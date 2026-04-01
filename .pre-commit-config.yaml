@@ -1,4 +1,14 @@
 repos:
+  - repo: local
+    hooks:
+      - id: jupytext-pre
+        name: Jupytext generate .py from .ipynb
+        entry: bash -c 'find notebooks -name "*.ipynb" -exec uv run jupytext --sync {} +'
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit]
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.6.9
     hooks:
@@ -8,8 +18,10 @@ repos:
 
   - repo: local
     hooks:
-      - id: jupytext-sync
-        name: Jupytext sync notebooks
-        entry: uv run jupytext --sync
+      - id: jupytext-post
+        name: Jupytext sync .py back to .ipynb
+        entry: bash -c 'find notebooks -name "*.py" -exec uv run jupytext --sync {} +'
         language: system
-        files: ^notebooks/.*\.(ipynb|py)$
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit]

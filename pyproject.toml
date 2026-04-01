@@ -25,6 +25,8 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ipywidgets>=8.1.8",
+    "jupytext>=1.16.0",
+    "pre-commit>=4.5.0",
 ]
 
 [tool.ruff]
@@ -47,3 +49,6 @@ known-first-party = ["cfm"]
 
 [tool.ruff.lint.per-file-ignores]
 "notebooks/**/*.py" = ["E402", "B018"]
+
+[tool.jupytext]
+formats = "ipynb,py:percent"
