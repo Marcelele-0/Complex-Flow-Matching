@@ -1,0 +1,15 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: jupytext-sync
+        name: Jupytext sync notebooks
+        entry: uv run jupytext --sync
+        language: system
+        files: ^notebooks/.*\.(ipynb|py)$
