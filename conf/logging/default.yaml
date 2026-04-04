@@ -1,0 +1,3 @@
+use_wandb: false
+project_name: "Decoupled-Cylindrical-Flow"
+experiment_name: "c_unet_baseline_l1"

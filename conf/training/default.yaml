@@ -1,0 +1,12 @@
+epochs: 100
+batch_size: 4
+num_workers: 4
+learning_rate: 2e-4
+weight_decay: 1e-4
+
+matmul_precision: "high"
+
+loss:
+  amp_loss_type: "l1"
+  phase_loss_type: "l1"
+  lambda_phase: 1.0

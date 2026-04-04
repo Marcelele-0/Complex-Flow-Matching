@@ -1,0 +1,6 @@
+defaults:
+  - dataset: skm_tea
+  - logging: default
+  - model: c_unet
+  - training: default
+  - _self_
