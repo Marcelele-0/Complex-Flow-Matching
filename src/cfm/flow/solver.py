@@ -1,4 +1,4 @@
-from typing import Callable
+from collections.abc import Callable
 
 import torch
 
@@ -6,15 +6,16 @@ import torch
 class CylindricalODESolver:
     """
     Euler ODE solver tailored for the decoupled cylindrical manifold.
-    Integrates the predicted velocity field over time to reconstruct 
+    Integrates the predicted velocity field over time to reconstruct
     clean MRI data from pure noise.
     """
+
     def __init__(self, num_steps: int = 50) -> None:
         self.num_steps = num_steps
 
     def step(self, x_t: torch.Tensor, v_t: torch.Tensor, dt: float) -> torch.Tensor:
         """
-        Performs a single Euler integration step and strictly projects 
+        Performs a single Euler integration step and strictly projects
         the angular components back onto the unit circle (R=1).
 
         Args:
@@ -39,7 +40,7 @@ class CylindricalODESolver:
         # 3. Euler step for phase (angular movement)
         # First, recover current angle
         phi_t = torch.atan2(py_t, px_t)
-        
+
         # Add angular velocity
         phi_next = phi_t + v_phi * dt
 
@@ -50,7 +51,9 @@ class CylindricalODESolver:
         return torch.cat([m_next, px_next, py_next], dim=1)
 
     @torch.no_grad()
-    def sample(self, model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor], noise: torch.Tensor) -> torch.Tensor:
+    def sample(
+        self, model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor], noise: torch.Tensor
+    ) -> torch.Tensor:
         """
         Solves the ODE from t=0 to t=1 to generate a sample.
 

@@ -1,18 +1,22 @@
 import torch
 
+
 class GeodesicFlowBridge:
     """
-    Constructs the probability path (bridge) between pure noise (t=0) 
+    Constructs the probability path (bridge) between pure noise (t=0)
     and the target complex-valued MRI data (t=1) on a cylindrical manifold.
-    
-    It computes the exact state x_t and the target vector field u_t 
+
+    It computes the exact state x_t and the target vector field u_t
     required to train the Continuous Normalizing Flow model.
     """
+
     def __init__(self) -> None:
         # We don't need trainable parameters here, it's pure mathematics.
         pass
 
-    def get_shortest_angular_diff(self, phi_start: torch.Tensor, phi_end: torch.Tensor) -> torch.Tensor:
+    def get_shortest_angular_diff(
+        self, phi_start: torch.Tensor, phi_end: torch.Tensor
+    ) -> torch.Tensor:
         """
         Calculates the shortest directed angular distance between two phases.
         Result is tightly bounded in [-pi, pi].
@@ -22,7 +26,9 @@ class GeodesicFlowBridge:
         diff = (diff + torch.pi) % (2 * torch.pi) - torch.pi
         return diff
 
-    def forward(self, cyl_noise: torch.Tensor, cyl_data: torch.Tensor, t: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, cyl_noise: torch.Tensor, cyl_data: torch.Tensor, t: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Computes the interpolated state and the target velocity.
 
@@ -57,10 +63,10 @@ class GeodesicFlowBridge:
 
         # Target angular velocity is simply the shortest path distance
         u_phi = self.get_shortest_angular_diff(phi_0, phi_1)
-        
+
         # State of the phase at time t
         phi_t = phi_0 + t * u_phi
-        
+
         # Reproject to Cartesian unit circle for the model input
         px_t = torch.cos(phi_t)
         py_t = torch.sin(phi_t)

@@ -1,13 +1,15 @@
-import torch 
+import torch
+
 
 def complex_to_cylinder(z: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
     """
     Convert a complex number to a decoupled cylindrical manifold (magnitude and unit-circle phase).
-    
+
     Args:
         z (torch.Tensor): A tensor of shape [batch, 1, H, W] representing complex numbers.
-        eps (float): A small value to prevent NaN when calculating the angle of zero-magnitude pixels.
-    
+        eps (float): A small value to prevent NaN when calculating the angle
+            of zero-magnitude pixels.
+
     Returns:
         torch.Tensor: A tensor of shape [batch, 3, H, W] of type torch.float32.
                       Channel 0: magnitude
@@ -19,7 +21,7 @@ def complex_to_cylinder(z: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
     # We add eps to prevent NaN gradients in purely empty regions
     phi = torch.angle(z + eps).to(torch.float32)
 
-    # CRITICAL: We DO NOT multiply by magnitude. 
+    # CRITICAL: We DO NOT multiply by magnitude.
     # This enforces the R=1 topology, preventing phase gradient collapse.
     p_x = torch.cos(phi)
     p_y = torch.sin(phi)
@@ -36,7 +38,8 @@ def cylinder_to_complex(cylinder_tensor: torch.Tensor, eps: float = 1e-8) -> tor
         eps (float): A small value to prevent division by zero during projection.
 
     Returns:
-        torch.Tensor: A tensor of shape [batch, 1, H, W] representing the complex numbers (torch.complex64).
+        torch.Tensor: A tensor of shape [batch, 1, H, W] representing the
+            complex numbers (torch.complex64).
     """
     # Fixed slicing syntax
     magnitude = cylinder_tensor[:, 0:1, :, :]
@@ -44,7 +47,7 @@ def cylinder_to_complex(cylinder_tensor: torch.Tensor, eps: float = 1e-8) -> tor
     p_y = cylinder_tensor[:, 2:3, :, :]
 
     # We force R=1 to correct any numerical instability from the ODE solver
-    norm = torch.sqrt(p_x ** 2 + p_y ** 2 + eps)
+    norm = torch.sqrt(p_x**2 + p_y**2 + eps)
     p_x_projected = p_x / norm
     p_y_projected = p_y / norm
 
