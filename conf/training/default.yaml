@@ -10,3 +10,7 @@ loss:
   amp_loss_type: "l1"
   phase_loss_type: "l1"
   lambda_phase: 1.0
+
+scheduler:
+  type: "CosineAnnealingLR"
+  eta_min: 1e-6

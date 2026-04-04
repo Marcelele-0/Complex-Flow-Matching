@@ -90,13 +90,28 @@ def main(cfg: DictConfig) -> None:
     
     bridge = GeodesicFlowBridge()
     
-    # --- Optimizer ---
+    # --- Optimizer & Scheduler ---
     lr = cfg.get("training", {}).get("learning_rate", 2e-4)
     weight_decay = cfg.get("training", {}).get("weight_decay", 1e-4)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 
-    # --- Main Training Loop ---
+    # Add learning rate scheduler from config
+    scheduler_cfg = cfg.get("training", {}).get("scheduler", {})
+    scheduler_type = scheduler_cfg.get("type", "CosineAnnealingLR")
     epochs = cfg.get("training", {}).get("epochs", 100)
+
+    if scheduler_type == "CosineAnnealingLR":
+        eta_min = scheduler_cfg.get("eta_min", 0.0)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, 
+            T_max=epochs, 
+            eta_min=eta_min
+        )
+    else:
+        # Default fallback
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+
+    # --- Main Training Loop ---
     
     for epoch in range(epochs):
         model.train()
@@ -127,8 +142,9 @@ def main(cfg: DictConfig) -> None:
             optimizer.zero_grad()
             pred_v = model(x_t, t_model)
 
-            # --- Loss: Enforce topology ---
-            loss, loss_amp, loss_phi = criterion(pred_v, target_v)
+            # --- Loss: Enforce topology with background masking ---
+            # Pass x_1 (original cylindrical image) as the base for the mask
+            loss, loss_amp, loss_phi = criterion(pred_v, target_v, target_x1=x_1)
             
             # --- Backpropagation ---
             loss.backward()
@@ -157,10 +173,18 @@ def main(cfg: DictConfig) -> None:
 
         # --- Epoch Summary ---
         avg_loss = epoch_loss_total / len(dataloader)
-        print(f"Epoch {epoch+1} | Avg Loss: {avg_loss:.5f}")
+        current_lr = optimizer.param_groups[0]['lr']
+        print(f"Epoch {epoch+1} | Avg Loss: {avg_loss:.5f} | LR: {current_lr:.6f}")
+        
+        # Step the learning rate scheduler
+        scheduler.step()
         
         if use_wandb:
-            wandb.log({"epoch": epoch + 1, "epoch_avg_loss": avg_loss})
+            wandb.log({
+                "epoch": epoch + 1, 
+                "epoch_avg_loss": avg_loss,
+                "learning_rate_epoch": current_lr
+            })
 
         # Checkpointing
         if (epoch + 1) % 10 == 0 or (epoch + 1) == epochs:

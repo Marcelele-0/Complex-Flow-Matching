@@ -3,74 +3,39 @@ import torch.nn.functional as F
 
 
 class DecoupledCylindricalLoss(torch.nn.Module):
-    """
-    Universal loss function for flow matching on the decoupled manifold (R^+ x S^1).
-    Supports multiple distance metrics for rigorous ablation studies.
-    """
-
-    def __init__(
-        self,
-        amp_loss_type: str = "l1",
-        phase_loss_type: str = "l1",
-        lambda_phase: float = 1.0,
-        huber_delta: float = 1.0,
-    ):
+    def __init__(self, amp_loss_type="l1", phase_loss_type="l1", lambda_phase=1.0):
         super().__init__()
-        self.amp_loss_type = amp_loss_type.lower()
-        self.phase_loss_type = phase_loss_type.lower()
         self.lambda_phase = lambda_phase
-        self.huber_delta = huber_delta
+        
+        # Initialize base losses (using reduction='none' for phase to apply the mask)
+        self.amp_loss_fn = torch.nn.L1Loss(reduction='mean') if amp_loss_type == "l1" else torch.nn.MSELoss(reduction='mean')
+        self.phase_loss_fn = torch.nn.L1Loss(reduction='none') if phase_loss_type == "l1" else torch.nn.MSELoss(reduction='none')
 
-        # Safety checks to prevent silent fails in Hydra configs
-        if self.amp_loss_type not in ["l1", "l2", "huber"]:
-            raise ValueError(f"Unsupported amp_loss_type: {self.amp_loss_type}")
-        if self.phase_loss_type not in ["l1", "cosine"]:
-            raise ValueError(f"Unsupported phase_loss_type: {self.phase_loss_type}")
-
-    def forward(
-        self, pred: torch.Tensor, target: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, pred_v, target_v, target_x1=None):
         """
-        Calculates the decoupled error between the predicted and target vector fields.
-
-        Args:
-            pred (torch.Tensor): Predicted velocities [Batch, 2, H, W]
-            target (torch.Tensor): Ground Truth velocities [Batch, 2, H, W]
-
-        Returns:
-            tuple: (total_loss, loss_amp, loss_phi)
+        pred_v: [B, 3, H, W] - predicted velocity
+        target_v: [B, 3, H, W] - target velocity from the bridge
+        target_x1: [B, 3, H, W] - pure data (cylindrical) used as the amplitude mask
         """
-        # Decouple amplitude and phase components
-        pred_m = pred[:, 0:1, :, :]
-        pred_phi = pred[:, 1:2, :, :]
+        # 1. Amplitude Loss (channel 0) - always trained, ensures dark background
+        loss_amp = self.amp_loss_fn(pred_v[:, 0:1], target_v[:, 0:1])
 
-        target_m = target[:, 0:1, :, :]
-        target_phi = target[:, 1:2, :, :]
+        # 2. Phase Loss (channels 1 and 2: cos/sin)
+        raw_phase_err = self.phase_loss_fn(pred_v[:, 1:3], target_v[:, 1:3])
 
-        # --- Amplitude Loss (Linear movement) ---
-        if self.amp_loss_type == "l1":
-            loss_amp = torch.abs(pred_m - target_m)
-        elif self.amp_loss_type == "l2":
-            loss_amp = (pred_m - target_m) ** 2
-        elif self.amp_loss_type == "huber":
-            loss_amp = F.huber_loss(pred_m, target_m, reduction="none", delta=self.huber_delta)
+        if target_x1 is not None:
+            # Create a mask from the amplitude of the clean image (target_x1 channel 0)
+            # .detach() ensures that phase errors do not disrupt amplitude learning
+            mask = target_x1[:, 0:1].detach().abs()
+            
+            # Normalize the mask to preserve the mean error scale
+            mask = mask / (mask.mean() + 1e-8)
+            
+            # Attenuate the phase error where there is no tissue
+            loss_phi = (raw_phase_err * mask).mean()
+        else:
+            loss_phi = raw_phase_err.mean()
 
-        # --- Phase Loss (Angular movement on S^1) ---
-        if self.phase_loss_type == "l1":
-            # Circular L1 distance (shortest path on Torus)
-            diff_phi = torch.abs(pred_phi - target_phi)
-            diff_phi = torch.remainder(diff_phi, 2 * torch.pi)
-            loss_phi = torch.minimum(diff_phi, 2 * torch.pi - diff_phi)
-
-        elif self.phase_loss_type == "cosine":
-            # Cosine angular loss: 1 - cos(theta_pred - theta_target)
-            # Yields 0.0 for perfect match/full rotations, and 2.0 for maximum error (pi)
-            loss_phi = 1.0 - torch.cos(pred_phi - target_phi)
-
-        # Aggregate (mean over batch and spatial dimensions)
-        mean_loss_amp = loss_amp.mean()
-        mean_loss_phi = loss_phi.mean()
-
-        total_loss = mean_loss_amp + (self.lambda_phase * mean_loss_phi)
-
-        return total_loss, mean_loss_amp, mean_loss_phi
+        total_loss = loss_amp + self.lambda_phase * loss_phi
+        
+        return total_loss, loss_amp, loss_phi
