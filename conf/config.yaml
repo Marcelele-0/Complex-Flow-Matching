@@ -2,6 +2,6 @@ defaults:
   - paths: default
   - dataset: skm_tea
   - logging: default
-  - model: c_unet
+  - model: c_unet_attention
   - training: default
   - _self_

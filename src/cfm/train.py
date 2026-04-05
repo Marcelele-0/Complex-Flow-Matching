@@ -71,8 +71,30 @@ def main(cfg: DictConfig) -> None:
     )
 
     # --- Model Initialization ---
+    model_name = cfg.get("model", {}).get("name", "c_unet")
     base_channels = cfg.get("model", {}).get("base_channels", 64)
-    model = CylindricalUNet(base_channels=base_channels).to(device)
+    
+    match model_name:
+        case "c_unet_attention":
+            from cfm.models.cylindrical_unet_attention import CylindricalUNetAttention
+            channel_mults = cfg.get("model", {}).get("channel_mults", [1, 2, 4, 8, 8])
+            use_attention = cfg.get("model", {}).get("use_attention", True)
+            attn_heads = cfg.get("model", {}).get("attn_heads", 4)
+            
+            model = CylindricalUNetAttention(
+                base_channels=base_channels,
+                channel_mults=list(channel_mults),
+                use_attention=use_attention,
+                attn_heads=attn_heads
+            ).to(device)
+            print(f"Instantiated CylindricalUNetAttention with base_channels={base_channels}")
+            
+        case "c_unet":
+            model = CylindricalUNet(base_channels=base_channels).to(device)
+            print(f"Instantiated standard CylindricalUNet with base_channels={base_channels}")
+            
+        case _:
+            raise ValueError(f"Unknown model name specified in config: {model_name}. Please check your yaml configuration.")
     
     print("Compiling model via Triton (this may take a minute during the first epoch)...")
     model = torch.compile(model)
