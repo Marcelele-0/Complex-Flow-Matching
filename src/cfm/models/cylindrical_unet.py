@@ -1,12 +1,15 @@
 import math
+
 import torch
 import torch.nn as nn
+
 
 class SinusoidalPositionEmbeddings(nn.Module):
     """
     Translates a time scalar t into a high-dimensional feature vector (embedding).
     This allows the network to "understand" the progression of time during generation.
     """
+
     def __init__(self, dim: int):
         super().__init__()
         self.dim = dim
@@ -23,25 +26,27 @@ class SinusoidalPositionEmbeddings(nn.Module):
 
 class TimeConditionedBlock(nn.Module):
     """
-    Residual Block that takes an image spatial map 
+    Residual Block that takes an image spatial map
     and injects information about the current time step.
     """
+
     def __init__(self, in_channels: int, out_channels: int, time_emb_dim: int):
         super().__init__()
-        self.time_mlp = nn.Sequential(
-            nn.SiLU(),
-            nn.Linear(time_emb_dim, out_channels)
-        )
+        self.time_mlp = nn.Sequential(nn.SiLU(), nn.Linear(time_emb_dim, out_channels))
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
         self.norm1 = nn.GroupNorm(8, out_channels)
-        
+
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
         self.norm2 = nn.GroupNorm(8, out_channels)
-        
+
         self.silu = nn.SiLU()
 
         # Residual connection aligning channels if there was a change
-        self.residual = nn.Conv2d(in_channels, out_channels, kernel_size=1) if in_channels != out_channels else nn.Identity()
+        self.residual = (
+            nn.Conv2d(in_channels, out_channels, kernel_size=1)
+            if in_channels != out_channels
+            else nn.Identity()
+        )
 
     def forward(self, x: torch.Tensor, t_emb: torch.Tensor) -> torch.Tensor:
         # Main convolutional branch
@@ -56,7 +61,7 @@ class TimeConditionedBlock(nn.Module):
 
         h = self.conv2(h)
         h = self.norm2(h)
-        
+
         return self.silu(h + self.residual(x))
 
 
@@ -66,15 +71,16 @@ class CylindricalUNet(nn.Module):
     Input: [B, 3, H, W] (Amplitude, p_x, p_y)
     Output: [B, 2, H, W] (Amplitude Velocity, Phase Angular Velocity)
     """
+
     def __init__(self, base_channels: int = 64):
         super().__init__()
-        
+
         time_emb_dim = base_channels * 4
         self.time_mlp = nn.Sequential(
             SinusoidalPositionEmbeddings(base_channels),
             nn.Linear(base_channels, time_emb_dim),
             nn.SiLU(),
-            nn.Linear(time_emb_dim, time_emb_dim)
+            nn.Linear(time_emb_dim, time_emb_dim),
         )
 
         # Initial convolution (from 3 manifold channels)
@@ -83,7 +89,7 @@ class CylindricalUNet(nn.Module):
         # ENCODER (Downsampling, extracting global context)
         self.down1 = TimeConditionedBlock(base_channels, base_channels * 2, time_emb_dim)
         self.pool1 = nn.MaxPool2d(2)
-        
+
         self.down2 = TimeConditionedBlock(base_channels * 2, base_channels * 4, time_emb_dim)
         self.pool2 = nn.MaxPool2d(2)
 
@@ -91,11 +97,11 @@ class CylindricalUNet(nn.Module):
         self.bottleneck = TimeConditionedBlock(base_channels * 4, base_channels * 4, time_emb_dim)
 
         # DECODER (Upsampling + Skip Connections)
-        self.up1 = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
+        self.up1 = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False)
         # Channels: 4*base (from upsample) + 4*base (from skip connection) = 8*base
         self.up_block1 = TimeConditionedBlock(base_channels * 8, base_channels * 2, time_emb_dim)
 
-        self.up2 = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
+        self.up2 = nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False)
         # Channels: 2*base (from upsample) + 2*base (from skip connection) = 4*base
         self.up_block2 = TimeConditionedBlock(base_channels * 4, base_channels, time_emb_dim)
 
@@ -115,7 +121,7 @@ class CylindricalUNet(nn.Module):
         # Encoder
         d1 = self.down1(x, t_emb)
         p1 = self.pool1(d1)
-        
+
         d2 = self.down2(p1, t_emb)
         p2 = self.pool2(d2)
 
@@ -124,7 +130,7 @@ class CylindricalUNet(nn.Module):
 
         # Decoder with Skip Connections
         u1 = self.up1(b)
-        u1 = torch.cat([u1, d2], dim=1) 
+        u1 = torch.cat([u1, d2], dim=1)
         u1 = self.up_block1(u1, t_emb)
 
         u2 = self.up2(u1)

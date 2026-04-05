@@ -1,16 +1,28 @@
-import os
+import glob
 import math
-import torch
+import os
+
 import hydra
 import matplotlib.pyplot as plt
+import torch
 from omegaconf import DictConfig
+
+# Assuming solver.py is in cfm/flow/ folder (change path if different)
+from cfm.flow.solver import CylindricalODESolver
 
 # Project-specific imports
 from cfm.models.cylindrical_unet import CylindricalUNet
 from cfm.utils.complex_ops import cylinder_to_complex
 
-# Assuming solver.py is in cfm/flow/ folder (change path if different)
-from cfm.flow.solver import CylindricalODESolver
+
+def find_latest_checkpoint(base_dir="outputs/train"):
+    """Returns the most recent checkpoint weights file from Hydra outputs."""
+    checkpoints = glob.glob(os.path.join(base_dir, "**", "*.pt"), recursive=True)
+    if not checkpoints:
+        return None
+    # Sort by modification time (most recently saved = highest epoch in newest run)
+    return max(checkpoints, key=os.path.getmtime)
+
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
 def main(cfg: DictConfig) -> None:
@@ -18,20 +30,59 @@ def main(cfg: DictConfig) -> None:
     print(f"Starting Inference on: {device}")
 
     # --- 1. Model Setup ---
-    base_channels = cfg.model.get("base_channels", 64)
-    model = CylindricalUNet(base_channels=base_channels).to(device)
-    
-    # Retrieve checkpoint directory from config or fallback to 'checkpoints'
+    model_name = cfg.get("model", {}).get("name", "c_unet")
+    base_channels = cfg.get("model", {}).get("base_channels", 64)
+
+    match model_name:
+        case "c_unet_attention":
+            from cfm.models.cylindrical_unet_attention import CylindricalUNetAttention
+
+            channel_mults = cfg.get("model", {}).get("channel_mults", [1, 2, 4, 8, 8])
+            use_attention = cfg.get("model", {}).get("use_attention", True)
+            attn_heads = cfg.get("model", {}).get("attn_heads", 4)
+
+            model = CylindricalUNetAttention(
+                base_channels=base_channels,
+                channel_mults=list(channel_mults),
+                use_attention=use_attention,
+                attn_heads=attn_heads,
+            ).to(device)
+            print(f"Instantiated CylindricalUNetAttention with base_channels={base_channels}")
+
+        case "c_unet":
+            model = CylindricalUNet(base_channels=base_channels).to(device)
+            print(f"Instantiated standard CylindricalUNet with base_channels={base_channels}")
+
+        case _:
+            raise ValueError(f"Unknown config model_name: {model_name}")
+
+    # Retrieve checkpoint directory from config or fallback to outputs scanning
     checkpoint_dir = cfg.get("paths", {}).get("checkpoint_dir", "checkpoints")
-    checkpoint_path = os.path.join(checkpoint_dir, "checkpoint_epoch_50.pt")
-    
+    checkpoint_path = os.path.join(checkpoint_dir, "checkpoint_epoch_100.pt")
+
     if not os.path.exists(checkpoint_path):
-        raise FileNotFoundError(f"Checkpoint {checkpoint_path} not found.")
-        
+        print(
+            f"Hardcoded checkpoint ({checkpoint_path}) from config does not "
+            f"exist in the current path."
+        )
+
+        orig_cwd = hydra.utils.get_original_cwd()
+        train_outputs_path = os.path.join(orig_cwd, "outputs", "train")
+
+        print(f"Scanning folder '{train_outputs_path}' for the latest model...")
+        latest_pt = find_latest_checkpoint(train_outputs_path)
+
+        if latest_pt is None:
+            raise FileNotFoundError(f"No .pt checkpoints found in '{train_outputs_path}'")
+
+        checkpoint_path = latest_pt
+
+    print(f"Loading weights from: {checkpoint_path}")
+
     # Load state dict and handle 'torch.compile' prefixes if necessary
     state_dict = torch.load(checkpoint_path, map_location=device, weights_only=True)
     clean_state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
-    
+
     model.load_state_dict(clean_state_dict)
     model.eval()
     print(f"Successfully loaded weights from {checkpoint_path}")
@@ -39,53 +90,58 @@ def main(cfg: DictConfig) -> None:
     # --- 2. Correct Cylindrical Noise Initialization (x_0) ---
     # We must match the training distribution: Amp in [0, 1] and Phase on circle [0, 2pi]
     # In SKM-TEA, original un-cropped slices are 512x512, modulo 16 crop retains this size.
-    b, h, w = 1, 512, 512 
-    
+    b = cfg.get("generate", {}).get("num_samples", 5)
+    h, w = 512, 512
+
     noise_amp = torch.rand(b, 1, h, w, device=device)
     noise_phi = torch.rand(b, 1, h, w, device=device) * 2 * math.pi
-    
-    x_0 = torch.cat([
-        noise_amp, 
-        torch.cos(noise_phi), 
-        torch.sin(noise_phi)
-    ], dim=1)
+
+    x_0 = torch.cat([noise_amp, torch.cos(noise_phi), torch.sin(noise_phi)], dim=1)
 
     # --- 3. ODE Integration using generic Solver ---
-    num_steps = 100 
-    print(f"Integrating Cylindrical Flow with {num_steps} steps...")
-    
+    num_steps = cfg.get("generate", {}).get("num_steps", 100)
+    print(f"Integrating Cylindrical Flow with {num_steps} steps for {b} samples...")
+
     # Initialize the refactored solver
     ode_solver = CylindricalODESolver(num_steps=num_steps)
-    
+
     # Run inference (sample method solves the loop from t=0 to t=1)
-    x_1_cylindrical = ode_solver.sample(model, x_0)
+    with torch.no_grad():
+        x_1_cylindrical = ode_solver.sample(model, x_0)
 
     # --- 4. Back-Transformation to Complex Domain ---
     # Map [Amp, Cos, Sin] back to complex numbers
     x_1_complex = cylinder_to_complex(x_1_cylindrical)
-    
-    # Extract components for plotting
-    magnitude = torch.abs(x_1_complex).squeeze().cpu().numpy()
-    phase = torch.angle(x_1_complex).squeeze().cpu().numpy()
+
+    # Get the proper output directory from config (Hydra CWD by default)
+    output_dir = cfg.get("paths", {}).get("output_dir", ".")
+    os.makedirs(output_dir, exist_ok=True)
 
     # --- 5. Visualization ---
-    fig, axes = plt.subplots(1, 2, figsize=(14, 7))
-    
-    # Magnitude plot
-    axes[0].imshow(magnitude, cmap="gray")
-    axes[0].set_title("Generated MRI Magnitude")
-    axes[0].axis("off")
-    
-    # Phase plot
-    im_phase = axes[1].imshow(phase, cmap="twilight")
-    axes[1].set_title("Generated MRI Phase")
-    axes[1].axis("off")
-    fig.colorbar(im_phase, ax=axes[1], fraction=0.046, pad=0.04, label="Radians")
+    for i in range(b):
+        magnitude = torch.abs(x_1_complex[i]).squeeze().cpu().numpy()
+        phase = torch.angle(x_1_complex[i]).squeeze().cpu().numpy()
 
-    output_file = "generated_mri_final.png"
-    plt.tight_layout()
-    plt.savefig(output_file, dpi=300)
-    print(f"Generation complete. Result saved to: {output_file}")
+        fig, axes = plt.subplots(1, 2, figsize=(14, 7))
+
+        # Magnitude plot
+        axes[0].imshow(magnitude, cmap="gray")
+        axes[0].set_title(f"Generated MRI Magnitude [Sample {i+1}]")
+        axes[0].axis("off")
+
+        # Phase plot
+        im_phase = axes[1].imshow(phase, cmap="twilight")
+        axes[1].set_title(f"Generated MRI Phase [Sample {i+1}]")
+        axes[1].axis("off")
+        fig.colorbar(im_phase, ax=axes[1], fraction=0.046, pad=0.04, label="Radians")
+
+        output_file = os.path.join(output_dir, f"generated_mri_sample_{i+1}.png")
+        plt.tight_layout()
+        plt.savefig(output_file, dpi=300)
+        plt.close(fig)
+
+    print(f"Generation complete. Resulted {b} images saved to: {output_dir}")
+
 
 if __name__ == "__main__":
     main()
