@@ -40,9 +40,12 @@ def main(cfg: DictConfig) -> None:
     use_wandb = cfg.get("logging", {}).get("use_wandb", False)
     if use_wandb and HAS_WANDB:
         print("Weights & Biases logging enabled.")
+        output_dir = cfg.get("paths", {}).get("output_dir", ".")
+        os.makedirs(output_dir, exist_ok=True)
         wandb.init(
             project=cfg.get("logging", {}).get("project_name", "Cylindrical-Flow-Matching"),
             name=cfg.get("logging", {}).get("experiment_name", "uniform_noise_run"),
+            dir=output_dir,
             config=OmegaConf.to_container(cfg, resolve=True)
         )
     else:
@@ -194,8 +197,11 @@ def main(cfg: DictConfig) -> None:
 
         # --- Epoch Summary ---
         avg_loss = epoch_loss_total / len(dataloader)
+        avg_loss_amp = epoch_loss_amp / len(dataloader)
+        avg_loss_phi = epoch_loss_phi / len(dataloader)
+        
         current_lr = optimizer.param_groups[0]['lr']
-        print(f"Epoch {epoch+1} | Avg Loss: {avg_loss:.5f} | LR: {current_lr:.6f}")
+        print(f"Epoch {epoch+1} | Avg Loss: {avg_loss:.5f} (Amp: {avg_loss_amp:.5f}, Phi: {avg_loss_phi:.5f}) | LR: {current_lr:.6f}")
         
         scheduler.step()
         
@@ -204,6 +210,8 @@ def main(cfg: DictConfig) -> None:
             log_dict = {
                 "epoch": epoch + 1, 
                 "epoch_avg_loss": avg_loss,
+                "epoch_avg_loss_amp": avg_loss_amp,
+                "epoch_avg_loss_phi": avg_loss_phi,
                 "learning_rate_epoch": current_lr
             }
             # Once every 10 epochs, log the realistic amplitude target from the dataset

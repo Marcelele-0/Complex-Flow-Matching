@@ -1,0 +1,3 @@
+use_wandb: true
+project_name: "complex_flow_matching"
+experiment_name: "c_unet_attention_run"

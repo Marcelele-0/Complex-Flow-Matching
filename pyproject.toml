@@ -30,6 +30,7 @@ dev = [
     "jupytext>=1.16.0",
     "pre-commit>=4.5.0",
     "pytest>=9.0.2",
+    "wandb>=0.25.1",
 ]
 
 [tool.ruff]

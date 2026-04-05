@@ -1,1 +1,2 @@
-checkpoint_dir: "checkpoints"
+output_dir: ${hydra:runtime.output_dir}
+checkpoint_dir: ${paths.output_dir}/checkpoints

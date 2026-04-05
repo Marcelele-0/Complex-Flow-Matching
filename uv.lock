@@ -80,6 +80,7 @@ dev = [
     { name = "jupytext" },
     { name = "pre-commit" },
     { name = "pytest" },
+    { name = "wandb" },
 ]
 
 [package.metadata]
@@ -102,6 +103,7 @@ dev = [
     { name = "jupytext", specifier = ">=1.16.0" },
     { name = "pre-commit", specifier = ">=4.5.0" },
     { name = "pytest", specifier = ">=9.0.2" },
+    { name = "wandb", specifier = ">=0.25.1" },
 ]
 
 [[package]]
