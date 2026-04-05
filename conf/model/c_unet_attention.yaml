@@ -1,0 +1,4 @@
+base_channels: 96
+channel_mults: [1, 2, 4, 8, 8] 
+use_attention: true
+attn_heads: 4
