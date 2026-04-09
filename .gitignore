@@ -17,3 +17,4 @@ outputs/
 # notebooks
 .ipynb_checkpoints/
 notebooks/*.ipynb
+notebooks/presentation

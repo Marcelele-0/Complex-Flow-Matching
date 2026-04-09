@@ -27,7 +27,9 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ipywidgets>=8.1.8",
+    "jupyter>=1.1.1",
     "jupytext>=1.16.0",
+    "plotly>=6.6.0",
     "pre-commit>=4.5.0",
     "pytest>=9.0.2",
     "wandb>=0.25.1",
