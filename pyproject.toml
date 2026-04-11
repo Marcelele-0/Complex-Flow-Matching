@@ -8,7 +8,7 @@ packages = ["src/cfm"]
 [project]
 name = "cfm"
 version = "0.1.0"
-description = "Add your description here"
+description = "Complex Flow Matching for MRI synthesis on cylindrical manifolds"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

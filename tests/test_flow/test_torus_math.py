@@ -39,11 +39,13 @@ def test_amplitude_loss_variants() -> None:
     _, l_amp_l2, _ = crit_l2(pred, target)
     assert torch.isclose(l_amp_l2, torch.tensor(9.0)), "L2 amplitude loss failed"
 
-    # Test Huber (with delta 1.0, error > delta, so it falls back to L1-like linear scale)
-    # Expected: delta * (|err| - 0.5 * delta) = 1.0 * (3.0 - 0.5) = 2.5
-    crit_huber = DecoupledCylindricalLoss(amp_loss_type="huber", huber_delta=1.0, lambda_phase=0.0)
-    _, l_amp_huber, _ = crit_huber(pred, target)
-    assert torch.isclose(l_amp_huber, torch.tensor(2.5)), "Huber amplitude loss failed"
+    # Test MSE (different from L1 for larger errors)
+    # Expected: mean squared error = (3.0^2 + 1.0^2 + 1.0^2) / 3 = 11/3 ≈ 3.667
+    crit_mse = DecoupledCylindricalLoss(amp_loss_type="mse", lambda_phase=0.0)
+    _, l_amp_mse, _ = crit_mse(pred, target)
+    assert torch.isclose(
+        l_amp_mse, torch.tensor(11.0 / 3.0), atol=1e-5
+    ), "MSE amplitude loss failed"
 
 
 def test_phase_loss_l1_topology_wrap() -> None:
