@@ -56,26 +56,25 @@ def main(cfg: DictConfig) -> None:
         case _:
             raise ValueError(f"Unknown config model_name: {model_name}")
 
-    # Retrieve checkpoint directory from config or fallback to outputs scanning
-    checkpoint_dir = cfg.get("paths", {}).get("checkpoint_dir", "checkpoints")
-    checkpoint_path = os.path.join(checkpoint_dir, "checkpoint_epoch_100.pt")
-
-    if not os.path.exists(checkpoint_path):
-        print(
-            f"Hardcoded checkpoint ({checkpoint_path}) from config does not "
-            f"exist in the current path."
-        )
-
-        orig_cwd = hydra.utils.get_original_cwd()
-        train_outputs_path = os.path.join(orig_cwd, "outputs", "train")
-
-        print(f"Scanning folder '{train_outputs_path}' for the latest model...")
-        latest_pt = find_latest_checkpoint(train_outputs_path)
-
-        if latest_pt is None:
-            raise FileNotFoundError(f"No .pt checkpoints found in '{train_outputs_path}'")
-
-        checkpoint_path = latest_pt
+    # Get checkpoint from run_name or fallback to logging.experiment_name
+    run_name = cfg.get("generate", {}).get("run_name")
+    
+    if not run_name:
+        # Fallback to experiment_name from logging config
+        run_name = cfg.get("logging", {}).get("experiment_name")
+    
+    if not run_name:
+        raise ValueError("No run_name in generate config and no experiment_name in logging config")
+    
+    # Search for best checkpoint in train/{run_name}/
+    orig_cwd = hydra.utils.get_original_cwd()
+    run_dir = os.path.join(orig_cwd, "train", run_name)
+    
+    print(f"Searching for best checkpoint in: {run_dir}")
+    checkpoint_path = find_latest_checkpoint(run_dir)
+    
+    if checkpoint_path is None:
+        raise FileNotFoundError(f"No .pt checkpoints found in '{run_dir}'")
 
     print(f"Loading weights from: {checkpoint_path}")
 

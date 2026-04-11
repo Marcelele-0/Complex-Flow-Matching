@@ -2,7 +2,7 @@ defaults:
   - hydra: default
   - paths: default
   - dataset: skm_tea
-  - logging: default
+  - logging: w_and_b
   - model: c_unet_attention
   - training: default
   - generate: default

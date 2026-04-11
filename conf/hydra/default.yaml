@@ -1,5 +1,5 @@
 run:
-  dir: outputs/${hydra:job.name}/${now:%Y-%m-%d}_${now:%H-%M}
+  dir: train/${logging.experiment_name}/${now:%Y-%m-%d}_%H:%M
 sweep:
-  dir: outputs/${hydra:job.name}_sweep/${now:%Y-%m-%d}_${now:%H-%M}
+  dir: train/${logging.experiment_name}_sweep/${now:%Y-%m-%d}_%H:%M
   subdir: ${hydra.job.num}

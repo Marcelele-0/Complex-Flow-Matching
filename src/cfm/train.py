@@ -141,16 +141,14 @@ def main(cfg: DictConfig) -> None:
             x_1 = batch.to(device)
             b, _, h, w = x_1.shape
 
-            # ---------------------------------------------------------
-            # FIX: Uniform Cylindrical Noise (Distribution matching)
-            # ---------------------------------------------------------
             noise_amp = torch.rand(b, 1, h, w, device=device)  # [0, 1]
             noise_phi = torch.rand(b, 1, h, w, device=device) * 2 * math.pi  # [0, 2pi]
 
             x_0 = torch.cat([noise_amp, torch.cos(noise_phi), torch.sin(noise_phi)], dim=1)
 
             # --- Time Sampling ---
-            t_model = torch.rand(b, device=device)
+            u = torch.rand(b, device=device)
+            t_model = torch.sigmoid(u)
             t_bridge = t_model.view(b, 1, 1, 1)
 
             # --- Bridge: Interpolation and target velocity ---
