@@ -147,8 +147,7 @@ def main(cfg: DictConfig) -> None:
             x_0 = torch.cat([noise_amp, torch.cos(noise_phi), torch.sin(noise_phi)], dim=1)
 
             # --- Time Sampling ---
-            u = torch.rand(b, device=device)
-            t_model = torch.sigmoid(u)
+            t_model = torch.rand(b, device=device)
             t_bridge = t_model.view(b, 1, 1, 1)
 
             # --- Bridge: Interpolation and target velocity ---
