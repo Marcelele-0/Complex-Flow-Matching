@@ -10,6 +10,8 @@ loss:
   amp_loss_type: "l1"
   phase_loss_type: "l1"
   lambda_phase: 1.0
+  lambda_hf: 0.0          # High-frequency k-space boost weight (disabled by default)
+  hf_boost_factor: 4.0    # Radial boost factor for high frequencies
 
 scheduler:
   type: "CosineAnnealingLR"

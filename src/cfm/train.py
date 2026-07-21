@@ -109,6 +109,8 @@ def main(cfg: DictConfig) -> None:
         amp_loss_type=loss_cfg.get("amp_loss_type", "l1"),
         phase_loss_type=loss_cfg.get("phase_loss_type", "l1"),
         lambda_phase=loss_cfg.get("lambda_phase", 1.0),
+        lambda_hf=loss_cfg.get("lambda_hf", 0.0),
+        hf_boost_factor=loss_cfg.get("hf_boost_factor", 4.0),
     ).to(device)
 
     bridge = GeodesicFlowBridge()
