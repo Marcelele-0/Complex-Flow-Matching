@@ -4,17 +4,48 @@ __pycache__/
 build/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
 
 # Virtual environments
-.venv
+.venv/
+venv/
 
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.cache/
+*.log
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# Data
 data/*
+!data/.gitkeep
 
-# output files
+# Output files
 outputs/
+wandb/
 
-# notebooks
+# Notebooks
 .ipynb_checkpoints/
 notebooks/*.ipynb
 notebooks/presentation
+
+# Editors / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

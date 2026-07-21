@@ -1,5 +1,8 @@
 # Complex Flow Matching (CFM) for MRI Synthesis
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
+
 A generative model for synthesizing MRI data using **Flow Matching** on cylindrical manifolds. This work applies continuous normalizing flows to complex-valued MRI images, representing them in amplitude-phase space.
 
 ## Motivation
@@ -77,9 +80,16 @@ schedule_runs.sh         # Batch training script
 
 ### Environment Setup
 ```bash
+git clone https://github.com/Marcelele-0/Complex-Flow-Matching.git
+cd Complex-Flow-Matching
+
 uv sync                    # Install dependencies
 export WANDB_API_KEY=your_key_here  # Add W&B API key
 ```
+
+### Data
+
+Place your dataset under `data/` (e.g. `data/skm-tea-mini/v1-release`) and point `conf/dataset/skm_tea.yaml` at the correct path. The `data/` directory is git-ignored, so datasets are never committed to the repo.
 
 ### Training
 
@@ -103,12 +113,12 @@ Edit the script to customize experiment parameters.
 
 **Use latest checkpoint from a training run:**
 ```bash
-python src/cfm/generate.py generate.run_name=c_unet_attention_run
+uv run src/cfm/generate.py generate.run_name=c_unet_attention_run
 ```
 
 **Custom settings:**
 ```bash
-python src/cfm/generate.py generate.run_name=my_run generate.num_samples=10
+uv run src/cfm/generate.py generate.run_name=my_run generate.num_samples=10
 ```
 
 ### Configuration
@@ -143,7 +153,7 @@ View at: https://wandb.ai
 
 ### Run tests
 ```bash
-pytest tests/
+uv run pytest tests/
 ```
 
 ### Format code
@@ -154,9 +164,10 @@ uv run ruff format .        # Formatting
 
 ### Pre-commit checks
 ```bash
+pre-commit install         # One-time setup: run hooks on every commit
 pre-commit run --all-files
 ```
 
 ## License
 
-MIT
+This project is licensed under the [MIT License](LICENSE).
