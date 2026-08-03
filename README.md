@@ -149,10 +149,6 @@ View at: https://wandb.ai
 ✅ **Batch Scheduling** - Run multiple experiments sequentially
 ✅ **Pre-commit Hooks** - Auto-formatting and linting
 
-## Team tasks
-
-Active work items for the team live in [`docs/tasks/`](docs/tasks/README.md) (velocity/loss fixes, HF experiments + W&B, metrics, 2.5D dataloader, cross-slice attention).
-
 ## Development
 
 ### Run tests
