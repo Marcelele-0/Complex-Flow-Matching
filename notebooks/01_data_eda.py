@@ -15,38 +15,86 @@
 # %%
 """Download and prepare SKM-TEA mini dataset."""
 
-import os
+import urllib.request
+from pathlib import Path
+
+from tqdm.auto import tqdm
 
 DATASET_DIR = "../data/skm-tea-mini/v1-release"
 DATASET_URL = "https://huggingface.co/datasets/arjundd/skm-tea-mini/resolve/main/v1-release"
 
-if not os.path.isdir(DATASET_DIR):
-    os.makedirs(DATASET_DIR, exist_ok=True)
+SUBJECTS = ["MTR_030", "MTR_184", "MTR_201"]
 
-    print("Downloading configuration files and metadata...")
-    files_to_download = [
-        "all_metadata.csv",
-        "annotations/v1.0.0/train.json",
-        "annotations/v1.0.0/val.json",
-        "annotations/v1.0.0/test.json",
-    ]
+# Individual files rather than the tarballs: no `tar` dependency, and no need to
+# hold the archive and its extracted copy on disk at the same time.
+DATASET_FILES = [
+    "all_metadata.csv",
+    *(f"annotations/v1.0.0/{split}.json" for split in ("train", "val", "test")),
+    *(f"files_recon_calib-24/{subject}.h5" for subject in SUBJECTS),
+    *(f"segmentation_masks/raw-data-track/{subject}.nii.gz" for subject in SUBJECTS),
+]
 
-    for fname in files_to_download:
-        out_path = f"{DATASET_DIR}/{fname}"
-        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-        os.system(f"wget -q {DATASET_URL}/{fname} -O {out_path}")
+CHUNK_SIZE = 1 << 20
 
-    print("Downloading and streaming extraction (k-space & masks only)...")
-    tar_files = ["files_recon_calib-24", "segmentation_masks"]
 
-    for fname in tar_files:
-        tar_url = f"{DATASET_URL}/tarball/{fname}.tar.gz"
-        print(f"Processing: {fname}...")
-        os.system(f"wget -c {tar_url} -O - | tar -xz -C {DATASET_DIR}/")
+def remote_size(url: str) -> int:
+    """Return the size the server reports for a URL, in bytes."""
+    with urllib.request.urlopen(urllib.request.Request(url, method="HEAD")) as response:
+        return int(response.headers["Content-Length"])
 
-    print("Dataset download and extraction complete.")
-else:
-    print("Dataset directory already exists. Skipping download.")
+
+def download_file(rel_path: str) -> None:
+    """
+    Download one dataset file into DATASET_DIR.
+
+    Compares the size on disk against the server's Content-Length: a matching file
+    is left alone, a shorter one is resumed via a Range request rather than being
+    fetched again from scratch.
+    """
+    out_path = Path(DATASET_DIR) / rel_path
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    url = f"{DATASET_URL}/{rel_path}"
+
+    expected_size = remote_size(url)
+    local_size = out_path.stat().st_size if out_path.exists() else 0
+
+    if local_size == expected_size:
+        print(f"present: {rel_path}")
+        return
+
+    request = urllib.request.Request(url)
+    if 0 < local_size < expected_size:
+        request.add_header("Range", f"bytes={local_size}-")
+        mode = "ab"
+    else:
+        # Nothing usable on disk (missing, empty, or somehow longer than the source).
+        local_size = 0
+        mode = "wb"
+
+    with (
+        urllib.request.urlopen(request) as response,
+        open(out_path, mode) as out_file,
+        tqdm(
+            total=expected_size,
+            initial=local_size,
+            unit="B",
+            unit_scale=True,
+            desc=rel_path,
+        ) as progress,
+    ):
+        while chunk := response.read(CHUNK_SIZE):
+            out_file.write(chunk)
+            progress.update(len(chunk))
+
+    final_size = out_path.stat().st_size
+    if final_size != expected_size:
+        raise OSError(f"{rel_path}: got {final_size} bytes, expected {expected_size}")
+
+
+for dataset_file in DATASET_FILES:
+    download_file(dataset_file)
+
+print("Dataset ready.")
 
 # %%
 """Load and visualize k-space hybrid data from first sample."""
