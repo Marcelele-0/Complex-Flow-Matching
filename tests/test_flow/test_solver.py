@@ -37,9 +37,16 @@ def test_solver_step_projection() -> None:
 
 
 def test_solver_sample_loop() -> None:
-    """Checks if the full integration loop executes with a dummy model."""
+    """Checks if the full integration loop executes with a dummy model.
+
+    Noise must be a valid cylindrical state (non-negative amplitude, phase on
+    the unit circle) - matching train.py - since the solver clamps amplitude
+    to [0, inf) and would alter off-manifold randn inputs.
+    """
     solver = CylindricalODESolver(num_steps=4)
-    noise = torch.randn(2, 3, 8, 8)
+    amp = torch.rand(2, 1, 8, 8)  # [0, 1], non-negative like real amplitudes
+    phi = torch.rand(2, 1, 8, 8) * 2 * math.pi
+    noise = torch.cat([amp, torch.cos(phi), torch.sin(phi)], dim=1)
 
     # Dummy model that always outputs zero velocity
     def dummy_model(x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
