@@ -171,3 +171,4 @@ pre-commit run --all-files
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+.
