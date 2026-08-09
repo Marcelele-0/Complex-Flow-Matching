@@ -10,7 +10,7 @@ class DecoupledCylindricalLoss(nn.Module):
     """Loss for the 2-channel cylindrical velocity field with optional
     high-frequency k-space boosting.
 
-    Velocity contract (see docs/decisions/001-two-channel-velocity.md):
+    Velocity contract:
         Channel 0: v_amp   - amplitude velocity
         Channel 1: v_phase - angular velocity in rad/unit-time
 
