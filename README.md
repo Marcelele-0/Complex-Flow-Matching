@@ -100,7 +100,7 @@ uv run src/cfm/train.py
 
 **Custom experiment:**
 ```bash
-uv run src/cfm/train.py loss.lambda_phase=2.0 logging.experiment_name=my_run
+uv run src/cfm/train.py training.loss.lambda_phase=2.0 logging.experiment_name=my_run
 ```
 
 **Batch schedule:**

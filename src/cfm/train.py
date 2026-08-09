@@ -136,6 +136,7 @@ def main(cfg: DictConfig) -> None:
         epoch_loss_total = 0.0
         epoch_loss_amp = 0.0
         epoch_loss_phi = 0.0
+        epoch_loss_hf = 0.0
 
         pbar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{epochs}")
 
@@ -160,7 +161,7 @@ def main(cfg: DictConfig) -> None:
             pred_v = model(x_t, t_model)
 
             # --- Loss with background masking ---
-            loss, loss_amp, loss_phi = criterion(pred_v, target_v, target_x1=x_1)
+            loss, loss_amp, loss_phi, loss_hf = criterion(pred_v, target_v, target_x1=x_1)
 
             # --- Backprop ---
             loss.backward()
@@ -171,12 +172,14 @@ def main(cfg: DictConfig) -> None:
             epoch_loss_total += loss.item()
             epoch_loss_amp += loss_amp.item()
             epoch_loss_phi += loss_phi.item()
+            epoch_loss_hf += loss_hf.item()
 
             pbar.set_postfix(
                 {
                     "loss": f"{loss.item():.4f}",
                     "amp": f"{loss_amp.item():.4f}",
                     "phi": f"{loss_phi.item():.4f}",
+                    "hf": f"{loss_hf.item():.4f}",
                 }
             )
 
@@ -187,6 +190,7 @@ def main(cfg: DictConfig) -> None:
                         "step_loss": loss.item(),
                         "step_loss_amp": loss_amp.item(),
                         "step_loss_phi": loss_phi.item(),
+                        "step_loss_hf": loss_hf.item(),
                         "learning_rate": optimizer.param_groups[0]["lr"],
                     }
                 )
@@ -195,11 +199,12 @@ def main(cfg: DictConfig) -> None:
         avg_loss = epoch_loss_total / len(dataloader)
         avg_loss_amp = epoch_loss_amp / len(dataloader)
         avg_loss_phi = epoch_loss_phi / len(dataloader)
+        avg_loss_hf = epoch_loss_hf / len(dataloader)
 
         current_lr = optimizer.param_groups[0]["lr"]
         print(
             f"Epoch {epoch+1} | Avg Loss: {avg_loss:.5f} (Amp: {avg_loss_amp:.5f}, "
-            f"Phi: {avg_loss_phi:.5f}) | LR: {current_lr:.6f}"
+            f"Phi: {avg_loss_phi:.5f}, HF: {avg_loss_hf:.5f}) | LR: {current_lr:.6f}"
         )
 
         scheduler.step()
@@ -211,6 +216,7 @@ def main(cfg: DictConfig) -> None:
                 "epoch_avg_loss": avg_loss,
                 "epoch_avg_loss_amp": avg_loss_amp,
                 "epoch_avg_loss_phi": avg_loss_phi,
+                "epoch_avg_loss_hf": avg_loss_hf,
                 "learning_rate_epoch": current_lr,
             }
             # Once every 10 epochs, log the realistic amplitude target from the dataset

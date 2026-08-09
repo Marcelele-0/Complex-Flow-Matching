@@ -10,7 +10,11 @@ loss:
   amp_loss_type: "l1"
   phase_loss_type: "l1"
   lambda_phase: 1.0
-  lambda_hf: 0.0          # High-frequency k-space boost weight (disabled by default)
+  # High-frequency k-space boost weight (disabled by default).
+  # NOTE: the FFT uses norm="ortho", which divides magnitudes by sqrt(H*W).
+  # Values tuned before the ortho change must be multiplied by sqrt(H*W)
+  # (512 at the native 512x512 resolution) to keep the same effective weight.
+  lambda_hf: 0.0
   hf_boost_factor: 4.0    # Radial boost factor for high frequencies
 
 scheduler:
