@@ -1,0 +1,39 @@
+# Where on the noise -> data bridge the reconstruction starts.
+#   0.0  pure generation: the target contributes nothing, so metrics are poor by
+#        construction (an unconditional sample has no reason to match the slice
+#        it was paired with).
+#   0.5  half-noised target; the model restores the rest.
+#   1.0  degenerate self-test: the bridge returns the target, so metrics come out
+#        near-perfect (PSNR ~150 dB, SSIM 1.0). Validates the pipeline, not the model.
+t_start: 0.5
+
+# Heun steps over the remaining interval [t_start, 1]. Step size is
+# (1 - t_start) / num_steps, so cost is independent of t_start.
+num_steps: 100
+
+# Phase is meaningless in air, so the phase error is averaged over tissue only:
+# pixels whose target amplitude exceeds mask_threshold * per-slice max. Range [0, 1).
+# null scores every pixel, giving a background-dominated number. The unmasked value
+# is reported alongside either way.
+mask_threshold: 0.05
+
+# COCO-style manifest at {data_dir}/annotations/v1.0.0/{split}.json.
+# null evaluates every .h5 in data_dir.
+split: test
+
+# Falls back to dataset.data_dir when null.
+data_dir: ~
+
+# null evaluates the whole split. When set, slices are strided rather than taken
+# from the front: consecutive slices of one volume are near-duplicates.
+max_samples: ~
+
+batch_size: 4
+num_workers: 4
+
+# Noise is reproducible for a fixed batch_size; changing it re-chunks the RNG stream.
+seed: 0
+
+# Checkpoint lookup: outputs/train/{run_name}/**/*.pt, newest by mtime.
+# Falls back to logging.experiment_name when null, same rule as generate.py.
+run_name: ~
