@@ -16,6 +16,14 @@ from.
 * ``1.0``: the bridge returns the target, so metrics come out near-perfect. Tests
   the eval plumbing, not the model.
 
+.. warning::
+   ``split`` chooses which files are *scored*; it does not hold them out.
+   ``train.py`` hands ``data_dir`` straight to
+   :class:`~cfm.data.dataset.SKMTEADataset`, which globs every ``.h5`` with no
+   split filter, so the volumes scored here were almost certainly in the training
+   set. Read these numbers as reconstruction fidelity, not generalization, until
+   the same manifests gate training.
+
 Everything above :func:`main` is pure (no Hydra, no HDF5, no filesystem except
 :func:`load_split_file_names`), so the whole path is unit-testable with a dummy
 model and synthetic tensors.
@@ -45,8 +53,8 @@ from cfm.data.transforms import (
 )
 from cfm.flow.bridge import GeodesicFlowBridge
 from cfm.flow.solver import CylindricalODESolver
-from cfm.models.cylindrical_unet import CylindricalUNet
 from cfm.utils.complex_ops import cylinder_to_complex
+from cfm.utils.inference import build_model, load_weights, resolve_checkpoint
 from cfm.utils.metrics import (
     circular_phase_error,
     peak_signal_noise_ratio,
@@ -252,6 +260,9 @@ class MetricSummary:
     std: float
     minimum: float
     maximum: float
+    # Kept apart because they mean opposite things: perfect_ids scored as well as
+    # possible, unscored_ids could not be scored at all. Both sit outside the mean.
+    perfect_ids: tuple[str, ...]
     unscored_ids: tuple[str, ...]
 
 
@@ -318,7 +329,14 @@ class MetricAccumulator:
         v = self.values()
         finite = torch.isfinite(v)
         scored = v[finite]
-        bad = [self._ids[i] for i in (~finite).nonzero().flatten().tolist()]
+
+        # +inf is an exact match, so it is a perfect score rather than a failure;
+        # it stays out of the mean but is reported separately from NaN. -inf is
+        # pathological and groups with the failures.
+        perfect_mask = torch.isposinf(v)
+        unscored_mask = torch.isnan(v) | torch.isneginf(v)
+        perfect = [self._ids[i] for i in perfect_mask.nonzero().flatten().tolist()]
+        bad = [self._ids[i] for i in unscored_mask.nonzero().flatten().tolist()]
 
         if scored.numel() == 0:
             mean = std = lo = hi = float("nan")
@@ -339,6 +357,7 @@ class MetricAccumulator:
             std=std,
             minimum=lo,
             maximum=hi,
+            perfect_ids=tuple(perfect[:max_reported_ids]),
             unscored_ids=tuple(bad[:max_reported_ids]),
         )
 
@@ -376,8 +395,10 @@ def format_summary_table(summaries: Sequence[MetricSummary]) -> str:
     if any_unscored:
         lines.append("mean/std/min/max are over the 'scored' (finite) samples only.")
         lines.append("  nan  = could not be scored (empty amplitude mask -> all-air slice)")
-        lines.append("  +inf = exact match, zero MSE")
+        lines.append("  +inf = exact match; a perfect score excluded from the mean, not a failure")
         for s in summaries:
+            if s.perfect_ids:
+                lines.append(f"perfect (excluded from mean) {s.name}: {', '.join(s.perfect_ids)}")
             if s.unscored_ids:
                 lines.append(f"unscored {s.name}: {', '.join(s.unscored_ids)}")
 
@@ -519,56 +540,13 @@ def main(cfg: DictConfig) -> None:
     torch.set_float32_matmul_precision(precision)
     print(f"Starting evaluation on: {device}")
 
-    # 2. Model. This match block and the checkpoint loading below mirror
-    # generate.py, which is deliberately left untouched; a third architecture
-    # added there needs adding here too.
-    model_name = cfg.get("model", {}).get("name", "c_unet")
-    base_channels = cfg.get("model", {}).get("base_channels", 64)
-
-    match model_name:
-        case "c_unet_attention":
-            from cfm.models.cylindrical_unet_attention import CylindricalUNetAttention
-
-            channel_mults = cfg.get("model", {}).get("channel_mults", [1, 2, 4, 8, 8])
-            use_attention = cfg.get("model", {}).get("use_attention", True)
-            attn_heads = cfg.get("model", {}).get("attn_heads", 4)
-
-            model = CylindricalUNetAttention(
-                base_channels=base_channels,
-                channel_mults=list(channel_mults),
-                use_attention=use_attention,
-                attn_heads=attn_heads,
-            ).to(device)
-            print(f"Instantiated CylindricalUNetAttention with base_channels={base_channels}")
-
-        case "c_unet":
-            model = CylindricalUNet(base_channels=base_channels).to(device)
-            print(f"Instantiated standard CylindricalUNet with base_channels={base_channels}")
-
-        case _:
-            raise ValueError(f"Unknown config model_name: {model_name}")
-
-    # 3. Checkpoint. Not compiled: one-shot eval pays the compile cost for nothing.
-    run_name = eval_cfg.get("run_name") or cfg.get("logging", {}).get("experiment_name")
-    if not run_name:
-        raise ValueError("No run_name in evaluate config and no experiment_name in logging config")
-
+    # 2. Model and checkpoint. Not compiled: one-shot eval pays the compile cost
+    # for nothing. load_weights also puts the model in eval mode.
     orig_cwd = hydra.utils.get_original_cwd()
-    run_dir = os.path.join(orig_cwd, "outputs", "train", run_name)
-    print(f"Searching for best checkpoint in: {run_dir}")
-
-    checkpoints = glob.glob(os.path.join(run_dir, "**", "*.pt"), recursive=True)
-    if not checkpoints:
-        raise FileNotFoundError(f"No .pt checkpoints found in '{run_dir}'")
-    checkpoint_path = max(checkpoints, key=os.path.getmtime)
-
-    print(f"Loading weights from: {checkpoint_path}")
-    state_dict = torch.load(checkpoint_path, map_location=device, weights_only=True)
-    # Strip the prefix torch.compile leaves behind so compiled checkpoints load.
-    clean_state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
-    model.load_state_dict(clean_state_dict)
-    model.eval()
-    print(f"Successfully loaded weights from {checkpoint_path}")
+    run_name = eval_cfg.get("run_name") or cfg.get("logging", {}).get("experiment_name")
+    model = build_model(cfg, device)
+    checkpoint_path = resolve_checkpoint(cfg, "evaluate", orig_cwd)
+    load_weights(model, checkpoint_path, device)
 
     # 4. Data. Same pipeline as train.py; a mismatch invalidates data_range=1.0.
     pipeline = Compose(
