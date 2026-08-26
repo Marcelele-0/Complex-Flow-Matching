@@ -1,4 +1,3 @@
-import glob
 import math
 import os
 
@@ -11,17 +10,8 @@ from omegaconf import DictConfig
 from cfm.flow.solver import CylindricalODESolver
 
 # Project-specific imports
-from cfm.models.cylindrical_unet import CylindricalUNet
 from cfm.utils.complex_ops import cylinder_to_complex
-
-
-def find_latest_checkpoint(base_dir="outputs/train"):
-    """Returns the most recent checkpoint weights file from Hydra outputs."""
-    checkpoints = glob.glob(os.path.join(base_dir, "**", "*.pt"), recursive=True)
-    if not checkpoints:
-        return None
-    # Sort by modification time (most recently saved = highest epoch in newest run)
-    return max(checkpoints, key=os.path.getmtime)
+from cfm.utils.inference import build_model, load_weights, resolve_checkpoint
 
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
@@ -30,61 +20,11 @@ def main(cfg: DictConfig) -> None:
     print(f"Starting Inference on: {device}")
 
     # --- 1. Model Setup ---
-    model_name = cfg.get("model", {}).get("name", "c_unet")
-    base_channels = cfg.get("model", {}).get("base_channels", 64)
+    model = build_model(cfg, device)
 
-    match model_name:
-        case "c_unet_attention":
-            from cfm.models.cylindrical_unet_attention import CylindricalUNetAttention
-
-            channel_mults = cfg.get("model", {}).get("channel_mults", [1, 2, 4, 8, 8])
-            use_attention = cfg.get("model", {}).get("use_attention", True)
-            attn_heads = cfg.get("model", {}).get("attn_heads", 4)
-
-            model = CylindricalUNetAttention(
-                base_channels=base_channels,
-                channel_mults=list(channel_mults),
-                use_attention=use_attention,
-                attn_heads=attn_heads,
-            ).to(device)
-            print(f"Instantiated CylindricalUNetAttention with base_channels={base_channels}")
-
-        case "c_unet":
-            model = CylindricalUNet(base_channels=base_channels).to(device)
-            print(f"Instantiated standard CylindricalUNet with base_channels={base_channels}")
-
-        case _:
-            raise ValueError(f"Unknown config model_name: {model_name}")
-
-    # Get checkpoint from run_name or fallback to logging.experiment_name
-    run_name = cfg.get("generate", {}).get("run_name")
-
-    if not run_name:
-        # Fallback to experiment_name from logging config
-        run_name = cfg.get("logging", {}).get("experiment_name")
-
-    if not run_name:
-        raise ValueError("No run_name in generate config and no experiment_name in logging config")
-
-    # Search for best checkpoint in outputs/train/{run_name}/
-    orig_cwd = hydra.utils.get_original_cwd()
-    run_dir = os.path.join(orig_cwd, "outputs", "train", run_name)
-
-    print(f"Searching for best checkpoint in: {run_dir}")
-    checkpoint_path = find_latest_checkpoint(run_dir)
-
-    if checkpoint_path is None:
-        raise FileNotFoundError(f"No .pt checkpoints found in '{run_dir}'")
-
-    print(f"Loading weights from: {checkpoint_path}")
-
-    # Load state dict and handle 'torch.compile' prefixes if necessary
-    state_dict = torch.load(checkpoint_path, map_location=device, weights_only=True)
-    clean_state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
-
-    model.load_state_dict(clean_state_dict)
-    model.eval()
-    print(f"Successfully loaded weights from {checkpoint_path}")
+    # Checkpoint from generate.run_name, falling back to logging.experiment_name
+    checkpoint_path = resolve_checkpoint(cfg, "generate", hydra.utils.get_original_cwd())
+    load_weights(model, checkpoint_path, device)
 
     # --- 2. Correct Cylindrical Noise Initialization (x_0) ---
     # We must match the training distribution: Amp in [0, 1] and Phase on circle [0, 2pi]
