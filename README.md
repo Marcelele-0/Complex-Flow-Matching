@@ -43,6 +43,7 @@ We construct a probability path from pure noise to real MRI data using shortest 
 src/cfm/
 ├── train.py              # Training entry point
 ├── generate.py           # Generation/inference
+├── evaluate.py           # Reconstruction-style evaluation (PSNR/SSIM/phase)
 ├── models/
 │   ├── cylindrical_unet.py
 │   └── cylindrical_unet_attention.py  # U-Net with attention
@@ -55,7 +56,8 @@ src/cfm/
 │   └── transforms.py     # Data pipelines
 └── utils/
     ├── complex_ops.py    # Complex number utilities
-    └── metrics.py        # Evaluation metrics
+    ├── inference.py      # Shared model building + checkpoint loading
+    └── metrics.py        # PSNR, SSIM, circular phase error
 
 conf/                    # Hydra configuration
 ├── config.yaml           # Main config
@@ -64,14 +66,17 @@ conf/                    # Hydra configuration
 ├── model/                # Model configs
 ├── training/             # Training hyperparameters
 ├── dataset/              # Dataset paths
-└── generate/             # Generation settings
+├── generate/             # Generation settings
+└── evaluate/             # Evaluation settings
 
 outputs/
 ├── train/{experiment_name}/{date}_{time}/
 │   ├── checkpoints/     # Model weights (.pt)
 │   └── wandb/           # W&B logs
-└── generate/{experiment_name}/{date}_{time}/
-    └── *.png             # Generated images
+├── generate/{experiment_name}/{date}_{time}/
+│   └── *.png             # Generated images
+└── evaluate/{experiment_name}/{date}_{time}/
+    └── metrics.json      # Scored metrics
 
 schedule_runs.sh         # Batch training script
 ```
@@ -120,6 +125,42 @@ uv run src/cfm/generate.py generate.run_name=c_unet_attention_run
 ```bash
 uv run src/cfm/generate.py generate.run_name=my_run generate.num_samples=10
 ```
+
+### Evaluation
+
+`generate.py` samples from pure noise, so there is no ground truth to score against.
+`evaluate.py` instead measures a **reconstruction**: a real slice is partially noised
+via the flow bridge, integrated back to `t=1` by the model, and compared to the
+original with PSNR, SSIM and circular phase error.
+
+```bash
+uv run src/cfm/evaluate.py evaluate.run_name=c_unet_attention_run
+```
+
+**Key settings:**
+
+| Setting | Meaning |
+|---|---|
+| `t_start` | How much the model must restore. `0.0` = pure generation, `0.5` = the real test, `1.0` = pipeline self-test (~150 dB) |
+| `split` | Which manifest to score (`train`/`val`/`test`), or `null` for every file in `data_dir` |
+| `max_samples` | Cap on slices scored; they are strided, not truncated |
+| `mask_threshold` | Amplitude floor for the phase error, so air does not dominate |
+
+```bash
+# sweep how much of the reconstruction the model is responsible for
+uv run src/cfm/evaluate.py evaluate.run_name=my_run evaluate.t_start=0.75
+
+# quick smoke test: should print PSNR ~150 dB, SSIM 1.0000, phase ~0
+uv run src/cfm/evaluate.py evaluate.t_start=1.0 evaluate.num_steps=2 evaluate.max_samples=8
+```
+
+Prints a summary table and writes `metrics.json` to the run's output directory. Logs to
+W&B when `logging.use_wandb=true`.
+
+> **These are not generalization numbers.** `split` selects which files are *scored*;
+> it does not hold them out. `train.py` currently globs every `.h5` under `data_dir` with
+> no split filter, so the volumes scored here were almost certainly in the training set.
+> Read the results as reconstruction fidelity until the same manifests gate training.
 
 ### Configuration
 

@@ -158,7 +158,13 @@ class TestEndToEndReconstruction:
         # The unscorable sample must not poison the reported number.
         assert math.isfinite(phase_summary.mean)
         assert math.isfinite(psnr_summary.mean)
+
+        # The same slice is unscorable for phase (no tissue to compare) but a
+        # perfect match for amplitude. Those must not share a label.
         assert phase_summary.unscored_ids == ("b",)
+        assert phase_summary.perfect_ids == ()
+        assert psnr_summary.perfect_ids == ("b",)
+        assert psnr_summary.unscored_ids == ()
 
 
 class TestMetricAccumulator:
@@ -175,6 +181,22 @@ class TestMetricAccumulator:
         assert summary.mean == pytest.approx(2.0)
         assert summary.minimum == pytest.approx(1.0)
         assert summary.maximum == pytest.approx(3.0)
+        # Index 1 is NaN (unscorable), index 2 is +inf (perfect). Separate lists.
+        assert summary.unscored_ids == ("#1",)
+        assert summary.perfect_ids == ("#2",)
+
+    def test_perfect_and_unscored_are_labelled_separately(self) -> None:
+        """A +inf sample is a perfect score, so it must not read as a failure."""
+        acc = MetricAccumulator("psnr_db")
+        acc.update(torch.tensor([30.0, float("inf"), float("nan")]), ["ok", "exact", "air"])
+
+        table = format_summary_table([acc.summary()])
+        perfect_line = next(line for line in table.splitlines() if line.startswith("perfect"))
+        unscored_line = next(line for line in table.splitlines() if line.startswith("unscored"))
+
+        assert "exact" in perfect_line and "air" not in perfect_line
+        assert "air" in unscored_line and "exact" not in unscored_line
+        assert "not a failure" in table
 
     def test_all_unscored_yields_nan_not_zero(self) -> None:
         acc = MetricAccumulator("phase_error_rad")
