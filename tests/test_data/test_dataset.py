@@ -42,3 +42,34 @@ def test_skm_tea_dataset_with_transforms(dummy_skm_tea_dir) -> None:
     # With pipeline, expect a cylinder [3, H, W] float32
     assert sample.shape == (3, 32, 32)
     assert sample.dtype == torch.float32
+
+
+def test_skm_tea_dataset_num_slices_1_matches_default(dummy_skm_tea_dir) -> None:
+    # num_slices defaults to 1; passing it explicitly must not change behavior
+    # at all (same __len__, same per-index tensor, bit-for-bit).
+    dataset_default = SKMTEADataset(data_dir=dummy_skm_tea_dir)
+    dataset_explicit = SKMTEADataset(data_dir=dummy_skm_tea_dir, num_slices=1)
+
+    assert len(dataset_default) == len(dataset_explicit)
+
+    for idx in range(len(dataset_default)):
+        torch.testing.assert_close(dataset_explicit[idx], dataset_default[idx])
+
+
+def test_skm_tea_dataset_num_slices_3_shape(dummy_skm_tea_dir) -> None:
+    """Tests that the num_slices=3 window loads with the expected [3, 1, H, W]
+    raw shape and [3, 3, H, W] shape once the per-slice pipeline is applied."""
+    dataset_raw = SKMTEADataset(data_dir=dummy_skm_tea_dir, num_slices=3)
+    assert len(dataset_raw) == len(SKMTEADataset(data_dir=dummy_skm_tea_dir))
+
+    sample_raw = dataset_raw[0]
+    assert sample_raw.shape == (3, 1, 32, 32)
+    assert sample_raw.dtype == torch.complex64
+
+    pipeline = Compose([ComplexToCylinderTransform()])
+    dataset_transformed = SKMTEADataset(
+        data_dir=dummy_skm_tea_dir, transform=pipeline, num_slices=3
+    )
+    sample_transformed = dataset_transformed[0]
+    assert sample_transformed.shape == (3, 3, 32, 32)
+    assert sample_transformed.dtype == torch.float32
