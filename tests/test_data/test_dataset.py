@@ -67,7 +67,9 @@ def test_skm_tea_dataset_num_slices_3_shape(dummy_skm_tea_dir) -> None:
     assert sample_raw.dtype == torch.complex64
 
     pipeline = Compose([ComplexToCylinderTransform()])
-    dataset_transformed = SKMTEADataset(data_dir=dummy_skm_tea_dir, transform=pipeline, num_slices=3)
+    dataset_transformed = SKMTEADataset(
+        data_dir=dummy_skm_tea_dir, transform=pipeline, num_slices=3
+    )
     sample_transformed = dataset_transformed[0]
     assert sample_transformed.shape == (3, 3, 32, 32)
     assert sample_transformed.dtype == torch.float32
