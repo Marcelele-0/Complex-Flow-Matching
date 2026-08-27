@@ -62,7 +62,8 @@ def main(cfg: DictConfig) -> None:
     )
 
     data_dir = cfg.get("dataset", {}).get("data_dir", "../data/skm-tea-mini/v1-release")
-    dataset = SKMTEADataset(data_dir=data_dir, transform=pipeline)
+    num_slices = cfg.get("dataset", {}).get("num_slices", 1)
+    dataset = SKMTEADataset(data_dir=data_dir, transform=pipeline, num_slices=num_slices)
 
     batch_size = cfg.get("training", {}).get("batch_size", 4)
     num_workers = cfg.get("training", {}).get("num_workers", 4)
