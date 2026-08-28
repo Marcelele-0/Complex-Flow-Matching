@@ -157,6 +157,41 @@ def test_generation_mode_default_is_unaffected(dummy_skm_tea_dir_large) -> None:
     assert isinstance(dataset[0], torch.Tensor)
 
 
+def test_reconstruction_mask_is_1d_along_phase_encode_axis(dummy_skm_tea_dir_large) -> None:
+    """Trajectory is 1D Cartesian phase-encoding: every row shares the same
+    pattern of sampled columns, not an independently-sampled 2D mask."""
+    dataset = _reconstruction_dataset(dummy_skm_tea_dir_large)
+    mask = dataset[0]["mask"][0]  # [H, W]
+
+    assert torch.all(mask == mask[0:1, :])
+
+
+def test_reconstruction_acceleration_8x_yields_sparser_mask(dummy_skm_tea_dir_large) -> None:
+    """The Hydra acceleration flag must actually change the sampling density
+    (ticket names 4x and 8x as the two example settings to switch between)."""
+    dataset_4x = _reconstruction_dataset(dummy_skm_tea_dir_large, acceleration=4)
+    dataset_8x = _reconstruction_dataset(dummy_skm_tea_dir_large, acceleration=8)
+
+    kept_4x = dataset_4x[0]["mask"].sum()
+    kept_8x = dataset_8x[0]["mask"].sum()
+
+    assert kept_8x < kept_4x
+
+
+def test_reconstruction_via_dataloader_batches_dict(dummy_skm_tea_dir_large) -> None:
+    """The dict sample format must survive the default DataLoader collate_fn,
+    since the ticket specifies the *DataLoader* should yield input/mask/target."""
+    dataset = _reconstruction_dataset(dummy_skm_tea_dir_large)
+    loader = torch.utils.data.DataLoader(dataset, batch_size=2, shuffle=False)
+
+    batch = next(iter(loader))
+
+    assert set(batch.keys()) == {"input", "mask", "target"}
+    assert batch["input"].shape == (2, 3, 48, 128)
+    assert batch["mask"].shape == (2, 1, 48, 128)
+    assert batch["target"].shape == (2, 3, 48, 128)
+
+
 def test_reconstruction_with_multi_slice_raises_value_error(dummy_skm_tea_dir_large) -> None:
     with pytest.raises(ValueError):
         SKMTEADataset(data_dir=dummy_skm_tea_dir_large, mode="reconstruction", num_slices=3)
