@@ -46,7 +46,8 @@ src/cfm/
 ├── evaluate.py           # Reconstruction-style evaluation (PSNR/SSIM/phase)
 ├── models/
 │   ├── cylindrical_unet.py
-│   └── cylindrical_unet_attention.py  # U-Net with attention
+│   ├── cylindrical_unet_attention.py  # U-Net with attention
+│   └── cylindrical_unet_cross_slice.py  # 2.5D, cross-slice attention
 ├── flow/
 │   ├── bridge.py         # Geodesic Flow Bridge
 │   ├── solver.py         # ODE solver for generation
@@ -113,6 +114,28 @@ uv run src/cfm/train.py training.loss.lambda_phase=2.0 logging.experiment_name=m
 ./schedule_runs.sh
 ```
 Edit the script to customize experiment parameters.
+
+**2.5D cross-slice model:**
+
+`c_unet_cross_slice` runs a shared 2D encoder over a window of neighbouring slices,
+fuses them with attention at the bottleneck, and decodes the **center slice only**.
+It buys volumetric consistency without a full 3D U-Net.
+
+```bash
+uv run src/cfm/train.py model=c_unet_cross_slice dataset.num_slices=3
+```
+
+`dataset.num_slices` must be odd and greater than 1 for this model; the 2D models
+require `num_slices=1`. Training fails immediately on a mismatch rather than
+crashing later inside a convolution.
+
+> **Sampling is not wired yet.** The model emits a center-only velocity, which the
+> ODE solver cannot use to advance a multi-slice state, so `generate.py` and
+> `evaluate.py` raise `NotImplementedError` for it. Use the 2D models to sample.
+>
+> **Memory:** the encoder runs on `batch_size × num_slices` images, so expect to
+> roughly halve `batch_size` versus `c_unet_attention` at `num_slices=3`. Measure
+> rather than assume — the bottleneck is actually cheaper here.
 
 ### Generation
 
