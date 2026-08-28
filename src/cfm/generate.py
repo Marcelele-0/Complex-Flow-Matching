@@ -11,7 +11,12 @@ from cfm.flow.solver import CylindricalODESolver
 
 # Project-specific imports
 from cfm.utils.complex_ops import cylinder_to_complex
-from cfm.utils.inference import build_model, load_weights, resolve_checkpoint
+from cfm.utils.inference import (
+    build_model,
+    load_weights,
+    reject_unsupported_sampling_model,
+    resolve_checkpoint,
+)
 
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
@@ -20,6 +25,7 @@ def main(cfg: DictConfig) -> None:
     print(f"Starting Inference on: {device}")
 
     # --- 1. Model Setup ---
+    reject_unsupported_sampling_model(cfg)
     model = build_model(cfg, device)
 
     # Checkpoint from generate.run_name, falling back to logging.experiment_name
