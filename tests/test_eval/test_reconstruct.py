@@ -1,6 +1,7 @@
 """Tests for the single-slice reconstruction and visualization module."""
 
 import math
+
 import matplotlib.pyplot as plt
 import pytest
 import torch

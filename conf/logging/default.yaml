@@ -1,3 +1,10 @@
+# Local preset: no Weights & Biases. Composed by conf/config.yaml, so a plain
+# `uv run src/cfm/train.py` writes metrics to stdout and nothing else.
+#
+# Opt in with `logging=w_and_b`. That file differs from this one *only* in
+# use_wandb, and deliberately so: experiment_name feeds the run directory in
+# conf/hydra/default.yaml, so switching presets must not silently move where
+# checkpoints and outputs land.
 use_wandb: false
-project_name: "Decoupled-Cylindrical-Flow"
-experiment_name: "c_unet_baseline_l1"
+project_name: "complex_flow_matching"
+experiment_name: "c_unet_attention_run"

@@ -57,3 +57,43 @@ def cylinder_to_complex(cylinder_tensor: torch.Tensor, eps: float = 1e-8) -> tor
     imag_part = magnitude * torch.sin(phi)
 
     return torch.complex(real_part, imag_part)
+
+
+def complex_to_euclidean(z: torch.Tensor) -> torch.Tensor:
+    """
+    Convert a complex number to the flat Euclidean representation (real and imaginary parts).
+
+    The Euclidean counterpart of :func:`complex_to_cylinder`. Note the absence of
+    an ``eps``: there is no ``atan2`` here and therefore no zero-magnitude
+    singularity to guard against, which is one of the concrete differences
+    between the two geometries.
+
+    Args:
+        z (torch.Tensor): A tensor of shape [batch, 1, H, W] representing complex numbers.
+
+    Returns:
+        torch.Tensor: A tensor of shape [batch, 2, H, W] of type torch.float32.
+                      Channel 0: real part
+                      Channel 1: imaginary part
+    """
+    return torch.cat([z.real.to(torch.float32), z.imag.to(torch.float32)], dim=1)
+
+
+def euclidean_to_complex(euclidean_tensor: torch.Tensor) -> torch.Tensor:
+    """
+    Convert flat Euclidean coordinates back to complex numbers.
+
+    Unlike :func:`cylinder_to_complex` there is nothing to re-project: every
+    point of R^2 is a valid complex number, so an ODE trajectory can never leave
+    the representable set. That is exactly why the Euclidean baseline needs no
+    manifold correction, and equally why it is free to wander into states the
+    cylindrical formulation forbids.
+
+    Args:
+        euclidean_tensor (torch.Tensor): A tensor of shape [batch, 2, H, W].
+
+    Returns:
+        torch.Tensor: A tensor of shape [batch, 1, H, W] representing the
+            complex numbers (torch.complex64).
+    """
+    return torch.complex(euclidean_tensor[:, 0:1, :, :], euclidean_tensor[:, 1:2, :, :])

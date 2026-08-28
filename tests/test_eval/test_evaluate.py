@@ -9,17 +9,17 @@ import math
 import pytest
 import torch
 
+from cfm.data.splits import select_indices
 from cfm.evaluate import (
     MetricAccumulator,
     compute_batch_metrics,
     format_summary_table,
     integrate_from_t,
     reconstruct_batch,
-    sample_cylindrical_noise,
-    select_indices,
 )
-from cfm.flow.bridge import GeodesicFlowBridge
 from cfm.flow.solver import CylindricalODESolver
+from cfm.manifolds import CylindricalManifold, EuclideanManifold
+from cfm.manifolds.cylindrical import sample_cylindrical_noise
 
 
 def _cylindrical_state(batch: int, h: int, w: int, seed: int = 0) -> torch.Tensor:
@@ -81,7 +81,20 @@ class TestIntegration:
 
     def test_noise_is_on_the_cylinder(self) -> None:
         """Sampled noise must match train.py's distribution and stay on the manifold."""
-        noise = sample_cylindrical_noise(4, 8, 8, torch.device("cpu"))
+        cpu = torch.device("cpu")
+
+        # The manifold must delegate to the module-level draw, not reimplement it:
+        # the Euclidean 'matched' prior's fairness guarantee rests on that one
+        # function's RNG call order.
+        via_manifold = CylindricalManifold().sample_noise(
+            4, 8, 8, cpu, torch.Generator(device="cpu").manual_seed(7)
+        )
+        direct = sample_cylindrical_noise(
+            4, 8, 8, cpu, torch.Generator(device="cpu").manual_seed(7)
+        )
+        assert torch.equal(via_manifold, direct)
+
+        noise = sample_cylindrical_noise(4, 8, 8, cpu)
         assert noise.shape == (4, 3, 8, 8)
         assert torch.all(noise[:, 0:1] >= 0.0) and torch.all(noise[:, 0:1] <= 1.0)
         radius_sq = noise[:, 1:2] ** 2 + noise[:, 2:3] ** 2
@@ -99,12 +112,12 @@ class TestEndToEndReconstruction:
         def nonsense_model(x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
             return torch.randn(x.shape[0], 2, x.shape[2], x.shape[3]) * 10.0
 
-        solver = CylindricalODESolver(num_steps=5)
-        bridge = GeodesicFlowBridge()
+        manifold = CylindricalManifold()
+        solver = manifold.make_solver(num_steps=5)
         x_1 = _cylindrical_state(3, 16, 16, seed=4)
 
-        pred = reconstruct_batch(nonsense_model, solver, bridge, x_1, t_start=1.0)
-        metrics = compute_batch_metrics(pred, x_1, mask_threshold=0.05)
+        pred = reconstruct_batch(nonsense_model, manifold, solver, x_1, t_start=1.0)
+        metrics = compute_batch_metrics(manifold, pred, x_1, mask_threshold=0.05)
 
         # NOT +inf: cylinder_to_complex rebuilds re = m*cos(phi), and the bridge's
         # atan2 -> +u_phi -> cos/sin roundtrip perturbs phi by ~1e-7, so abs() is
@@ -114,18 +127,18 @@ class TestEndToEndReconstruction:
         assert torch.all(metrics["phase_error_rad"] < 1e-5)
 
     def test_unmasked_phase_error_is_reported_alongside(self) -> None:
-        solver = CylindricalODESolver(num_steps=2)
-        bridge = GeodesicFlowBridge()
+        manifold = CylindricalManifold()
+        solver = manifold.make_solver(num_steps=2)
         x_1 = _cylindrical_state(2, 16, 16, seed=5)
 
-        pred = reconstruct_batch(_state_and_time_model, solver, bridge, x_1, t_start=0.5)
-        metrics = compute_batch_metrics(pred, x_1, mask_threshold=0.05)
+        pred = reconstruct_batch(_state_and_time_model, manifold, solver, x_1, t_start=0.5)
+        metrics = compute_batch_metrics(manifold, pred, x_1, mask_threshold=0.05)
 
         assert "phase_error_rad_unmasked" in metrics
         assert metrics["phase_error_rad_unmasked"].shape == (2,)
 
         # With no threshold the masked entry IS the unmasked one, so no extra key.
-        unmasked_only = compute_batch_metrics(pred, x_1, mask_threshold=None)
+        unmasked_only = compute_batch_metrics(manifold, pred, x_1, mask_threshold=None)
         assert "phase_error_rad_unmasked" not in unmasked_only
 
     def test_all_air_slice_is_unscored_not_zero(self) -> None:
@@ -134,13 +147,13 @@ class TestEndToEndReconstruction:
         def nonsense_model(x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
             return torch.randn(x.shape[0], 2, x.shape[2], x.shape[3]) * 10.0
 
-        solver = CylindricalODESolver(num_steps=3)
-        bridge = GeodesicFlowBridge()
+        manifold = CylindricalManifold()
+        solver = manifold.make_solver(num_steps=3)
         x_1 = _cylindrical_state(3, 16, 16, seed=6)
         x_1[1, 0] = 0.0  # middle slice is pure air: zero amplitude everywhere
 
-        pred = reconstruct_batch(nonsense_model, solver, bridge, x_1, t_start=1.0)
-        metrics = compute_batch_metrics(pred, x_1, mask_threshold=0.05)
+        pred = reconstruct_batch(nonsense_model, manifold, solver, x_1, t_start=1.0)
+        metrics = compute_batch_metrics(manifold, pred, x_1, mask_threshold=0.05)
 
         assert torch.isnan(metrics["phase_error_rad"][1])
         assert torch.isposinf(metrics["psnr_db"][1])
@@ -165,6 +178,99 @@ class TestEndToEndReconstruction:
         assert phase_summary.perfect_ids == ()
         assert psnr_summary.perfect_ids == ("b",)
         assert psnr_summary.unscored_ids == ()
+
+
+class TestEuclideanReconstruction:
+    """The same eval path, run on the flat geometry.
+
+    The point is not that these numbers are good, but that the machinery above -
+    the bridge, the integration, the complex-domain scoring, the accumulator -
+    is genuinely geometry-agnostic and produces a comparable table for both arms.
+    """
+
+    @staticmethod
+    def _euclidean_state(batch: int, h: int, w: int, seed: int = 0) -> torch.Tensor:
+        torch.manual_seed(seed)
+        amp = torch.rand(batch, 1, h, w)
+        phi = torch.rand(batch, 1, h, w) * 2 * math.pi
+        return torch.cat([amp * torch.cos(phi), amp * torch.sin(phi)], dim=1)
+
+    def test_t_start_one_is_a_perfect_reconstruction(self) -> None:
+        """t_start=1 makes the bridge return the target, so metrics must be ~perfect.
+
+        NOT +inf: the bridge evaluates x_0 + t*(x_1 - x_0), which at t=1 is x_1
+        only up to float32 rounding, so abs() is not bit-exact. Measured ~156 dB,
+        the same order as the cylindrical path - for a different reason there
+        (an atan2 -> cos/sin roundtrip), but the same practical floor.
+        """
+
+        def nonsense_model(x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+            return torch.randn(x.shape[0], 2, x.shape[2], x.shape[3]) * 10.0
+
+        manifold = EuclideanManifold()
+        solver = manifold.make_solver(num_steps=5)
+        x_1 = self._euclidean_state(3, 16, 16, seed=7)
+
+        pred = reconstruct_batch(nonsense_model, manifold, solver, x_1, t_start=1.0)
+        metrics = compute_batch_metrics(manifold, pred, x_1, mask_threshold=0.05)
+
+        assert torch.all(metrics["psnr_db"] > 100.0)
+        assert torch.allclose(metrics["ssim"], torch.ones_like(metrics["ssim"]), atol=1e-4)
+        assert torch.all(metrics["phase_error_rad"] < 1e-5)
+
+    def test_produces_the_same_metric_keys_as_the_cylindrical_path(self) -> None:
+        """A comparison table needs both columns to have the same rows."""
+
+        def zero_model(x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+            return torch.zeros(x.shape[0], 2, x.shape[2], x.shape[3])
+
+        euc = EuclideanManifold()
+        euc_metrics = compute_batch_metrics(
+            euc,
+            reconstruct_batch(
+                zero_model,
+                euc,
+                euc.make_solver(2),
+                self._euclidean_state(2, 16, 16, seed=8),
+                t_start=0.5,
+            ),
+            self._euclidean_state(2, 16, 16, seed=8),
+            mask_threshold=0.05,
+        )
+
+        cyl = CylindricalManifold()
+        cyl_metrics = compute_batch_metrics(
+            cyl,
+            reconstruct_batch(
+                zero_model,
+                cyl,
+                cyl.make_solver(2),
+                _cylindrical_state(2, 16, 16, seed=8),
+                t_start=0.5,
+            ),
+            _cylindrical_state(2, 16, 16, seed=8),
+            mask_threshold=0.05,
+        )
+
+        assert euc_metrics.keys() == cyl_metrics.keys()
+        assert all(v.shape == (2,) for v in euc_metrics.values())
+
+    def test_integration_runs_from_an_arbitrary_t_start(self) -> None:
+        """integrate_from_t must drive the Euclidean solver as readily as the cylindrical one."""
+        seen: list[float] = []
+
+        def recording_model(x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+            seen.append(float(t[0]))
+            return torch.zeros(x.shape[0], 2, x.shape[2], x.shape[3])
+
+        manifold = EuclideanManifold()
+        x_start = self._euclidean_state(1, 8, 8, seed=9)
+        out = integrate_from_t(recording_model, manifold.make_solver(5), x_start, t_start=0.4)
+
+        expected = [0.4, 0.52, 0.52, 0.64, 0.64, 0.76, 0.76, 0.88, 0.88]
+        assert seen == pytest.approx(expected, abs=1e-6)
+        # A zero field must leave a flat state untouched: no clamp, no projection.
+        assert torch.equal(out, x_start)
 
 
 class TestMetricAccumulator:

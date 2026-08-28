@@ -82,8 +82,21 @@ class SelfAttention2d(nn.Module):
 
 class CylindricalUNetAttention(nn.Module):
     """
-    Dynamic Cylindrical U-Net built based on configuration parameters.
-    Includes optional Self-Attention at the bottleneck.
+    Dynamic U-Net built from configuration parameters, with optional
+    Self-Attention at the bottleneck.
+
+    The trunk is geometry-agnostic: only ``in_channels`` records which
+    representation is being consumed, so the cylindrical and Euclidean
+    experiments run an identical architecture and differ by one convolution's
+    input width. The name is kept for checkpoint and config compatibility.
+
+    Args:
+        base_channels: Width of the first feature level.
+        channel_mults: Per-level width multipliers; its length sets the depth.
+        use_attention: Whether to insert self-attention at the bottleneck.
+        attn_heads: Number of attention heads.
+        in_channels: Channels of the state, i.e. ``Manifold.state_channels``.
+        out_channels: Channels of the velocity, i.e. ``Manifold.velocity_channels``.
     """
 
     def __init__(
@@ -92,6 +105,8 @@ class CylindricalUNetAttention(nn.Module):
         channel_mults: list | None = None,
         use_attention: bool = True,
         attn_heads: int = 4,
+        in_channels: int = 3,
+        out_channels: int = 2,
     ):
         super().__init__()
 
@@ -106,8 +121,6 @@ class CylindricalUNetAttention(nn.Module):
             nn.SiLU(),
             nn.Linear(time_emb_dim, time_emb_dim),
         )
-
-        self.init_conv = nn.Conv2d(3, base_channels, kernel_size=3, padding=1)
 
         # === DYNAMIC ENCODER ===
         self.downs = nn.ModuleList()
@@ -148,7 +161,16 @@ class CylindricalUNetAttention(nn.Module):
             )
             in_ch = out_ch
 
-        self.final_conv = nn.Conv2d(base_channels, 2, kernel_size=1)
+        self.final_conv = nn.Conv2d(base_channels, out_channels, kernel_size=1)
+
+        # Initial convolution, from the manifold's state channels. This is the one
+        # module whose shape depends on the manifold, so constructing it last means
+        # every other module has already drawn from the RNG at the same stream
+        # position in both geometries: with one seed, the cylindrical and Euclidean
+        # models start from element-wise identical weights everywhere except this
+        # convolution. Moving it earlier silently reintroduces an initialisation
+        # confound. Pinned by tests/test_manifolds/test_manifolds.py.
+        self.init_conv = nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1)
 
     def forward(self, x: torch.Tensor, time: torch.Tensor) -> torch.Tensor:
         t_emb = self.time_mlp(time)

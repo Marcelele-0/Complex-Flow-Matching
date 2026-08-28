@@ -14,14 +14,14 @@ import os
 import torch
 from omegaconf import DictConfig
 
-# Models that train but cannot yet drive CylindricalODESolver, mapped to why.
+# Models that train but cannot yet drive an ODE solver, mapped to why.
 SAMPLING_UNSUPPORTED_MODELS = {
     "c_unet_cross_slice": (
         "predicts a center-slice velocity [B, 2, H, W] from a slice window "
-        "[B, S, 3, H, W]. CylindricalODESolver advances a state with a velocity of "
-        "matching shape, so it cannot step a multi-slice state from this output. "
-        "Training is supported; sampling needs all-slice decoding, which is not "
-        "implemented yet."
+        "[B, S, C, H, W]. A solver advances a state with a velocity of matching "
+        "shape, so it cannot step a multi-slice state from this output. Training "
+        "is supported on either geometry; sampling needs all-slice decoding, "
+        "which is not implemented yet."
     ),
 }
 
@@ -45,17 +45,29 @@ def reject_unsupported_sampling_model(cfg: DictConfig) -> None:
         raise NotImplementedError(f"model={model_name} {reason}")
 
 
-def build_model(cfg: DictConfig, device: torch.device) -> torch.nn.Module:
+def build_model(
+    cfg: DictConfig,
+    device: torch.device,
+    in_channels: int = 3,
+    out_channels: int = 2,
+) -> torch.nn.Module:
     """Instantiate the architecture named by ``cfg.model.name``, on ``device``.
 
-    Register new architectures here: this is the single place both entry points
-    resolve a model name through.
+    Register new architectures here: this is the single place every entry point
+    resolves a model name through.
 
     Args:
         cfg: Full Hydra config. Reads ``model.name``, ``model.base_channels`` and,
             for the attention variant, ``channel_mults`` / ``use_attention`` /
             ``attn_heads``.
         device: Device to move the instantiated model to.
+        in_channels: Width of the state the model consumes, normally
+            ``Manifold.state_channels``. Defaults to the cylindrical 3 so a
+            caller predating the manifold group is unaffected. This is the *only*
+            architectural difference between the two geometries: pass 2 and the
+            same trunk consumes ``(Re, Im)`` instead of ``(m, cos, sin)``.
+        out_channels: Width of the velocity the model emits, normally
+            ``Manifold.velocity_channels``. 2 for both geometries.
 
     Returns:
         The model, on ``device``, in whatever mode ``torch.nn.Module`` defaults to
@@ -81,6 +93,8 @@ def build_model(cfg: DictConfig, device: torch.device) -> torch.nn.Module:
                 channel_mults=list(channel_mults),
                 use_attention=use_attention,
                 attn_heads=attn_heads,
+                in_channels=in_channels,
+                out_channels=out_channels,
             ).to(device)
             print(f"Instantiated CylindricalUNetAttention with base_channels={base_channels}")
 
@@ -94,18 +108,24 @@ def build_model(cfg: DictConfig, device: torch.device) -> torch.nn.Module:
                 base_channels=base_channels,
                 channel_mults=list(channel_mults),
                 attn_heads=attn_heads,
+                in_channels=in_channels,
             ).to(device)
             print(f"Instantiated CylindricalUNetCrossSlice with base_channels={base_channels}")
 
         case "c_unet":
             from cfm.models.cylindrical_unet import CylindricalUNet
 
-            model = CylindricalUNet(base_channels=base_channels).to(device)
+            model = CylindricalUNet(
+                base_channels=base_channels,
+                in_channels=in_channels,
+                out_channels=out_channels,
+            ).to(device)
             print(f"Instantiated standard CylindricalUNet with base_channels={base_channels}")
 
         case _:
             raise ValueError(f"Unknown config model_name: {model_name}")
 
+    print(f"  state channels in: {in_channels}   velocity channels out: {out_channels}")
     return model
 
 

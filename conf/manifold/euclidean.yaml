@@ -1,0 +1,18 @@
+# Flat R^2 - the standard flow-matching baseline the cylindrical model is
+# measured against.
+#
+# State  : [Re(z), Im(z)]            2 channels
+# Bridge : x_t = (1-t)*x_0 + t*x_1,  u = x_1 - x_0
+# Step   : x <- x + v*dt.  No phase wrapping, no modulo, no trig embedding.
+# Loss   : one unweighted regression over both channels (training.loss.vel_loss_type)
+name: euclidean
+
+# Where x_0 is drawn from.
+#   uniform   The default. Modulus ~U[0,1] with a uniform argument - the same law
+#             the cylindrical arm starts from - drawn as a * g/||g|| using only
+#             rand/randn. Same prior on both arms, no trigonometry on this path.
+#   gaussian  Textbook N(0, I). What "standard Euclidean flow matching" means in
+#             the literature; support is not the unit disc.
+#   matched   Replays the cylindrical RNG stream, so one seed gives both arms the
+#             identical noise field. Tighter still, at the cost of a cos/sin draw.
+noise_prior: uniform

@@ -26,9 +26,10 @@ from cfm.data.transforms import (
     ComplexToCylinderTransform,
     Compose,
 )
-from cfm.evaluate import integrate_from_t, sample_cylindrical_noise
+from cfm.evaluate import integrate_from_t
 from cfm.flow.bridge import GeodesicFlowBridge
 from cfm.flow.solver import CylindricalODESolver
+from cfm.manifolds.cylindrical import sample_cylindrical_noise
 from cfm.utils.complex_ops import cylinder_to_complex
 from cfm.utils.inference import build_model, load_weights, resolve_checkpoint
 from cfm.utils.metrics import (
@@ -195,7 +196,10 @@ def render_diagnostic_figure(
     fig.colorbar(im7, ax=axes[1, 3], fraction=0.046, pad=0.04, label="Rad Error")
 
     # Global Title & Statistics Banner
-    title_line1 = f"Reconstruction Benchmark: {sample_id}  (t_start={t_start:.2f}, {noise_pct:.0f}% Noise Degradation)"
+    title_line1 = (
+        f"Reconstruction Benchmark: {sample_id}  "
+        f"(t_start={t_start:.2f}, {noise_pct:.0f}% Noise Degradation)"
+    )
     title_line2 = (
         f"STATISTICS:  PSNR = {metrics['psnr_db']:.2f} dB   |   "
         f"SSIM = {metrics['ssim']:.4f}   |   "
