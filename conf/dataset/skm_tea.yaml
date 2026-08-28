@@ -1,2 +1,3 @@
 data_dir: "data/skm-tea-mini/v1-release"
 num_slices: 1
+acceleration: 4

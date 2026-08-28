@@ -29,6 +29,7 @@ dev = [
     "ipywidgets>=8.1.8",
     "jupyter>=1.1.1",
     "jupytext>=1.16.0",
+    "manim>=0.21.0",
     "plotly>=6.6.0",
     "pre-commit>=4.5.0",
     "pytest>=9.0.2",

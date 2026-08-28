@@ -13,6 +13,7 @@ from cfm.data.transforms import (
     CenterCropModulo,
     ComplexToCylinderTransform,
     Compose,
+    WindowAmplitudeNormalize,
 )
 from cfm.flow.bridge import GeodesicFlowBridge
 from cfm.flow.torus_math import DecoupledCylindricalLoss
@@ -57,10 +58,6 @@ def main(cfg: DictConfig) -> None:
 
     # --- Data Pipeline ---
     # Ensure dataset loads target[slice, :, :, 0, 0] as a complex tensor!
-    pipeline = Compose(
-        [ComplexToCylinderTransform(), AmplitudeNormalize(), CenterCropModulo(base=16)]
-    )
-
     data_dir = cfg.get("dataset", {}).get("data_dir", "../data/skm-tea-mini/v1-release")
     num_slices = cfg.get("dataset", {}).get("num_slices", 1)
 
@@ -85,7 +82,25 @@ def main(cfg: DictConfig) -> None:
             "Use model=c_unet_cross_slice, or set dataset.num_slices=1."
         )
 
-    dataset = SKMTEADataset(data_dir=data_dir, transform=pipeline, num_slices=num_slices)
+    if num_slices > 1:
+        # WindowAmplitudeNormalize needs the whole stacked window at once, so
+        # amplitude normalization moves to window_transform (post-stack), and
+        # runs before the crop - same order as the baseline pipeline below -
+        # so the window max is computed on the uncropped image, not after.
+        slice_pipeline = Compose([ComplexToCylinderTransform()])
+        window_pipeline = Compose([WindowAmplitudeNormalize(), CenterCropModulo(base=16)])
+    else:
+        slice_pipeline = Compose(
+            [ComplexToCylinderTransform(), AmplitudeNormalize(), CenterCropModulo(base=16)]
+        )
+        window_pipeline = None
+
+    dataset = SKMTEADataset(
+        data_dir=data_dir,
+        transform=slice_pipeline,
+        window_transform=window_pipeline,
+        num_slices=num_slices,
+    )
 
     batch_size = cfg.get("training", {}).get("batch_size", 4)
     num_workers = cfg.get("training", {}).get("num_workers", 4)

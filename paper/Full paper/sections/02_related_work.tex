@@ -1,0 +1,11 @@
+\section{Related Work}
+\label{sec:related}
+
+\textbf{Generative Models for MRI.} 
+Deep generative models, particularly score-based diffusion \cite{song2020score} and Continuous Normalizing Flows (CNFs) \cite{lipman2022flow}, have become the state-of-the-art for medical image synthesis and reconstruction. Flow Matching has recently emerged as a highly efficient alternative, offering simulation-free training of vector fields. We build upon this paradigm, adapting it to the specific constraints of complex-valued MRI.
+
+\textbf{Complex-Valued Deep Learning.} 
+Most deep learning applications in MRI discard the phase or treat the complex signal as two independent Euclidean channels. Recent efforts have highlighted the importance of phase for downstream tasks like quantitative susceptibility mapping (QSM). Unlike models that regress real and imaginary parts, our approach natively respects the periodic topology of the phase by modeling the velocity field on a cylindrical manifold.
+
+\textbf{Volumetric Consistency in Medical Imaging.} 
+Generating continuous 3D structures from 2D slices remains a computational challenge. While 3D U-Nets offer full spatial context, they suffer from prohibitive VRAM requirements, especially when modeling complex-valued data at high resolutions. Conversely, pure 2D slice-by-slice generation introduces discontinuities along the longitudinal axis. To address this, we leverage a 2.5D architecture, utilizing attention mechanisms in the latent space to exchange information between adjacent slices, preserving 3D coherence without the overhead of 3D convolutions.
