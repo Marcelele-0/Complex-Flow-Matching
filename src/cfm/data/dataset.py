@@ -24,9 +24,24 @@ class SKMTEADataset(Dataset):
         data_dir: str,
         transform: Optional[Callable] = None,
         num_slices: int = 1,
+        mode: str = "generation",
+        acceleration: int = 4,
+        mask_seed: Optional[int] = None,
+        pre_transform: Optional[Callable] = None,
+        post_transform: Optional[Callable] = None,
     ) -> None:
         if num_slices <= 0 or num_slices % 2 == 0:
             raise ValueError(f"num_slices must be a positive odd integer, got {num_slices}")
+
+        if mode not in ("generation", "reconstruction"):
+            raise ValueError(f"mode must be 'generation' or 'reconstruction', got {mode!r}")
+
+        if mode == "reconstruction" and num_slices != 1:
+            raise ValueError(
+                f"mode='reconstruction' currently supports num_slices=1 only, got {num_slices}. "
+                "Multi-slice reconstruction needs a decision on whether the whole window "
+                "shares one mask (one acquisition) or gets independent masks; out of scope here."
+            )
 
         self.files = glob.glob(f"{data_dir}/files_recon_calib-24/*.h5")
         if not self.files:
@@ -34,6 +49,11 @@ class SKMTEADataset(Dataset):
 
         self.transform = transform
         self.num_slices = num_slices
+        self.mode = mode
+        self.acceleration = acceleration
+        self.mask_seed = mask_seed
+        self.pre_transform = pre_transform
+        self.post_transform = post_transform
         self.slice_map = []
         self._volume_depths: dict[str, int] = {}
 
