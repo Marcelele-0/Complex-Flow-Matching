@@ -36,8 +36,7 @@ class DecoupledCylindricalLoss(nn.Module):
         super().__init__()
         if amp_loss_type not in VALID_AMP_LOSSES:
             raise ValueError(
-                f"amp_loss_type must be one of {sorted(VALID_AMP_LOSSES)}, "
-                f"got {amp_loss_type!r}"
+                f"amp_loss_type must be one of {sorted(VALID_AMP_LOSSES)}, got {amp_loss_type!r}"
             )
         if phase_loss_type not in VALID_PHASE_LOSSES:
             raise ValueError(

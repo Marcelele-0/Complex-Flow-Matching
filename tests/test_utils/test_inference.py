@@ -15,6 +15,7 @@ from cfm.utils.inference import (
     build_model,
     find_latest_checkpoint,
     load_weights,
+    reject_unsupported_sampling_model,
     resolve_checkpoint,
 )
 
@@ -58,6 +59,37 @@ class TestBuildModel:
         cfg = OmegaConf.create({"model": {"name": "not_a_real_model"}})
         with pytest.raises(ValueError, match="Unknown config model_name"):
             build_model(cfg, CPU)
+
+    def test_builds_cross_slice_unet_returning_center_velocity(self) -> None:
+        cfg = OmegaConf.create(
+            {
+                "model": {
+                    "name": "c_unet_cross_slice",
+                    "base_channels": 16,
+                    "channel_mults": [1, 2],
+                    "attn_heads": 2,
+                }
+            }
+        )
+        model = build_model(cfg, CPU)
+
+        # Window of 3 slices in, one center velocity out.
+        out = model(torch.rand(2, 3, 3, 16, 16), torch.rand(2))
+        assert out.shape == (2, 2, 16, 16)
+
+
+class TestRejectUnsupportedSamplingModel:
+    def test_cross_slice_model_is_rejected_with_an_explanation(self) -> None:
+        cfg = OmegaConf.create({"model": {"name": "c_unet_cross_slice"}})
+        with pytest.raises(NotImplementedError, match="CylindricalODESolver"):
+            reject_unsupported_sampling_model(cfg)
+
+    @pytest.mark.parametrize("name", ["c_unet", "c_unet_attention"])
+    def test_2d_models_pass(self, name: str) -> None:
+        reject_unsupported_sampling_model(OmegaConf.create({"model": {"name": name}}))
+
+    def test_missing_model_config_defaults_to_a_supported_model(self) -> None:
+        reject_unsupported_sampling_model(OmegaConf.create({}))
 
 
 class TestFindLatestCheckpoint:
