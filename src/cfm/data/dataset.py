@@ -1,4 +1,6 @@
 import glob
+import hashlib
+import os
 from typing import Callable, Optional
 
 import h5py
@@ -43,6 +45,9 @@ class SKMTEADataset(Dataset):
                 "shares one mask (one acquisition) or gets independent masks; out of scope here."
             )
 
+        if acceleration < 1:
+            raise ValueError(f"acceleration must be >= 1, got {acceleration}")
+
         self.files = glob.glob(f"{data_dir}/files_recon_calib-24/*.h5")
         if not self.files:
             raise FileNotFoundError(f"No .h5 files found in: {data_dir}")
@@ -76,6 +81,39 @@ class SKMTEADataset(Dataset):
         while i < 0 or i > depth - 1:
             i = -i if i < 0 else 2 * (depth - 1) - i
         return i
+
+    def _mask_seed(self, f_path: str, slice_idx: int) -> int:
+        """Deterministic seed from (file, slice, acceleration[, mask_seed]), stable
+        across processes/workers (unlike Python's randomized hash())."""
+        key = f"{os.path.basename(f_path)}:{slice_idx}:{self.acceleration}"
+        if self.mask_seed is not None:
+            key = f"{key}:{self.mask_seed}"
+        return int.from_bytes(hashlib.sha256(key.encode()).digest()[:4], "big")
+
+    def _undersampling_mask(self, f_path: str, slice_idx: int, h: int, w: int) -> torch.Tensor:
+        """Builds a deterministic 1D Cartesian phase-encoding mask along the last
+        (Nz) axis: a fixed center ACS region is always kept, and the remaining
+        lines needed to reach `self.acceleration` are chosen uniformly at random
+        with a per-(file, slice) seed, then tiled to [1, H, W]."""
+        rng = np.random.default_rng(self._mask_seed(f_path, slice_idx))
+
+        num_center_lines = min(24, w)
+        center_start = w // 2 - num_center_lines // 2
+        center_end = center_start + num_center_lines
+
+        line_mask = np.zeros(w, dtype=np.float32)
+        line_mask[center_start:center_end] = 1.0
+
+        remaining_lines = int(w / self.acceleration) - num_center_lines
+        if remaining_lines > 0:
+            leftover_indices = np.concatenate(
+                [np.arange(0, center_start), np.arange(center_end, w)]
+            )
+            sampled = rng.choice(leftover_indices, remaining_lines, replace=False)
+            line_mask[sampled] = 1.0
+
+        mask = np.tile(line_mask, (h, 1))
+        return torch.from_numpy(mask).unsqueeze(0)
 
     def __getitem__(self, idx: int) -> torch.Tensor:
         f_path, slice_idx = self.slice_map[idx]
