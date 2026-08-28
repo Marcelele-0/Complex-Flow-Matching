@@ -14,6 +14,36 @@ import os
 import torch
 from omegaconf import DictConfig
 
+# Models that train but cannot yet drive CylindricalODESolver, mapped to why.
+SAMPLING_UNSUPPORTED_MODELS = {
+    "c_unet_cross_slice": (
+        "predicts a center-slice velocity [B, 2, H, W] from a slice window "
+        "[B, S, 3, H, W]. CylindricalODESolver advances a state with a velocity of "
+        "matching shape, so it cannot step a multi-slice state from this output. "
+        "Training is supported; sampling needs all-slice decoding, which is not "
+        "implemented yet."
+    ),
+}
+
+
+def reject_unsupported_sampling_model(cfg: DictConfig) -> None:
+    """Fail early when the configured model cannot be sampled from.
+
+    Called by the sampling entry points before any checkpoint or data work, so the
+    limitation is stated plainly instead of surfacing as a shape error inside the
+    solver.
+
+    Args:
+        cfg: Full Hydra config; reads ``model.name``.
+
+    Raises:
+        NotImplementedError: If the configured model cannot drive the solver.
+    """
+    model_name = cfg.get("model", {}).get("name", "c_unet")
+    reason = SAMPLING_UNSUPPORTED_MODELS.get(model_name)
+    if reason is not None:
+        raise NotImplementedError(f"model={model_name} {reason}")
+
 
 def build_model(cfg: DictConfig, device: torch.device) -> torch.nn.Module:
     """Instantiate the architecture named by ``cfg.model.name``, on ``device``.
@@ -53,6 +83,19 @@ def build_model(cfg: DictConfig, device: torch.device) -> torch.nn.Module:
                 attn_heads=attn_heads,
             ).to(device)
             print(f"Instantiated CylindricalUNetAttention with base_channels={base_channels}")
+
+        case "c_unet_cross_slice":
+            from cfm.models.cylindrical_unet_cross_slice import CylindricalUNetCrossSlice
+
+            channel_mults = cfg.get("model", {}).get("channel_mults", [1, 2, 4, 8, 8])
+            attn_heads = cfg.get("model", {}).get("attn_heads", 4)
+
+            model = CylindricalUNetCrossSlice(
+                base_channels=base_channels,
+                channel_mults=list(channel_mults),
+                attn_heads=attn_heads,
+            ).to(device)
+            print(f"Instantiated CylindricalUNetCrossSlice with base_channels={base_channels}")
 
         case "c_unet":
             from cfm.models.cylindrical_unet import CylindricalUNet

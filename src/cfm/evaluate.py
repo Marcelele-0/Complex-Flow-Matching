@@ -54,7 +54,12 @@ from cfm.data.transforms import (
 from cfm.flow.bridge import GeodesicFlowBridge
 from cfm.flow.solver import CylindricalODESolver
 from cfm.utils.complex_ops import cylinder_to_complex
-from cfm.utils.inference import build_model, load_weights, resolve_checkpoint
+from cfm.utils.inference import (
+    build_model,
+    load_weights,
+    reject_unsupported_sampling_model,
+    resolve_checkpoint,
+)
 from cfm.utils.metrics import (
     circular_phase_error,
     peak_signal_noise_ratio,
@@ -542,6 +547,8 @@ def main(cfg: DictConfig) -> None:
 
     # 2. Model and checkpoint. Not compiled: one-shot eval pays the compile cost
     # for nothing. load_weights also puts the model in eval mode.
+    reject_unsupported_sampling_model(cfg)
+
     orig_cwd = hydra.utils.get_original_cwd()
     run_name = eval_cfg.get("run_name") or cfg.get("logging", {}).get("experiment_name")
     model = build_model(cfg, device)

@@ -11,7 +11,12 @@ from cfm.flow.solver import CylindricalODESolver
 
 # Project-specific imports
 from cfm.utils.complex_ops import cylinder_to_complex
-from cfm.utils.inference import build_model, load_weights, resolve_checkpoint
+from cfm.utils.inference import (
+    build_model,
+    load_weights,
+    reject_unsupported_sampling_model,
+    resolve_checkpoint,
+)
 
 
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
@@ -20,6 +25,7 @@ def main(cfg: DictConfig) -> None:
     print(f"Starting Inference on: {device}")
 
     # --- 1. Model Setup ---
+    reject_unsupported_sampling_model(cfg)
     model = build_model(cfg, device)
 
     # Checkpoint from generate.run_name, falling back to logging.experiment_name
@@ -65,16 +71,16 @@ def main(cfg: DictConfig) -> None:
 
         # Magnitude plot
         axes[0].imshow(magnitude, cmap="gray")
-        axes[0].set_title(f"Generated MRI Magnitude [Sample {i+1}]")
+        axes[0].set_title(f"Generated MRI Magnitude [Sample {i + 1}]")
         axes[0].axis("off")
 
         # Phase plot
         im_phase = axes[1].imshow(phase, cmap="twilight")
-        axes[1].set_title(f"Generated MRI Phase [Sample {i+1}]")
+        axes[1].set_title(f"Generated MRI Phase [Sample {i + 1}]")
         axes[1].axis("off")
         fig.colorbar(im_phase, ax=axes[1], fraction=0.046, pad=0.04, label="Radians")
 
-        output_file = os.path.join(output_dir, f"generated_mri_sample_{i+1}.png")
+        output_file = os.path.join(output_dir, f"generated_mri_sample_{i + 1}.png")
         plt.tight_layout()
         plt.savefig(output_file, dpi=300)
         plt.close(fig)
