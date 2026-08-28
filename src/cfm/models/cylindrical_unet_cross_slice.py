@@ -77,14 +77,14 @@ class CrossSliceAttention(nn.Module):
         b, s, c, h, w = x.shape
 
         # GroupNorm expects [N, C, H, W], so normalise in the folded layout.
-        normed = self.norm(x.reshape(b * s, c, h, w)).view(b, s, c, h * w)
-
-        # [B, S, C, h*w] -> [B*h*w, S, C]: one length-S sequence per position.
+        normed = self.norm(x.reshape(b * s, c, h, w)).reshape(b, s, c, h * w)
+        # Sequence of spatial positions across slices
         seq = normed.permute(0, 3, 1, 2).reshape(b * h * w, s, c)
-        attn_out, _ = self.mha(seq, seq, seq)
 
-        # Back to [B, S, C, h, w].
-        attn_out = attn_out.view(b, h * w, s, c).permute(0, 2, 3, 1).reshape(b, s, c, h, w)
+        attn_out, _ = self.mha(seq, seq, seq, need_weights=False)
+
+        # Reshape back to B x S x C x H x W
+        attn_out = attn_out.reshape(b, h * w, s, c).permute(0, 2, 3, 1).reshape(b, s, c, h, w)
         return x + attn_out
 
 
@@ -205,7 +205,7 @@ class CylindricalUNetCrossSlice(nn.Module):
         hidden = self.bottleneck1(hidden, t_emb_slices)
 
         _, bott_c, bott_h, bott_w = hidden.shape
-        hidden = self.cross_slice_attn(hidden.view(b, s, bott_c, bott_h, bott_w))
+        hidden = self.cross_slice_attn(hidden.reshape(b, s, bott_c, bott_h, bott_w))
 
         # Collapse to the center slice. Everything below is B-sized, so the decoder
         # costs the same as the 2D baseline and t_emb is used unrepeated again.
@@ -216,7 +216,7 @@ class CylindricalUNetCrossSlice(nn.Module):
         for up_module, skip in zip(self.ups, reversed(skips), strict=False):
             upsample, block = up_module[0], up_module[1]
             hidden = upsample(hidden)
-            skip_center = skip.view(b, s, *skip.shape[1:])[:, center]
+            skip_center = skip.reshape(b, s, *skip.shape[1:])[:, center]
             hidden = torch.cat([hidden, skip_center], dim=1)
             hidden = block(hidden, t_emb)
 

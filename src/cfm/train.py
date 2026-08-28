@@ -72,9 +72,9 @@ def main(cfg: DictConfig) -> None:
     # every .h5 in data_dir has been scanned; the mismatch would otherwise surface
     # as an opaque shape error deep inside a convolution.
     needs_slice_window = model_name == "c_unet_cross_slice"
-    if needs_slice_window and num_slices == 1:
+    if needs_slice_window and (num_slices == 1 or num_slices % 2 == 0):
         raise ValueError(
-            f"model={model_name} consumes slice windows but dataset.num_slices=1. "
+            f"model={model_name} consumes slice windows but dataset.num_slices={num_slices}. "
             "Set dataset.num_slices to an odd value > 1, e.g. "
             f"'uv run src/cfm/train.py model={model_name} dataset.num_slices=3'."
         )
@@ -171,7 +171,7 @@ def main(cfg: DictConfig) -> None:
         epoch_loss_phi = 0.0
         epoch_loss_hf = 0.0
 
-        pbar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{epochs}")
+        pbar = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{epochs}")
 
         for _batch_idx, batch in enumerate(pbar):
             x_1 = batch.to(device)
@@ -260,7 +260,7 @@ def main(cfg: DictConfig) -> None:
 
         current_lr = optimizer.param_groups[0]["lr"]
         print(
-            f"Epoch {epoch+1} | Avg Loss: {avg_loss:.5f} (Amp: {avg_loss_amp:.5f}, "
+            f"Epoch {epoch + 1} | Avg Loss: {avg_loss:.5f} (Amp: {avg_loss_amp:.5f}, "
             f"Phi: {avg_loss_phi:.5f}, HF: {avg_loss_hf:.5f}) | LR: {current_lr:.6f}"
         )
 
@@ -282,7 +282,7 @@ def main(cfg: DictConfig) -> None:
                 # center slice for 2.5D windows, so this stays a 2D image either way.
                 gt_amp_img = x_1_sup[0, 0].detach().cpu().numpy()
                 log_dict["ground_truth_sample"] = wandb.Image(
-                    gt_amp_img, caption=f"Epoch {epoch+1} Target Amp"
+                    gt_amp_img, caption=f"Epoch {epoch + 1} Target Amp"
                 )
 
             wandb.log(log_dict)
@@ -291,7 +291,7 @@ def main(cfg: DictConfig) -> None:
         # FIX: Cleanly save model without torch.compile artifacts
         # ---------------------------------------------------------
         if (epoch + 1) % 10 == 0 or (epoch + 1) == epochs:
-            checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_epoch_{epoch+1}.pt")
+            checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_epoch_{epoch + 1}.pt")
 
             # Extract basic weights bypassing _orig_mod wrapper
             state_dict = (

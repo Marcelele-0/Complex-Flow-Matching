@@ -1,5 +1,4 @@
-"""Numerical metrics for scoring generated complex-valued MRI.
-"""
+"""Numerical metrics for scoring generated complex-valued MRI."""
 
 from __future__ import annotations
 
@@ -63,7 +62,6 @@ def _gaussian_window(
     g = torch.exp(-(coords**2) / (2 * sigma**2))
     g = g / g.sum()
     return torch.outer(g, g)
-
 
 
 def shortest_angular_difference(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:

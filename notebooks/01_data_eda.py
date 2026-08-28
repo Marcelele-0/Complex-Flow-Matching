@@ -355,7 +355,9 @@ with h5py.File(sample_file, "r") as f:
     lowpass_img = np.abs(np.fft.ifftshift(np.fft.ifft2(np.fft.ifftshift(lowpass_kspace))))
 
     axes[1, 0].imshow(lowpass_img, cmap="gray")
-    axes[1, 0].set_title(f"Low-Pass Reconstruction (Center {2*center_radius}×{2*center_radius})")
+    axes[1, 0].set_title(
+        f"Low-Pass Reconstruction (Center {2 * center_radius}×{2 * center_radius})"
+    )
     axes[1, 0].axis("off")
 
     # High-pass filter: keep only periphery k-space (details/edges)
