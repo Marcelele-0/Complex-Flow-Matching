@@ -118,6 +118,36 @@ class SKMTEADataset(Dataset):
     def __getitem__(self, idx: int) -> torch.Tensor:
         f_path, slice_idx = self.slice_map[idx]
 
+        if self.mode == "reconstruction":
+            with h5py.File(f_path, "r") as f:
+                img_np = f["target"][slice_idx, :, :, 0, 0]
+
+            img_np = np.nan_to_num(img_np)
+            img_complex = torch.from_numpy(img_np).to(torch.complex64).unsqueeze(0)
+
+            if self.pre_transform is not None:
+                img_complex = self.pre_transform(img_complex)
+
+            _, h, w = img_complex.shape
+            mask = self._undersampling_mask(f_path, slice_idx, h, w)
+
+            y = torch.fft.fft2(img_complex, norm="ortho")
+            y_under = y * mask
+            x_alias = torch.fft.ifft2(y_under, norm="ortho")
+
+            # Shared scalar so input/target stay on the same amplitude scale;
+            # AmplitudeNormalize would normalize each independently and break
+            # the y_under = mask * fft(target) relationship between the pair.
+            scale = img_complex.abs().max().clamp(min=1e-8)
+            x_gt = img_complex / scale
+            x_alias = x_alias / scale
+
+            if self.post_transform is not None:
+                x_gt = self.post_transform(x_gt)
+                x_alias = self.post_transform(x_alias)
+
+            return {"input": x_alias, "mask": mask, "target": x_gt}
+
         if self.num_slices == 1:
             with h5py.File(f_path, "r") as f:
                 # target shape: (Nx, Ny, Nz, echoes, coils)
