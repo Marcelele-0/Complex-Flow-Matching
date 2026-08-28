@@ -1,0 +1,14 @@
+\section{Method}
+\label{sec:method}
+
+Our framework synthesizes complex-valued MRI scans by learning a continuous vector field on a cylindrical manifold. The pipeline takes complex SKM-TEA data, maps it to a cylindrical representation $[A, \cos(\phi), \sin(\phi)]$, and models the generative trajectory from uniform noise to the data distribution.
+
+\subsection{Cylindrical Flow Matching}
+Complex MRI data is inherently non-Euclidean. The magnitude $A$ is non-negative, while the phase $\phi$ is periodic, living on a unit circle $S^1$. We formulate the generation process using a geodesic probability path $x_t$ where time $t \in [0, 1]$. We parameterize the neural network, a 2D Cylindrical Attention U-Net, to predict the target velocity field $v_\theta(x_t, t) = (v_A, v_\phi)$. The generation is performed at inference time using a deterministic Heun ODE solver.
+
+\subsection{High-Frequency k-space Boost}
+A common issue in generative MRI is the generation of blurry edges due to the regression-to-the-mean effect in standard $L_1$ losses. To explicitly enforce the sharpness of anatomical structures, we introduce a High-Frequency k-space Boost Loss. We transform the velocity prediction error into the frequency domain using a 2D Fast Fourier Transform (FFT). A radial mask $\mathcal{M}$ is applied to the k-space representation, penalizing errors in high-frequency regions:
+$$
+\mathcal{L}_{HF} = \mathbb{E}_{x, t} \left[ \left\| \mathcal{M} \odot \mathcal{F}(v_\theta(x_t, t) - v(x_1)) \right\|_1 \right]
+$$
+where $\mathcal{F}$ denotes the 2D FFT, and $\mathcal{M}$ monotonically increases with the Euclidean distance from the k-space center.

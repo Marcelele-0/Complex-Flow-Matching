@@ -1,0 +1,13 @@
+\section{Introduction}
+\label{sec:intro}
+
+Magnetic Resonance Imaging (MRI) fundamentally captures complex-valued signals that contain both magnitude and phase information. While magnitude is universally used for clinical diagnosis, the phase component encodes critical physical properties and magnetic field variations \cite{desai2021skmtea}. However, the majority of deep generative models applied to MRI synthesis treat these complex numbers as independent two-channel real signals (real and imaginary parts), operating entirely within a flat Euclidean space.
+
+This Euclidean assumption violates the intrinsic topological geometry of complex data: magnitude is strictly non-negative ($\mathbb{R}_{\ge 0}$), and phase is strictly periodic, existing on a circular manifold ($S^1$). Standard diffusion models and flow matching frameworks \cite{lipman2022flow} applied directly to this space often struggle with phase wrapping artifacts and fail to preserve high-frequency anatomical details.
+
+To bridge this gap, we introduce a novel generative framework tailored for complex-valued MRI synthesis. Our core contributions are:
+\begin{itemize}
+    \item We formulate the generative process using Cylindrical Flow Matching, defining the probability path explicitly on the natural geometry of complex signals.
+    \item We introduce a High-Frequency k-space Boost Loss, applying a radial mask in the Fourier domain to explicitly penalize the attenuation of high-frequency details, yielding sharper anatomical boundaries.
+    \item We implement a 2.5D Cross-Slice Attention mechanism to enforce volumetric consistency along the Z-axis, overcoming the memory bottlenecks of native 3D U-Nets while maintaining context across adjacent slices.
+\end{itemize}

@@ -7,8 +7,8 @@ weight_decay: 1e-4
 matmul_precision: "high"
 
 loss:
-  amp_loss_type: "l1"
-  phase_loss_type: "l1"
+  amp_loss_type: "l2"
+  phase_loss_type: "l2"
   lambda_phase: 1.0
   # High-frequency k-space boost weight (disabled by default).
   # NOTE: the FFT uses norm="ortho", which divides magnitudes by sqrt(H*W).
