@@ -1,0 +1,43 @@
+\section{Experiments and Results}
+\label{sec:experiments}
+
+We evaluate Cylindrical Flow Matching on complex-valued MRI synthesis and downstream reconstruction using the comprehensive raw $k$-space SKM-TEA dataset \citep{desai2021skmtea}. We compare our geometry-aware approach directly against the Euclidean baseline. Crucially, the training and inference pipelines, including the underlying neural vector field architecture, remain exactly the same for both methods; the singular modification is the underlying manifold topology.
+
+\begin{figure}[!ht]
+    \centering
+    \includegraphics[width=\linewidth, height=1.5cm, keepaspectratio]{example-image-b} 
+    \caption{\textbf{Qualitative comparison.} From left to right: Real MRI phase, Euclidean Flow reconstruction (showing severe boundary artifacts), and our Cylindrical Flow reconstruction (preserving native topology).}
+    \label{fig:results_visual}
+    \vspace{-3mm}
+\end{figure}
+
+As shown in Figure \ref{fig:results_visual}, the Euclidean model struggles with phase wrapping, leading to artificial signal cancellations and magnitude dropouts near the boundaries. In contrast, our geometry-aware approach accurately recovers the phase signal, preserving fine-grained high-frequency details essential for downstream medical diagnostics. 
+
+To properly evaluate phase reconstruction, we employ the amplitude-weighted Geodesic Phase Error (GPE), explicitly defined as:
+\begin{equation}
+    \mathrm{GPE}(\theta, \hat{\theta}) = \frac{\sum_i A_i \cdot (1 - \cos(\theta_i - \hat{\theta}_i))}{\sum_i A_i}
+\end{equation}
+where $A_i$ is the ground-truth magnitude. This formulation correctly accounts for the cyclic topology of $S^1$. Naive Euclidean "Phase MSE" is invalid because it improperly penalizes topologically equivalent angles (e.g., $-\pi$ and $\pi$) with a maximum squared error of $(2\pi)^2$ instead of 0. Table \ref{tab:results_metrics} outlines our evaluation benchmark across both generation and reconstruction tasks (ongoing final runs denoted by --).
+
+\begin{table}[t]
+    \centering
+    \caption{\textbf{Quantitative metrics.} Evaluation benchmark on generation and downstream reconstruction (ongoing runs denoted by --).}
+    \vspace{-1mm}
+    \resizebox{\columnwidth}{!}{%
+    \begin{tabular}{lcccc}
+        \toprule
+         & \multicolumn{2}{c}{\textbf{Generation}} & \multicolumn{2}{c}{\textbf{Reconstruction}} \\
+        \cmidrule(lr){2-3} \cmidrule(lr){4-5}
+        \textbf{Method} & \textbf{FID $\downarrow$} & \textbf{Geodesic Phase Error $\downarrow$} & \textbf{PSNR $\uparrow$} & \textbf{SSIM $\uparrow$} \\
+        \midrule
+        PhaseGen \citep{rempe2025phasegen} & -- & -- & -- & -- \\
+        Euclidean ($\mathbb{R}^2$) & -- & -- & -- & -- \\
+        Cylindrical Flow (Ours) & -- & -- & -- & -- \\
+        \bottomrule
+    \end{tabular}%
+    }
+    \label{tab:results_metrics}
+    \vspace{-2mm}
+\end{table}
+
+For the reconstruction task, we employ the trained cylindrical flow as a learned generative prior within a posterior sampling framework at $4\times$ Cartesian acceleration.

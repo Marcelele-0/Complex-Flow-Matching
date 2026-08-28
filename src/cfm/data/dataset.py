@@ -141,9 +141,9 @@ class SKMTEADataset(Dataset):
             _, h, w = img_complex.shape
             mask = self._undersampling_mask(f_path, slice_idx, h, w)
 
-            y = torch.fft.fft2(img_complex, norm="ortho")
+            y = torch.fft.fftshift(torch.fft.fft2(img_complex, norm="ortho"), dim=(-2, -1))
             y_under = y * mask
-            x_alias = torch.fft.ifft2(y_under, norm="ortho")
+            x_alias = torch.fft.ifft2(torch.fft.ifftshift(y_under, dim=(-2, -1)), norm="ortho")
 
             # Shared scalar so input/target stay on the same amplitude scale;
             # AmplitudeNormalize would normalize each independently and break

@@ -111,7 +111,7 @@ def test_reconstruction_mask_zeros_out_kspace(dummy_skm_tea_dir_large) -> None:
     img_complex = CenterCropModulo(base=16)(img_complex)
 
     mask = dataset._undersampling_mask(f_path, 0, img_complex.shape[1], img_complex.shape[2])
-    y = torch.fft.fft2(img_complex, norm="ortho")
+    y = torch.fft.fftshift(torch.fft.fft2(img_complex, norm="ortho"), dim=(-2, -1))
     y_under = y * mask
 
     assert torch.all(y_under[mask == 0] == 0)
@@ -127,7 +127,7 @@ def test_reconstruction_energy_inequality(dummy_skm_tea_dir_large) -> None:
     img_complex = CenterCropModulo(base=16)(img_complex)
 
     mask = dataset._undersampling_mask(f_path, 0, img_complex.shape[1], img_complex.shape[2])
-    y = torch.fft.fft2(img_complex, norm="ortho")
+    y = torch.fft.fftshift(torch.fft.fft2(img_complex, norm="ortho"), dim=(-2, -1))
     y_under = y * mask
 
     assert torch.linalg.norm(y_under) <= torch.linalg.norm(y)

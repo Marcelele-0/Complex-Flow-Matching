@@ -155,7 +155,7 @@ def main(cfg: DictConfig) -> None:
         epoch_loss_phi = 0.0
         epoch_loss_hf = 0.0
 
-        pbar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{epochs}")
+        pbar = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{epochs}")
 
         for _batch_idx, batch in enumerate(pbar):
             x_1 = batch.to(device)
@@ -220,7 +220,7 @@ def main(cfg: DictConfig) -> None:
 
         current_lr = optimizer.param_groups[0]["lr"]
         print(
-            f"Epoch {epoch+1} | Avg Loss: {avg_loss:.5f} (Amp: {avg_loss_amp:.5f}, "
+            f"Epoch {epoch + 1} | Avg Loss: {avg_loss:.5f} (Amp: {avg_loss_amp:.5f}, "
             f"Phi: {avg_loss_phi:.5f}, HF: {avg_loss_hf:.5f}) | LR: {current_lr:.6f}"
         )
 
@@ -242,7 +242,7 @@ def main(cfg: DictConfig) -> None:
                     x_1[0, 0].detach().cpu().numpy()
                 )  # Extract the first channel (Amplitude) of the first batch image
                 log_dict["ground_truth_sample"] = wandb.Image(
-                    gt_amp_img, caption=f"Epoch {epoch+1} Target Amp"
+                    gt_amp_img, caption=f"Epoch {epoch + 1} Target Amp"
                 )
 
             wandb.log(log_dict)
@@ -251,7 +251,7 @@ def main(cfg: DictConfig) -> None:
         # FIX: Cleanly save model without torch.compile artifacts
         # ---------------------------------------------------------
         if (epoch + 1) % 10 == 0 or (epoch + 1) == epochs:
-            checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_epoch_{epoch+1}.pt")
+            checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_epoch_{epoch + 1}.pt")
 
             # Extract basic weights bypassing _orig_mod wrapper
             state_dict = (

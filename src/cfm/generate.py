@@ -65,16 +65,16 @@ def main(cfg: DictConfig) -> None:
 
         # Magnitude plot
         axes[0].imshow(magnitude, cmap="gray")
-        axes[0].set_title(f"Generated MRI Magnitude [Sample {i+1}]")
+        axes[0].set_title(f"Generated MRI Magnitude [Sample {i + 1}]")
         axes[0].axis("off")
 
         # Phase plot
         im_phase = axes[1].imshow(phase, cmap="twilight")
-        axes[1].set_title(f"Generated MRI Phase [Sample {i+1}]")
+        axes[1].set_title(f"Generated MRI Phase [Sample {i + 1}]")
         axes[1].axis("off")
         fig.colorbar(im_phase, ax=axes[1], fraction=0.046, pad=0.04, label="Radians")
 
-        output_file = os.path.join(output_dir, f"generated_mri_sample_{i+1}.png")
+        output_file = os.path.join(output_dir, f"generated_mri_sample_{i + 1}.png")
         plt.tight_layout()
         plt.savefig(output_file, dpi=300)
         plt.close(fig)

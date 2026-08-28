@@ -34,6 +34,8 @@ data/*
 # Output files
 outputs/
 wandb/
+manim/outputs/
+manim/media/
 
 # Notebooks
 .ipynb_checkpoints/
@@ -45,6 +47,18 @@ notebooks/presentation
 .vscode/
 *.swp
 *.swo
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.out
+
+# Review worktrees
+.review-*
 
 # OS
 .DS_Store
