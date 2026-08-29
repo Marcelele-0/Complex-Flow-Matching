@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+from cfm.flow.spectral import high_frequency_penalty
+
 # "l2" and "mse" are aliases for the same squared-error loss.
 VALID_AMP_LOSSES = {"l1", "l2", "mse"}
 VALID_PHASE_LOSSES = {"l1", "l2", "mse", "cosine"}
@@ -105,33 +107,9 @@ class DecoupledCylindricalLoss(nn.Module):
         loss_hf = torch.tensor(0.0, device=pred_v.device, dtype=pred_v.dtype)
 
         if self.lambda_hf > 0.0:
-            # Compute error vector in spatial domain
-            error_v = pred_v - target_v
-
-            # Transform to frequency domain (FFT 2D) with low frequencies centered.
-            # norm="ortho" keeps magnitudes comparable across image resolutions,
-            # so lambda_hf means the same thing at every crop size.
-            fft_err = torch.fft.fftshift(
-                torch.fft.fft2(error_v, dim=(-2, -1), norm="ortho"), dim=(-2, -1)
-            )
-            fft_err_mag = torch.abs(fft_err)
-
-            # Build radial mask favoring high frequencies (k-space periphery)
-            h, w = pred_v.shape[-2:]
-            device = pred_v.device
-            y, x = torch.meshgrid(
-                torch.linspace(-1, 1, h, device=device),
-                torch.linspace(-1, 1, w, device=device),
-                indexing="ij",
-            )
-            radius = torch.sqrt(x**2 + y**2)  # Euclidean distance from center
-
-            # At center: mask = 1.0, at periphery: linearly increases
-            hf_mask = 1.0 + (self.hf_boost_factor * radius)
-            hf_mask = hf_mask.unsqueeze(0).unsqueeze(0)
-
-            # Apply mask and average error
-            loss_hf = (fft_err_mag * hf_mask).mean()
+            # Shared with EuclideanVelocityLoss so a HF ablation is identical on
+            # both geometries. See cfm.flow.spectral for the ortho-norm caveat.
+            loss_hf = high_frequency_penalty(pred_v - target_v, self.hf_boost_factor)
 
         total_loss = loss_amp + (self.lambda_phase * loss_phi) + (self.lambda_hf * loss_hf)
 

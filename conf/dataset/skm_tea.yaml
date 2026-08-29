@@ -1,3 +1,8 @@
 data_dir: "data/skm-tea-mini/v1-release"
 num_slices: 1
 acceleration: 4
+
+# Manifest gating training, from {data_dir}/annotations/v1.0.0/{split}.json.
+# Must differ from evaluate.split or the scores are on seen data.
+# null trains on every .h5 in data_dir (no held-out claim is then possible).
+split: train

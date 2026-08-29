@@ -6,10 +6,49 @@ weight_decay: 1e-4
 
 matmul_precision: "high"
 
+# Seeds weight init, batch order, noise and time sampling. Set to null for an
+# unseeded run.
+#
+# One seed also puts BOTH manifolds on element-wise identical weights everywhere
+# except init_conv - the single module whose shape depends on the geometry, built
+# last so it cannot shift the RNG for anything else. Initialisation is therefore
+# not a confound. Data order, noise and time sampling still vary with the seed,
+# so run several seeds per arm and report the spread.
+seed: 0
+
+# Max gradient norm, or null to disable clipping.
+#
+# NOT scale-invariant. The two losses differ ~4x in magnitude (the cylindrical
+# total carries an O(pi) angular term), and AdamW is otherwise scale-invariant,
+# so clipping is the one place that difference affects training. It only matters
+# when the threshold binds for one arm and not the other: measured here, both
+# arms clip at 1.0 early on, but the Euclidean gradients fall below it first.
+#
+# Set to null for a comparison run, or check the logged `grad_norm` for both arms
+# before publishing a table.
+grad_clip: 1.0
+
+# torch.compile the model before training. Worth the one-off Triton compile on a
+# GPU; set false for CPU smoke runs, where it costs a minute and buys nothing.
+compile: true
+
+# One loss block serves both geometries. Each manifold reads the keys that apply
+# to it and ignores the rest, so `training.loss.*` overrides keep working
+# unchanged across the manifold switch.
 loss:
-  amp_loss_type: "l2"
-  phase_loss_type: "l2"
+  # --- cylindrical only ---
+  amp_loss_type: "l1"
+  phase_loss_type: "l1"
   lambda_phase: 1.0
+
+  # --- euclidean only ---
+  # Velocity loss over (v_re, v_im). "l1" matches the cylindrical method, so
+  # neither arm of the comparison is penalised for a metric choice the other did
+  # not make; "l2"/"mse" is the conventional flow-matching alternative, kept as a
+  # one-flag ablation.
+  vel_loss_type: "l1"
+
+  # --- both geometries ---
   # High-frequency k-space boost weight (disabled by default).
   # NOTE: the FFT uses norm="ortho", which divides magnitudes by sqrt(H*W).
   # Values tuned before the ortho change must be multiplied by sqrt(H*W)

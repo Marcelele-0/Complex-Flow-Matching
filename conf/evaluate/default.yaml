@@ -20,10 +20,10 @@ mask_threshold: 0.05
 # COCO-style manifest at {data_dir}/annotations/v1.0.0/{split}.json.
 # null evaluates every .h5 in data_dir.
 #
-# WARNING: this selects which files are SCORED, it does not hold them out.
-# train.py globs every .h5 under data_dir with no split filter, so these volumes
-# were almost certainly trained on. Read the results as reconstruction fidelity,
-# not generalization, until the same manifests gate training.
+# train.py gates its dataset through the same manifests via dataset.split, so as
+# long as this differs from dataset.split (default 'train') the scored volumes are
+# genuinely held out and the numbers are a generalization result. Setting either
+# to null removes the gate, and no held-out claim can then be made.
 split: test
 
 # Falls back to dataset.data_dir when null.

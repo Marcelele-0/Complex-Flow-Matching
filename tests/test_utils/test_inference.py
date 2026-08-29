@@ -77,11 +77,31 @@ class TestBuildModel:
         out = model(torch.rand(2, 3, 3, 16, 16), torch.rand(2))
         assert out.shape == (2, 2, 16, 16)
 
+    def test_cross_slice_model_takes_the_manifold_state_width(self) -> None:
+        """in_channels must reach the 2.5D model, so the Euclidean baseline can
+        be run with cross-slice attention rather than rejected."""
+        cfg = OmegaConf.create(
+            {
+                "model": {
+                    "name": "c_unet_cross_slice",
+                    "base_channels": 8,
+                    "channel_mults": [1, 2],
+                    "attn_heads": 2,
+                }
+            }
+        )
+        model = build_model(cfg, CPU, in_channels=2, out_channels=2)
+
+        out = model(torch.rand(2, 3, 2, 16, 16), torch.rand(2))
+        assert out.shape == (2, 2, 16, 16)
+
 
 class TestRejectUnsupportedSamplingModel:
     def test_cross_slice_model_is_rejected_with_an_explanation(self) -> None:
         cfg = OmegaConf.create({"model": {"name": "c_unet_cross_slice"}})
-        with pytest.raises(NotImplementedError, match="CylindricalODESolver"):
+        # Matched on the reason, not on a class name: the blocker is the solver's
+        # shape contract, which holds for every geometry's solver.
+        with pytest.raises(NotImplementedError, match="multi-slice state"):
             reject_unsupported_sampling_model(cfg)
 
     @pytest.mark.parametrize("name", ["c_unet", "c_unet_attention"])

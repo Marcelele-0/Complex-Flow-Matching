@@ -1,11 +1,17 @@
-"""Reconstruction-style evaluation of a trained cylindrical flow-matching model.
+"""Reconstruction-style evaluation of a trained flow-matching model, any geometry.
 
 ``generate.py`` samples from pure noise, so it has no ground truth and PSNR/SSIM
 have nothing to compare against. This script scores a reconstruction instead: a
-real slice becomes ``x_1``, is pushed part-way back toward noise through
-:class:`~cfm.flow.bridge.GeodesicFlowBridge` at a configurable ``t_start``, then
-integrated forward to ``t=1`` by the model and compared against the slice it came
-from.
+real slice becomes ``x_1``, is pushed part-way back toward noise through the
+selected manifold's bridge at a configurable ``t_start``, then integrated forward
+to ``t=1`` by the model and compared against the slice it came from.
+
+The geometry enters only through :class:`~cfm.manifolds.base.Manifold`. The
+cylindrical model and the Euclidean baseline are scored by this same code, with
+the same slices, the same integration schedule, the same metrics and the same
+accumulator, which is what makes the two columns of a comparison table
+comparable. Scoring always happens in the complex domain, where both
+representations agree on what a pixel means.
 
 ``t_start`` sets how much work the model is asked to do:
 
@@ -16,24 +22,21 @@ from.
 * ``1.0``: the bridge returns the target, so metrics come out near-perfect. Tests
   the eval plumbing, not the model.
 
-.. warning::
-   ``split`` chooses which files are *scored*; it does not hold them out.
-   ``train.py`` hands ``data_dir`` straight to
-   :class:`~cfm.data.dataset.SKMTEADataset`, which globs every ``.h5`` with no
-   split filter, so the volumes scored here were almost certainly in the training
-   set. Read these numbers as reconstruction fidelity, not generalization, until
-   the same manifests gate training.
+``split`` selects the volumes to score through
+:func:`~cfm.data.splits.load_split_file_names`, the same function ``train.py``
+gates its dataset with. Setting ``dataset.split=train`` and ``evaluate.split=test``
+therefore holds the scored volumes out for real. Both default that way; set either
+to ``null`` only for a directory with no ``annotations/``, and then no held-out
+claim can be made about the numbers.
 
 Everything above :func:`main` is pure (no Hydra, no HDF5, no filesystem except
-:func:`load_split_file_names`), so the whole path is unit-testable with a dummy
-model and synthetic tensors.
+the split helpers), so the whole path is unit-testable with a dummy model and
+synthetic tensors.
 """
 
 from __future__ import annotations
 
-import glob
 import json
-import math
 import os
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
@@ -45,15 +48,9 @@ from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
 from cfm.data.dataset import SKMTEADataset
-from cfm.data.transforms import (
-    AmplitudeNormalize,
-    CenterCropModulo,
-    ComplexToCylinderTransform,
-    Compose,
-)
-from cfm.flow.bridge import GeodesicFlowBridge
-from cfm.flow.solver import CylindricalODESolver
-from cfm.utils.complex_ops import cylinder_to_complex
+from cfm.data.splits import load_split_file_names, select_indices
+from cfm.flow.solver import HeunODESolver
+from cfm.manifolds import Manifold, build_manifold
 from cfm.utils.inference import (
     build_model,
     load_weights,
@@ -81,28 +78,28 @@ except ImportError:
 @torch.no_grad()
 def integrate_from_t(
     model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-    solver: CylindricalODESolver,
+    solver: HeunODESolver,
     x_start: torch.Tensor,
     t_start: float,
 ) -> torch.Tensor:
-    """Integrate the cylindrical flow from ``t_start`` to ``t=1``.
+    """Integrate the flow from ``t_start`` to ``t=1``, in whatever geometry ``solver`` carries.
 
-    Mirrors :meth:`~cfm.flow.solver.CylindricalODESolver.sample` (Heun
+    Mirrors :meth:`~cfm.flow.solver.HeunODESolver.sample` (Heun
     predictor/corrector, Euler on the final step) but starts at an arbitrary
     ``t_start``, which ``sample`` cannot do because it hardcodes ``t=0``. State
-    updates go through the public ``solver.step``, so the manifold projection is
-    never reimplemented here.
+    updates go through the public ``solver.step``, so a geometry's constraint -
+    or its deliberate absence, in the Euclidean case - is never reimplemented here.
 
     Args:
-        model: Callable ``(state [B, 3, H, W], time [B]) -> velocity [B, 2, H, W]``.
-        solver: Supplies ``num_steps`` and the manifold-safe ``step``.
-        x_start: State on the cylinder at ``t_start``, shape ``[B, 3, H, W]``.
+        model: Callable ``(state [B, C, H, W], time [B]) -> velocity [B, 2, H, W]``.
+        solver: Supplies ``num_steps`` and the geometry's ``step``.
+        x_start: State at ``t_start``, shape ``[B, C, H, W]``.
         t_start: Absolute start time in ``[0, 1]``. At ``0`` this reproduces
             ``sample`` bit-for-bit; at ``1`` the interval is empty and the state
-            returns unchanged up to the phase reprojection inside ``step``.
+            returns unchanged up to whatever re-projection ``step`` applies.
 
     Returns:
-        The state at ``t=1``, shape ``[B, 3, H, W]``.
+        The state at ``t=1``, shape ``[B, C, H, W]``.
 
     Raises:
         ValueError: If ``t_start`` is outside ``[0, 1]`` or ``num_steps < 1``.
@@ -149,37 +146,10 @@ def integrate_from_t(
     return x_t
 
 
-def sample_cylindrical_noise(
-    batch: int,
-    height: int,
-    width: int,
-    device: torch.device,
-    generator: torch.Generator | None = None,
-) -> torch.Tensor:
-    """Draw ``x_0`` on the cylinder exactly as ``train.py`` does.
-
-    Amplitude is ``U[0, 1]``, phase is ``U[0, 2*pi)`` mapped onto the unit circle.
-    Any other distribution puts the model off its training manifold at ``t=0``.
-
-    Args:
-        batch: Number of samples.
-        height: Spatial height.
-        width: Spatial width.
-        device: Device to allocate on.
-        generator: Optional RNG for reproducibility.
-
-    Returns:
-        Cylindrical noise of shape ``[B, 3, H, W]``.
-    """
-    amp = torch.rand(batch, 1, height, width, device=device, generator=generator)
-    phi = torch.rand(batch, 1, height, width, device=device, generator=generator) * 2 * math.pi
-    return torch.cat([amp, torch.cos(phi), torch.sin(phi)], dim=1)
-
-
 def reconstruct_batch(
     model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-    solver: CylindricalODESolver,
-    bridge: GeodesicFlowBridge,
+    manifold: Manifold,
+    solver: HeunODESolver,
     x_1: torch.Tensor,
     t_start: float,
     generator: torch.Generator | None = None,
@@ -188,44 +158,58 @@ def reconstruct_batch(
 
     Args:
         model: The velocity field, ``(state, time) -> velocity``.
+        manifold: Supplies the noise prior and the bridge.
         solver: ODE solver supplying ``num_steps`` and ``step``.
-        bridge: Bridge used to build the partially-noised state.
-        x_1: Clean cylindrical target, shape ``[B, 3, H, W]``.
+        x_1: Clean target in the manifold's representation, ``[B, C, H, W]``.
         t_start: Where on the noise-to-data path to start from.
-        generator: Optional RNG for the noise draw.
+        generator: Optional RNG for the noise draw. One seed makes a run
+            repeatable, but it does not by itself pair the two geometries: the
+            Euclidean prior defaults to ``uniform``, which draws the same *law* as
+            the cylindrical prior but not the same sample. Under
+            ``manifold.noise_prior=matched`` one seed does give both arms the same
+            complex noise field, so they are scored on the same perturbation
+            rather than merely the same slice.
 
     Returns:
-        The reconstructed cylindrical state at ``t=1``, shape ``[B, 3, H, W]``.
+        The reconstructed state at ``t=1``, shape ``[B, C, H, W]``.
     """
     b, _, h, w = x_1.shape
-    x_0 = sample_cylindrical_noise(b, h, w, x_1.device, generator)
+    x_0 = manifold.sample_noise(b, h, w, x_1.device, generator)
 
     t = torch.full((b, 1, 1, 1), t_start, device=x_1.device, dtype=torch.float32)
     # target_v is the training signal; only the state matters at eval time.
-    x_t, _ = bridge.forward(cyl_noise=x_0, cyl_data=x_1, t=t)
+    x_t, _ = manifold.bridge(x_0, x_1, t)
 
     return integrate_from_t(model, solver, x_t, t_start)
 
 
 def compute_batch_metrics(
-    pred_cyl: torch.Tensor,
-    target_cyl: torch.Tensor,
+    manifold: Manifold,
+    pred_state: torch.Tensor,
+    target_state: torch.Tensor,
     mask_threshold: float | None,
     sampling_mask: torch.Tensor | None = None,
 ) -> dict[str, torch.Tensor]:
     """Score one batch in the complex domain, per sample.
 
-    Both sides go through :func:`~cfm.utils.complex_ops.cylinder_to_complex`
-    first, since ``circular_phase_error``'s ``mask_threshold`` derives its mask
-    from a complex target's amplitude.
+    Both sides go through ``manifold.to_complex`` first. That is what makes the
+    numbers comparable across geometries - a magnitude and a phase mean the same
+    thing whatever coordinates produced them - and it is required anyway, since
+    ``circular_phase_error``'s ``mask_threshold`` derives its mask from a complex
+    target's amplitude.
+
+    The manifold is a required argument rather than a defaulted one on purpose:
+    scoring a Euclidean reconstruction through the cylindrical back-transform
+    would silently produce plausible-looking, wrong numbers.
 
     The unmasked phase error is reported alongside the masked one: the masked
     value is the meaningful score (phase is noise in air), the unmasked value
     shows how much of the image the mask discards.
 
     Args:
-        pred_cyl: Reconstruction, cylindrical ``[B, 3, H, W]``.
-        target_cyl: Ground truth, cylindrical ``[B, 3, H, W]``.
+        manifold: Supplies ``to_complex`` for the geometry both tensors are in.
+        pred_state: Reconstruction, ``[B, C, H, W]`` in the manifold's representation.
+        target_state: Ground truth, same shape and representation.
         mask_threshold: Fraction of the per-slice max amplitude below which pixels
             are excluded from the phase error. ``None`` scores every pixel, in
             which case masked and unmasked coincide.
@@ -236,12 +220,13 @@ def compute_batch_metrics(
     Returns:
         Mapping from metric name to a per-sample tensor of shape ``[B]``.
     """
-    pred = cylinder_to_complex(pred_cyl)
-    target = cylinder_to_complex(target_cyl)
+    pred = manifold.to_complex(pred_state)
+    target = manifold.to_complex(target_state)
 
     metrics = {
-        # data_range=1.0 holds only because AmplitudeNormalize maps the amplitude
-        # channel to [0, 1]; a different pipeline invalidates it.
+        # data_range=1.0 holds because every manifold's transform normalises the
+        # modulus to [0, 1] (AmplitudeNormalize / EuclideanNormalize); a different
+        # pipeline invalidates it.
         "psnr_db": peak_signal_noise_ratio(pred, target, data_range=1.0, reduction="none"),
         "ssim": structural_similarity(pred, target, data_range=1.0, reduction="none"),
         "phase_error_rad": circular_phase_error(
@@ -427,92 +412,6 @@ def format_summary_table(summaries: Sequence[MetricSummary]) -> str:
 # --------------------------------------------------------------------------- #
 # Split selection
 # --------------------------------------------------------------------------- #
-def load_split_file_names(
-    data_dir: str,
-    split: str | None,
-    annotations_subdir: str = "annotations/v1.0.0",
-) -> set[str] | None:
-    """Read the COCO-style manifest for ``split`` and return its ``.h5`` basenames.
-
-    Args:
-        data_dir: Dataset root, the same one handed to :class:`SKMTEADataset`.
-        split: Manifest name (``"train"``, ``"val"``, ``"test"``), or ``None`` for
-            every file in ``data_dir``, the escape hatch for a directory with no
-            ``annotations/``.
-        annotations_subdir: Where the manifests live under ``data_dir``.
-
-    Returns:
-        The set of ``.h5`` basenames in the split, or ``None`` when ``split`` is
-        ``None``.
-
-    Raises:
-        FileNotFoundError: If the manifest for ``split`` does not exist.
-        ValueError: If the manifest lists no images.
-    """
-    if split is None:
-        return None
-
-    manifest = os.path.join(data_dir, annotations_subdir, f"{split}.json")
-    if not os.path.isfile(manifest):
-        available = sorted(glob.glob(os.path.join(data_dir, annotations_subdir, "*.json")))
-        names = [os.path.basename(p) for p in available] or "none"
-        raise FileNotFoundError(
-            f"No manifest for split={split!r} at {manifest}. Available: {names}. "
-            f"Use evaluate.split=null to evaluate every file in data_dir."
-        )
-
-    with open(manifest, encoding="utf-8") as fh:
-        payload = json.load(fh)
-
-    file_names = {os.path.basename(img["file_name"]) for img in payload.get("images", [])}
-    if not file_names:
-        raise ValueError(f"Manifest {manifest} lists no images under 'images'.")
-    return file_names
-
-
-def select_indices(
-    slice_map: Sequence[tuple[str, int]],
-    file_names: set[str] | None,
-    max_samples: int | None = None,
-) -> list[int]:
-    """Pick the dataset indices to evaluate.
-
-    Args:
-        slice_map: :attr:`SKMTEADataset.slice_map`, one ``(file_path, slice_idx)``
-            per slice in dataset order.
-        file_names: ``.h5`` basenames to keep, or ``None`` to keep everything.
-        max_samples: Optional cap, applied by striding rather than truncation.
-            Slices from one volume are highly correlated, so the first N all come
-            from one end of one knee and misrepresent the split.
-
-    Returns:
-        Ascending dataset indices.
-
-    Raises:
-        ValueError: If no slice matches the requested split.
-    """
-    if file_names is None:
-        indices = list(range(len(slice_map)))
-    else:
-        indices = [
-            i for i, (path, _) in enumerate(slice_map) if os.path.basename(path) in file_names
-        ]
-
-    if not indices:
-        present = sorted({os.path.basename(p) for p, _ in slice_map})
-        raise ValueError(
-            f"No slices matched the split. Manifest lists {sorted(file_names or [])}, "
-            f"but the files present on disk are {present}. Download the missing volumes, "
-            f"pick another split, or set evaluate.split=null to evaluate whatever is there."
-        )
-
-    if max_samples is not None and 0 < max_samples < len(indices):
-        stride = len(indices) // max_samples
-        indices = indices[::stride][:max_samples]
-
-    return indices
-
-
 # --------------------------------------------------------------------------- #
 # Hydra entry point
 # --------------------------------------------------------------------------- #
@@ -566,20 +465,29 @@ def main(cfg: DictConfig) -> None:
     torch.set_float32_matmul_precision(precision)
     print(f"Starting evaluation on: {device}")
 
-    # 2. Model and checkpoint. Not compiled: one-shot eval pays the compile cost
+    # 2. Geometry. Must match the one the checkpoint was trained under; a mismatch
+    # surfaces immediately as a state-dict shape error on init_conv rather than as
+    # quietly wrong metrics.
+    manifold = build_manifold(cfg).to(device)
+
+    # 3. Model and checkpoint. Not compiled: one-shot eval pays the compile cost
     # for nothing. load_weights also puts the model in eval mode.
     reject_unsupported_sampling_model(cfg)
 
     orig_cwd = hydra.utils.get_original_cwd()
     run_name = eval_cfg.get("run_name") or cfg.get("logging", {}).get("experiment_name")
-    model = build_model(cfg, device)
+    model = build_model(
+        cfg,
+        device,
+        in_channels=manifold.state_channels,
+        out_channels=manifold.velocity_channels,
+    )
     checkpoint_path = resolve_checkpoint(cfg, "evaluate", orig_cwd)
     load_weights(model, checkpoint_path, device)
 
-    # 4. Data. Same pipeline as train.py; a mismatch invalidates data_range=1.0.
-    pipeline = Compose(
-        [ComplexToCylinderTransform(), AmplitudeNormalize(), CenterCropModulo(base=16)]
-    )
+    # 4. Data. Same pipeline train.py uses for this geometry; a mismatch
+    # invalidates data_range=1.0.
+    pipeline = manifold.build_transform(crop_base=16)
     data_dir = eval_cfg.get("data_dir") or cfg.get("dataset", {}).get(
         "data_dir", "data/skm-tea-mini/v1-release"
     )
@@ -624,7 +532,7 @@ def main(cfg: DictConfig) -> None:
         print("Weights & Biases logging enabled.")
         wandb.init(
             project=cfg.get("logging", {}).get("project_name", "Cylindrical-Flow-Matching"),
-            name=f"eval_{run_name}_t{t_start}",
+            name=f"eval_{manifold.name}_{run_name}_t{t_start}",
             dir=output_dir,
             config=OmegaConf.to_container(cfg, resolve=True),
         )
@@ -633,8 +541,7 @@ def main(cfg: DictConfig) -> None:
         print("Local logging only.")
 
     # 6. Evaluation loop.
-    solver = CylindricalODESolver(num_steps=num_steps)
-    bridge = GeodesicFlowBridge()
+    solver = manifold.make_solver(num_steps)
     accumulators: dict[str, MetricAccumulator] = {}
 
     span = 1.0 - t_start
@@ -653,8 +560,10 @@ def main(cfg: DictConfig) -> None:
             batch_ids = sample_ids[position : position + x_1.shape[0]]
             position += x_1.shape[0]
 
-            pred = reconstruct_batch(model, solver, bridge, x_1, t_start, generator)
-            batch_metrics = compute_batch_metrics(pred, x_1, mask_threshold, sampling_mask)
+            pred = reconstruct_batch(model, manifold, solver, x_1, t_start, generator)
+            batch_metrics = compute_batch_metrics(
+                manifold, pred, x_1, mask_threshold, sampling_mask
+            )
 
             for name, values in batch_metrics.items():
                 if name not in accumulators:
@@ -667,6 +576,7 @@ def main(cfg: DictConfig) -> None:
     print()
     print("=" * 88)
     print("Reconstruction evaluation")
+    print(f"  manifold   : {manifold.name}")
     print(f"  checkpoint : {checkpoint_path}")
     print(f"  split      : {split}   ({num_files} file(s), {len(indices)} slices)")
     print(f"  t_start    : {t_start:.3f}   num_steps: {num_steps}")
@@ -681,6 +591,9 @@ def main(cfg: DictConfig) -> None:
     with open(metrics_path, "w", encoding="utf-8") as fh:
         json.dump(
             {
+                # Recorded so a metrics.json can never be mistaken for the other
+                # arm of the comparison once it is out of its output directory.
+                "manifold": manifold.name,
                 "checkpoint": checkpoint_path,
                 "split": split,
                 "num_slices": len(indices),
@@ -697,6 +610,7 @@ def main(cfg: DictConfig) -> None:
 
     if use_wandb:
         log_dict: dict[str, float | int | str] = {
+            "eval/manifold": manifold.name,
             "eval/t_start": t_start,
             "eval/num_steps": num_steps,
             "eval/num_samples": len(indices),

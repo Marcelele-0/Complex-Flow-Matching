@@ -1,62 +1,46 @@
+from abc import ABC, abstractmethod
 from collections.abc import Callable
 
 import torch
 
 
-class CylindricalODESolver:
-    """
-    Heun ODE solver (2nd order) tailored for the decoupled cylindrical manifold.
-    Integrates the predicted velocity field over time to reconstruct
-    clean MRI data from pure noise, providing sharper reconstructions than Euler.
+class HeunODESolver(ABC):
+    """Heun (2nd-order) integration of a predicted velocity field from t=0 to t=1.
+
+    The time schedule, the predictor/corrector pairing and the Euler-only final
+    step live here; a subclass supplies nothing but ``step``, which is the single
+    place a manifold constraint may enter. Two models that differ only in ``step``
+    are therefore integrated on an identical grid with an identical number of
+    model evaluations - which is what makes a cylindrical-vs-Euclidean comparison
+    a comparison of geometries rather than of solvers.
     """
 
     def __init__(self, num_steps: int = 50) -> None:
         self.num_steps = num_steps
 
+    @abstractmethod
     def step(self, x_t: torch.Tensor, v_t: torch.Tensor, dt: float) -> torch.Tensor:
-        """
-        Performs a single integration step and safely projects back onto the Cylinder.
+        """Advance the state by ``dt`` under velocity ``v_t``, staying representable.
 
         Args:
-            x_t (torch.Tensor): Current state [B, 3, H, W]
+            x_t (torch.Tensor): Current state [B, C, H, W]
             v_t (torch.Tensor): Predicted velocity [B, 2, H, W]
             dt (float): Time step size
 
         Returns:
-            torch.Tensor: Next state [B, 3, H, W] safely on the manifold
+            torch.Tensor: Next state [B, C, H, W]
         """
-        # 1. Unpack state and velocity
-        m_t = x_t[:, 0:1, :, :]
-        px_t = x_t[:, 1:2, :, :]
-        py_t = x_t[:, 2:3, :, :]
-
-        v_m = v_t[:, 0:1, :, :]
-        v_phi = v_t[:, 1:2, :, :]
-
-        # 2. Amplitude step with physical constraint (prevent negative energy)
-        m_next = m_t + v_m * dt
-        m_next = torch.clamp(m_next, min=0.0)
-
-        # 3. Phase step on S^1
-        phi_t = torch.atan2(py_t, px_t)
-        phi_next = phi_t + v_phi * dt
-
-        # 4. Reproject to Cartesian unit circle to strictly enforce R=1
-        px_next = torch.cos(phi_next)
-        py_next = torch.sin(phi_next)
-
-        return torch.cat([m_next, px_next, py_next], dim=1)
 
     @torch.no_grad()
     def sample(
         self, model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor], noise: torch.Tensor
     ) -> torch.Tensor:
         """
-        Solves the ODE from t=0 to t=1 using Heun's Method on a Manifold.
+        Solves the ODE from t=0 to t=1 using Heun's Method.
 
         Args:
             model: A callable (neural network) taking (state, time) and returning velocity.
-            noise (torch.Tensor): Initial pure noise state [B, 3, H, W].
+            noise (torch.Tensor): Initial pure noise state [B, C, H, W].
 
         Returns:
             torch.Tensor: Reconstructed state at t=1.
@@ -94,3 +78,45 @@ class CylindricalODESolver:
             x_t = self.step(x_t, v_avg, dt)
 
         return x_t
+
+
+class CylindricalODESolver(HeunODESolver):
+    """
+    Heun ODE solver (2nd order) tailored for the decoupled cylindrical manifold.
+    Integrates the predicted velocity field over time to reconstruct
+    clean MRI data from pure noise, providing sharper reconstructions than Euler.
+    """
+
+    def step(self, x_t: torch.Tensor, v_t: torch.Tensor, dt: float) -> torch.Tensor:
+        """
+        Performs a single integration step and safely projects back onto the Cylinder.
+
+        Args:
+            x_t (torch.Tensor): Current state [B, 3, H, W]
+            v_t (torch.Tensor): Predicted velocity [B, 2, H, W]
+            dt (float): Time step size
+
+        Returns:
+            torch.Tensor: Next state [B, 3, H, W] safely on the manifold
+        """
+        # 1. Unpack state and velocity
+        m_t = x_t[:, 0:1, :, :]
+        px_t = x_t[:, 1:2, :, :]
+        py_t = x_t[:, 2:3, :, :]
+
+        v_m = v_t[:, 0:1, :, :]
+        v_phi = v_t[:, 1:2, :, :]
+
+        # 2. Amplitude step with physical constraint (prevent negative energy)
+        m_next = m_t + v_m * dt
+        m_next = torch.clamp(m_next, min=0.0)
+
+        # 3. Phase step on S^1
+        phi_t = torch.atan2(py_t, px_t)
+        phi_next = phi_t + v_phi * dt
+
+        # 4. Reproject to Cartesian unit circle to strictly enforce R=1
+        px_next = torch.cos(phi_next)
+        py_next = torch.sin(phi_next)
+
+        return torch.cat([m_next, px_next, py_next], dim=1)

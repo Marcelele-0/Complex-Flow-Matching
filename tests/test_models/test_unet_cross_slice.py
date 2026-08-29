@@ -30,9 +30,12 @@ def _cylindrical_window(b: int, s: int, h: int, w: int, seed: int = 0) -> torch.
     return torch.cat([amp, torch.cos(phi), torch.sin(phi)], dim=2)
 
 
-def _model(base_channels: int = 16) -> CylindricalUNetCrossSlice:
+def _model(base_channels: int = 16, in_channels: int = 3) -> CylindricalUNetCrossSlice:
     return CylindricalUNetCrossSlice(
-        base_channels=base_channels, channel_mults=TEST_MULTS, attn_heads=2
+        base_channels=base_channels,
+        channel_mults=TEST_MULTS,
+        attn_heads=2,
+        in_channels=in_channels,
     )
 
 

@@ -1,3 +1,8 @@
-use_wandb: false
+# Weights & Biases preset: `uv run src/cfm/train.py logging=w_and_b`.
+# Requires WANDB_API_KEY in the environment.
+#
+# Identical to conf/logging/default.yaml except for use_wandb, so opting into
+# logging does not move the run's output directory. See the note there.
+use_wandb: true
 project_name: "complex_flow_matching"
 experiment_name: "c_unet_attention_run"
