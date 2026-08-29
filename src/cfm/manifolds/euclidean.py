@@ -220,3 +220,6 @@ class EuclideanManifold(Manifold):
 
     def to_complex(self, state: torch.Tensor) -> torch.Tensor:
         return euclidean_to_complex(state)
+
+    def from_complex(self, z: torch.Tensor) -> torch.Tensor:
+        return torch.cat([z.real, z.imag], dim=1)

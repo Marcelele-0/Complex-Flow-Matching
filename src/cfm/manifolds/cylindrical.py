@@ -142,3 +142,8 @@ class CylindricalManifold(Manifold):
 
     def to_complex(self, state: torch.Tensor) -> torch.Tensor:
         return cylinder_to_complex(state)
+
+    def from_complex(self, z: torch.Tensor) -> torch.Tensor:
+        amp = torch.abs(z)
+        phi = torch.angle(z)
+        return torch.cat([amp, torch.cos(phi), torch.sin(phi)], dim=1)

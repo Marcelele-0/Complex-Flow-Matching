@@ -63,3 +63,4 @@ notebooks/presentation
 # OS
 .DS_Store
 Thumbs.db
+overleaf_cache/

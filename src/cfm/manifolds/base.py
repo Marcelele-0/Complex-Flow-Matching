@@ -164,3 +164,14 @@ class Manifold(ABC):
         Returns:
             ``[B, 1, H, W]`` complex.
         """
+
+    @abstractmethod
+    def from_complex(self, z: torch.Tensor) -> torch.Tensor:
+        """Map a normalized complex tensor back to the manifold's representation.
+
+        Args:
+            z: ``[B, 1, H, W]`` complex.
+
+        Returns:
+            ``[B, state_channels, H, W]`` manifold state.
+        """

@@ -44,6 +44,7 @@ from dataclasses import asdict, dataclass
 import hydra
 import torch
 from omegaconf import DictConfig, OmegaConf
+from torch.fft import fft2, fftshift, ifft2, ifftshift
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
@@ -75,12 +76,27 @@ except ImportError:
 # --------------------------------------------------------------------------- #
 # Integration
 # --------------------------------------------------------------------------- #
+def dc_project(
+    x_state: torch.Tensor, manifold: Manifold, y_measured_kspace: torch.Tensor, mask: torch.Tensor
+) -> torch.Tensor:
+    """Replace measured k-space lines in the current state."""
+    z = manifold.to_complex(x_state)
+    Z = fftshift(fft2(z, norm="ortho"), dim=(-2, -1))
+    Z_dc = Z * (1 - mask) + y_measured_kspace * mask
+    z_dc = ifft2(ifftshift(Z_dc, dim=(-2, -1)), norm="ortho")
+    return manifold.from_complex(z_dc)
+
+
 @torch.no_grad()
 def integrate_from_t(
     model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     solver: HeunODESolver,
     x_start: torch.Tensor,
     t_start: float,
+    manifold: Manifold | None = None,
+    y_measured_kspace: torch.Tensor | None = None,
+    sampling_mask: torch.Tensor | None = None,
+    use_dc_projection: bool = False,
 ) -> torch.Tensor:
     """Integrate the flow from ``t_start`` to ``t=1``, in whatever geometry ``solver`` carries.
 
@@ -133,7 +149,15 @@ def integrate_from_t(
 
         # Final step is Euler only, so the field is never evaluated past t=1.
         if i == num_steps - 1:
-            return solver.step(x_t, v_t, dt)
+            x_t = solver.step(x_t, v_t, dt)
+            if (
+                use_dc_projection
+                and manifold is not None
+                and y_measured_kspace is not None
+                and sampling_mask is not None
+            ):
+                x_t = dc_project(x_t, manifold, y_measured_kspace, sampling_mask)
+            return x_t
 
         # Euler probe, field at the probe, averaged velocity.
         x_pred = solver.step(x_t, v_t, dt)
@@ -142,6 +166,14 @@ def integrate_from_t(
 
         # Corrected step, taken from x_t.
         x_t = solver.step(x_t, v_avg, dt)
+
+        if (
+            use_dc_projection
+            and manifold is not None
+            and y_measured_kspace is not None
+            and sampling_mask is not None
+        ):
+            x_t = dc_project(x_t, manifold, y_measured_kspace, sampling_mask)
 
     return x_t
 
@@ -153,6 +185,10 @@ def reconstruct_batch(
     x_1: torch.Tensor,
     t_start: float,
     generator: torch.Generator | None = None,
+    x_alias: torch.Tensor | None = None,
+    sampling_mask: torch.Tensor | None = None,
+    y_measured_kspace: torch.Tensor | None = None,
+    use_dc_projection: bool = False,
 ) -> torch.Tensor:
     """Noise the target to ``t_start`` via the bridge, then integrate back to ``t=1``.
 
@@ -178,9 +214,21 @@ def reconstruct_batch(
 
     t = torch.full((b, 1, 1, 1), t_start, device=x_1.device, dtype=torch.float32)
     # target_v is the training signal; only the state matters at eval time.
-    x_t, _ = manifold.bridge(x_0, x_1, t)
+    if use_dc_projection and x_alias is not None:
+        x_t, _ = manifold.bridge(x_0, x_alias, t)
+    else:
+        x_t, _ = manifold.bridge(x_0, x_1, t)
 
-    return integrate_from_t(model, solver, x_t, t_start)
+    return integrate_from_t(
+        model,
+        solver,
+        x_t,
+        t_start,
+        manifold=manifold if use_dc_projection else None,
+        y_measured_kspace=y_measured_kspace if use_dc_projection else None,
+        sampling_mask=sampling_mask if use_dc_projection else None,
+        use_dc_projection=use_dc_projection,
+    )
 
 
 def compute_batch_metrics(
@@ -433,6 +481,7 @@ def main(cfg: DictConfig) -> None:
     dc_cfg = eval_cfg.get("mask", {})
     dc_acceleration = int(dc_cfg.get("acceleration", 4))
     dc_center_fraction = float(dc_cfg.get("center_fraction", 0.08))
+    use_dc_projection = eval_cfg.get("use_dc_projection", False)
 
     if dc_acceleration < 1:
         raise ValueError(f"evaluate.mask.acceleration must be >= 1, got {dc_acceleration}")
@@ -555,12 +604,36 @@ def main(cfg: DictConfig) -> None:
 
     with torch.no_grad():
         for batch in tqdm(loader, desc="Evaluating"):
-            x_1 = batch["target"].to(device)
+            target_complex = batch["target"].to(device)
+            x_1 = manifold.from_complex(target_complex)
             sampling_mask = batch["mask"].to(device)
             batch_ids = sample_ids[position : position + x_1.shape[0]]
             position += x_1.shape[0]
 
-            pred = reconstruct_batch(model, manifold, solver, x_1, t_start, generator)
+            if use_dc_projection and t_start < 1.0:
+                x_alias = batch["input"].to(device)
+                y_kspace = (
+                    fftshift(fft2(target_complex, norm="ortho"), dim=(-2, -1)) * sampling_mask
+                )
+
+                # The aliased input needs to be in the manifold representation
+                x_alias_manifold = manifold.from_complex(x_alias)
+
+                pred = reconstruct_batch(
+                    model,
+                    manifold,
+                    solver,
+                    x_1,
+                    t_start,
+                    generator,
+                    x_alias=x_alias_manifold,
+                    sampling_mask=sampling_mask,
+                    y_measured_kspace=y_kspace,
+                    use_dc_projection=True,
+                )
+            else:
+                pred = reconstruct_batch(model, manifold, solver, x_1, t_start, generator)
+
             batch_metrics = compute_batch_metrics(
                 manifold, pred, x_1, mask_threshold, sampling_mask
             )
