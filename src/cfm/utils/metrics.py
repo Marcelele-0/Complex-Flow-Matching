@@ -7,6 +7,7 @@ import torch.nn.functional as F
 
 __all__ = [
     "circular_phase_error",
+    "data_consistency_error",
     "peak_signal_noise_ratio",
     "shortest_angular_difference",
     "structural_similarity",
@@ -258,3 +259,88 @@ def circular_phase_error(
         error_per_sample = total / valid
 
     return _reduce(error_per_sample, reduction)
+
+
+def data_consistency_error(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    mask: torch.Tensor,
+    eps: float = 1e-8,
+    reduction: str = "mean",
+) -> torch.Tensor:
+    """Relative k-space error on the sampled trajectories.
+
+    In accelerated MRI, data consistency measures reconstruction fidelity strictly
+    where the scanner actually sampled::
+
+        ||M * (F(x_hat) - F(x))||^2_2 / (||M * F(x)||^2_2 + eps)
+
+    Unsampled locations are unconstrained by the acquisition, so they are excluded
+    rather than penalised. Dividing by the target's masked energy makes the score
+    dimensionless and comparable across slices, resolutions and mask densities: a
+    value of ``0.1`` means the error carries a tenth of the reference's energy on
+    the sampled lines, whatever the units.
+
+    .. warning::
+       ``target`` is the processed ground-truth **image**, so ``y`` is ``F(x)``,
+       not the scanner's measured k-space. The pipeline loads the reconstructed
+       ``target`` array, normalises amplitude per slice, and crops in image space,
+       all of which break correspondence with the raw acquisition. This scores
+       agreement with the reference image on the sampled trajectories; it is not a
+       claim about physical measurements.
+
+    Args:
+        pred: Reconstruction, complex ``[B, C, H, W]`` or ``[B, H, W]``.
+        target: Reference, complex and the same shape as ``pred``.
+        mask: Binary undersampling mask (1 where sampled), broadcastable to
+            ``pred``, in **centered** k-space convention (DC in the middle) to
+            match the internal ``fftshift``. Non-binary masks act as weights.
+        eps: Guard for the denominator, so a sample with no reference energy on the
+            sampled lines yields ``0`` instead of dividing by zero.
+        reduction: ``"mean"``, ``"sum"`` or ``"none"`` (per-sample values).
+
+    Returns:
+        Scalar tensor, or ``[B]`` when ``reduction="none"``. Identical inputs yield
+        exactly ``0.0``.
+
+    Raises:
+        ValueError: If either input is not complex, shapes disagree, inputs are not
+            3D or 4D, or ``mask`` does not broadcast to them.
+    """
+    # No decomposed path here: data consistency is about phase as much as
+    # magnitude, so an amplitude-only input would silently score the wrong thing.
+    if not torch.is_complex(pred) or not torch.is_complex(target):
+        raise ValueError(
+            "data_consistency_error needs complex pred and target "
+            f"(got {pred.dtype} and {target.dtype}); the k-space of an "
+            "amplitude-only image discards the phase this metric measures"
+        )
+    _check_shapes(pred, target)
+
+    if pred.dim() not in (3, 4):
+        raise ValueError(
+            "data_consistency_error expects [B, C, H, W] or [B, H, W], " f"got {tuple(pred.shape)}"
+        )
+
+    try:
+        broadcast_mask = mask.expand_as(pred.real)
+    except RuntimeError as exc:
+        raise ValueError(
+            f"mask of shape {tuple(mask.shape)} does not broadcast to {tuple(pred.shape)}"
+        ) from exc
+
+    # fft2 over the two spatial dims, then fftshift so a centered mask lines up
+    # with DC at the middle. The shift is a permutation applied identically to
+    # both sides, so it only decides which coefficients the mask selects.
+    def to_kspace(x: torch.Tensor) -> torch.Tensor:
+        return torch.fft.fftshift(torch.fft.fft2(x, norm="ortho"), dim=(-2, -1))
+
+    target_k = to_kspace(target) * broadcast_mask
+    residual = to_kspace(pred) * broadcast_mask - target_k
+
+    # |z|^2 straight from the components; abs() would take a needless sqrt.
+    dims = _sample_dims(pred)
+    numerator = (residual.real**2 + residual.imag**2).sum(dim=dims)
+    denominator = (target_k.real**2 + target_k.imag**2).sum(dim=dims)
+
+    return _reduce(numerator / (denominator + eps), reduction)

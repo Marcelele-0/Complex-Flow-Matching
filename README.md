@@ -154,7 +154,7 @@ uv run src/cfm/generate.py generate.run_name=my_run generate.num_samples=10
 `generate.py` samples from pure noise, so there is no ground truth to score against.
 `evaluate.py` instead measures a **reconstruction**: a real slice is partially noised
 via the flow bridge, integrated back to `t=1` by the model, and compared to the
-original with PSNR, SSIM and circular phase error.
+original with PSNR, SSIM, circular phase error, and data consistency error.
 
 ```bash
 uv run src/cfm/evaluate.py evaluate.run_name=c_unet_attention_run
@@ -168,6 +168,8 @@ uv run src/cfm/evaluate.py evaluate.run_name=c_unet_attention_run
 | `split` | Which manifest to score (`train`/`val`/`test`), or `null` for every file in `data_dir` |
 | `max_samples` | Cap on slices scored; they are strided, not truncated |
 | `mask_threshold` | Amplitude floor for the phase error, so air does not dominate |
+| `mask.acceleration` | Undersampling factor R for the data consistency error (default 4) |
+| `mask.center_fraction` | Fraction of k-space center always sampled (default 0.08) |
 
 ```bash
 # sweep how much of the reconstruction the model is responsible for
@@ -184,6 +186,18 @@ W&B when `logging.use_wandb=true`.
 > it does not hold them out. `train.py` currently globs every `.h5` under `data_dir` with
 > no split filter, so the volumes scored here were almost certainly in the training set.
 > Read the results as reconstruction fidelity until the same manifests gate training.
+
+**Data consistency error** scores k-space agreement on the sampled trajectories only:
+`‖M ⊙ (F(x̂) − F(x))‖²₂ / (‖M ⊙ F(x)‖²₂ + ε)`. The denominator makes it dimensionless
+and comparable across slices, resolutions and mask densities — `0.1` means the residual
+carries a tenth of the reference's energy on the sampled lines.
+
+> The undersampling mask is **simulated**, not read from the scan — SKM-TEA ships fully
+> sampled data. And the reference is `F(x)`, the transform of the ground-truth *image*,
+> not raw scanner k-space: the pipeline normalizes amplitude per slice and crops in image
+> space, both of which break correspondence with the acquisition. So this measures
+> agreement with the reference image on the sampled lines, not fidelity to physical
+> measurements.
 
 ### Configuration
 
