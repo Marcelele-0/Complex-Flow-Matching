@@ -141,6 +141,43 @@ class TestEndToEndReconstruction:
         unmasked_only = compute_batch_metrics(manifold, pred, x_1, mask_threshold=None)
         assert "phase_error_rad_unmasked" not in unmasked_only
 
+    def test_dc_error_appears_only_when_a_sampling_mask_is_given(self) -> None:
+        manifold = CylindricalManifold()
+        solver = manifold.make_solver(num_steps=2)
+        x_1 = _cylindrical_state(2, 16, 16, seed=11)
+        pred = reconstruct_batch(_state_and_time_model, manifold, solver, x_1, t_start=0.5)
+
+        without = compute_batch_metrics(manifold, pred, x_1, mask_threshold=0.05)
+        assert "data_consistency_error" not in without
+
+        mask = torch.ones(1, 1, 16, 16)
+        with_mask = compute_batch_metrics(
+            manifold, pred, x_1, mask_threshold=0.05, sampling_mask=mask
+        )
+
+        # The key name is what MetricAccumulator registers, so it reaches the
+        # summary table, metrics.json and W&B without further wiring.
+        assert with_mask["data_consistency_error"].shape == (2,)
+        assert torch.all(with_mask["data_consistency_error"] >= 0)
+
+    def test_dc_error_is_near_zero_for_a_perfect_reconstruction(self) -> None:
+        """At t_start=1 the bridge returns the target, so k-space should match."""
+
+        def nonsense_model(x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+            return torch.randn(x.shape[0], 2, x.shape[2], x.shape[3]) * 10.0
+
+        manifold = CylindricalManifold()
+        solver = manifold.make_solver(num_steps=3)
+        x_1 = _cylindrical_state(2, 16, 16, seed=12)
+
+        pred = reconstruct_batch(nonsense_model, manifold, solver, x_1, t_start=1.0)
+        mask = torch.ones(1, 1, 16, 16)
+        metrics = compute_batch_metrics(
+            manifold, pred, x_1, mask_threshold=0.05, sampling_mask=mask
+        )
+
+        assert torch.all(metrics["data_consistency_error"] < 1e-8)
+
     def test_all_air_slice_is_unscored_not_zero(self) -> None:
         """An all-air slice must come back NaN and be counted, never averaged in."""
 

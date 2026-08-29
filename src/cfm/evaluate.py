@@ -59,6 +59,7 @@ from cfm.utils.inference import (
 )
 from cfm.utils.metrics import (
     circular_phase_error,
+    data_consistency_error,
     peak_signal_noise_ratio,
     structural_similarity,
 )
@@ -187,6 +188,7 @@ def compute_batch_metrics(
     pred_state: torch.Tensor,
     target_state: torch.Tensor,
     mask_threshold: float | None,
+    sampling_mask: torch.Tensor | None = None,
 ) -> dict[str, torch.Tensor]:
     """Score one batch in the complex domain, per sample.
 
@@ -211,6 +213,9 @@ def compute_batch_metrics(
         mask_threshold: Fraction of the per-slice max amplitude below which pixels
             are excluded from the phase error. ``None`` scores every pixel, in
             which case masked and unmasked coincide.
+        sampling_mask: Optional k-space undersampling mask in centered convention,
+            broadcastable to ``[B, 1, H, W]``. When given, adds the data
+            consistency error: relative k-space residual on the sampled lines.
 
     Returns:
         Mapping from metric name to a per-sample tensor of shape ``[B]``.
@@ -230,6 +235,11 @@ def compute_batch_metrics(
     }
     if mask_threshold is not None:
         metrics["phase_error_rad_unmasked"] = circular_phase_error(pred, target, reduction="none")
+
+    if sampling_mask is not None:
+        metrics["data_consistency_error"] = data_consistency_error(
+            pred, target, mask=sampling_mask, reduction="none"
+        )
     return metrics
 
 
@@ -420,6 +430,17 @@ def main(cfg: DictConfig) -> None:
     seed = int(eval_cfg.get("seed", 0))
     split = eval_cfg.get("split", "test")
 
+    dc_cfg = eval_cfg.get("mask", {})
+    dc_acceleration = int(dc_cfg.get("acceleration", 4))
+    dc_center_fraction = float(dc_cfg.get("center_fraction", 0.08))
+
+    if dc_acceleration < 1:
+        raise ValueError(f"evaluate.mask.acceleration must be >= 1, got {dc_acceleration}")
+    if not 0.0 <= dc_center_fraction <= 1.0:
+        raise ValueError(
+            f"evaluate.mask.center_fraction must be in [0, 1], got {dc_center_fraction}"
+        )
+
     if not 0.0 <= t_start <= 1.0:
         raise ValueError(f"evaluate.t_start must be in [0, 1], got {t_start}")
     if num_steps < 1:
@@ -477,7 +498,9 @@ def main(cfg: DictConfig) -> None:
     # filtering is possible, so a corrupt file aborts the run even when it is not
     # in the chosen split. Intentional: swallowing a corrupt-data error here is how
     # you end up reporting metrics on half a dataset.
-    dataset = SKMTEADataset(data_dir=data_dir, transform=pipeline)
+    dataset = SKMTEADataset(
+        data_dir=data_dir, transform=pipeline, mode="reconstruction", acceleration=dc_acceleration
+    )
     file_names = load_split_file_names(data_dir, split)
     indices = select_indices(dataset.slice_map, file_names, max_samples)
     sample_ids = [
@@ -529,14 +552,18 @@ def main(cfg: DictConfig) -> None:
 
     # shuffle=False and drop_last=False keep this position aligned with sample_ids.
     position = 0
+
     with torch.no_grad():
         for batch in tqdm(loader, desc="Evaluating"):
-            x_1 = batch.to(device)
+            x_1 = batch["target"].to(device)
+            sampling_mask = batch["mask"].to(device)
             batch_ids = sample_ids[position : position + x_1.shape[0]]
             position += x_1.shape[0]
 
             pred = reconstruct_batch(model, manifold, solver, x_1, t_start, generator)
-            batch_metrics = compute_batch_metrics(manifold, pred, x_1, mask_threshold)
+            batch_metrics = compute_batch_metrics(
+                manifold, pred, x_1, mask_threshold, sampling_mask
+            )
 
             for name, values in batch_metrics.items():
                 if name not in accumulators:
@@ -554,6 +581,7 @@ def main(cfg: DictConfig) -> None:
     print(f"  split      : {split}   ({num_files} file(s), {len(indices)} slices)")
     print(f"  t_start    : {t_start:.3f}   num_steps: {num_steps}")
     print(f"  mask thr.  : {mask_threshold}")
+    print(f"  dc mask    : R={dc_acceleration}, center_fraction={dc_center_fraction} (simulated)")
     print(f"  batch/dev  : {batch_size} on {device}   seed: {seed}")
     print("=" * 88)
     print(format_summary_table(summaries))

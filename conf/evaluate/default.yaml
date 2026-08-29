@@ -42,3 +42,23 @@ seed: 0
 # Checkpoint lookup: outputs/train/{run_name}/**/*.pt, newest by mtime.
 # Falls back to logging.experiment_name when null, same rule as generate.py.
 run_name: ~
+
+# Undersampling mask for the data consistency (DC) error, which scores k-space
+# agreement on the sampled trajectories only.
+#
+# The mask is SIMULATED, not read from the scan: SKM-TEA ships fully sampled data
+# and the pipeline loads the reconstructed image, so no acquisition mask exists to
+# load. One mask is drawn per run from evaluate.seed and reused for every slice,
+# so runs are comparable.
+#
+# Note the reference k-space is F(ground truth image), not raw scanner k-space:
+# the pipeline normalises amplitude per slice and crops in image space, both of
+# which break correspondence with the acquisition. DC error therefore measures
+# agreement with the reference image on the sampled lines, not fidelity to
+# physical measurements.
+mask:
+  # Target acceleration R; the kept line budget is width // acceleration.
+  acceleration: 4
+  # Fraction of phase-encode lines always kept at the k-space center. If this
+  # block alone exceeds the budget, the center wins and the achieved R is lower.
+  center_fraction: 0.08
