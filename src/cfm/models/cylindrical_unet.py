@@ -67,12 +67,25 @@ class TimeConditionedBlock(nn.Module):
 
 class CylindricalUNet(nn.Module):
     """
-    U-Net tailored for the cylindrical topology (R^+ x S^1).
-    Input: [B, 3, H, W] (Amplitude, p_x, p_y)
-    Output: [B, 2, H, W] (Amplitude Velocity, Phase Angular Velocity)
+    U-Net for flow matching on complex-valued MRI.
+
+    The trunk is geometry-agnostic: only ``in_channels`` records which
+    representation is being consumed, so the cylindrical and Euclidean
+    experiments run the same architecture and differ by one convolution's input
+    width. The name is kept for checkpoint and config compatibility.
+
+    Input: [B, in_channels, H, W]
+        cylindrical: 3 channels (Amplitude, p_x, p_y)
+        euclidean:   2 channels (Re, Im)
+    Output: [B, out_channels, H, W] - the velocity field, 2 channels either way.
+
+    Args:
+        base_channels: Width of the first feature level.
+        in_channels: Channels of the state, i.e. ``Manifold.state_channels``.
+        out_channels: Channels of the velocity, i.e. ``Manifold.velocity_channels``.
     """
 
-    def __init__(self, base_channels: int = 64):
+    def __init__(self, base_channels: int = 64, in_channels: int = 3, out_channels: int = 2):
         super().__init__()
 
         time_emb_dim = base_channels * 4
@@ -82,9 +95,6 @@ class CylindricalUNet(nn.Module):
             nn.SiLU(),
             nn.Linear(time_emb_dim, time_emb_dim),
         )
-
-        # Initial convolution (from 3 manifold channels)
-        self.init_conv = nn.Conv2d(3, base_channels, kernel_size=3, padding=1)
 
         # ENCODER (Downsampling, extracting global context)
         self.down1 = TimeConditionedBlock(base_channels, base_channels * 2, time_emb_dim)
@@ -105,13 +115,22 @@ class CylindricalUNet(nn.Module):
         # Channels: 2*base (from upsample) + 2*base (from skip connection) = 4*base
         self.up_block2 = TimeConditionedBlock(base_channels * 4, base_channels, time_emb_dim)
 
-        # Final convolution outputting our 2 velocity vectors
-        self.final_conv = nn.Conv2d(base_channels, 2, kernel_size=1)
+        # Final convolution outputting the velocity field
+        self.final_conv = nn.Conv2d(base_channels, out_channels, kernel_size=1)
+
+        # Initial convolution, from the manifold's state channels. This is the one
+        # module whose shape depends on the manifold, so constructing it last means
+        # every other module has already drawn from the RNG at the same stream
+        # position in both geometries: with one seed, the cylindrical and Euclidean
+        # models start from element-wise identical weights everywhere except this
+        # convolution. Moving it earlier silently reintroduces an initialisation
+        # confound. Pinned by tests/test_manifolds/test_manifolds.py.
+        self.init_conv = nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1)
 
     def forward(self, x: torch.Tensor, time: torch.Tensor) -> torch.Tensor:
         """
         Args:
-            x: Tensor from topological projection [B, 3, H, W]
+            x: State tensor from the manifold's transform [B, in_channels, H, W]
             time: Time scalars for each sample in the batch [B]
         """
         t_emb = self.time_mlp(time)

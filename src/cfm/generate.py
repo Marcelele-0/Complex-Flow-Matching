@@ -1,4 +1,10 @@
-import math
+"""Unconditional sampling from a trained flow, in whichever geometry it was trained.
+
+The manifold supplies the prior, the ODE step and the map back to the complex
+domain, so this script is identical for the cylindrical model and the Euclidean
+baseline. Only ``manifold=`` changes.
+"""
+
 import os
 
 import hydra
@@ -6,11 +12,7 @@ import matplotlib.pyplot as plt
 import torch
 from omegaconf import DictConfig
 
-# Assuming solver.py is in cfm/flow/ folder (change path if different)
-from cfm.flow.solver import CylindricalODESolver
-
-# Project-specific imports
-from cfm.utils.complex_ops import cylinder_to_complex
+from cfm.manifolds import build_manifold
 from cfm.utils.inference import (
     build_model,
     load_weights,
@@ -24,39 +26,46 @@ def main(cfg: DictConfig) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Starting Inference on: {device}")
 
-    # --- 1. Model Setup ---
+    # --- 1. Geometry and Model Setup ---
     reject_unsupported_sampling_model(cfg)
-    model = build_model(cfg, device)
+
+    # The manifold must match the one the checkpoint was trained under; a
+    # mismatch shows up immediately as a state-dict shape error on init_conv.
+    manifold = build_manifold(cfg).to(device)
+
+    model = build_model(
+        cfg,
+        device,
+        in_channels=manifold.state_channels,
+        out_channels=manifold.velocity_channels,
+    )
 
     # Checkpoint from generate.run_name, falling back to logging.experiment_name
     checkpoint_path = resolve_checkpoint(cfg, "generate", hydra.utils.get_original_cwd())
     load_weights(model, checkpoint_path, device)
 
-    # --- 2. Correct Cylindrical Noise Initialization (x_0) ---
-    # We must match the training distribution: Amp in [0, 1] and Phase on circle [0, 2pi]
-    # In SKM-TEA, original un-cropped slices are 512x512, modulo 16 crop retains this size.
+    # --- 2. Noise Initialization (x_0) ---
+    # Drawn by the manifold so it matches the training distribution exactly; any
+    # other distribution puts the model off its trained support at t=0.
     b = cfg.get("generate", {}).get("num_samples", 5)
-    h, w = 512, 512
+    # SKM-TEA slices are 512x512 natively and the modulo-16 crop retains that.
+    image_size = cfg.get("generate", {}).get("image_size", 512)
+    h, w = image_size, image_size
 
-    noise_amp = torch.rand(b, 1, h, w, device=device)
-    noise_phi = torch.rand(b, 1, h, w, device=device) * 2 * math.pi
+    x_0 = manifold.sample_noise(b, h, w, device)
 
-    x_0 = torch.cat([noise_amp, torch.cos(noise_phi), torch.sin(noise_phi)], dim=1)
-
-    # --- 3. ODE Integration using generic Solver ---
+    # --- 3. ODE Integration ---
     num_steps = cfg.get("generate", {}).get("num_steps", 100)
-    print(f"Integrating Cylindrical Flow with {num_steps} steps for {b} samples...")
+    print(f"Integrating {manifold.name} flow with {num_steps} steps for {b} samples...")
 
-    # Initialize the refactored solver
-    ode_solver = CylindricalODESolver(num_steps=num_steps)
+    ode_solver = manifold.make_solver(num_steps)
 
     # Run inference (sample method solves the loop from t=0 to t=1)
     with torch.no_grad():
-        x_1_cylindrical = ode_solver.sample(model, x_0)
+        x_1_state = ode_solver.sample(model, x_0)
 
     # --- 4. Back-Transformation to Complex Domain ---
-    # Map [Amp, Cos, Sin] back to complex numbers
-    x_1_complex = cylinder_to_complex(x_1_cylindrical)
+    x_1_complex = manifold.to_complex(x_1_state)
 
     # Get the proper output directory from config (Hydra CWD by default)
     output_dir = cfg.get("paths", {}).get("output_dir", ".")

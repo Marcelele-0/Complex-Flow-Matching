@@ -1,0 +1,9 @@
+# R^+ x S^1 - the repository's original formulation.
+#
+# State  : [m, cos(phi), sin(phi)]   3 channels, phase pinned to the unit circle
+# Prior  : m ~ U[0,1], phi ~ U[0,2pi)
+# Bridge : linear in amplitude, geodesic (shortest angular distance) in phase
+# Step   : amplitude clamped at 0, phase re-projected onto R=1 after every step
+# Loss   : decoupled amplitude + phase, phase weighted by an amplitude mask
+#          (reads training.loss.amp_loss_type / phase_loss_type / lambda_phase)
+name: cylindrical

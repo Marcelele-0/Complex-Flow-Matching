@@ -91,8 +91,12 @@ class CrossSliceAttention(nn.Module):
 class CylindricalUNetCrossSlice(nn.Module):
     """2.5D U-Net predicting the center slice's velocity from a window of slices.
 
-    Input is ``[B, S, 3, H, W]`` (amplitude, cos(phi), sin(phi) per slice) and
-    output is ``[B, 2, H, W]`` (v_amp, v_phi) for the center slice only.
+    Input is ``[B, S, in_channels, H, W]`` and output is ``[B, 2, H, W]`` - the
+    velocity for the center slice only. The trunk is geometry-agnostic: at
+    ``in_channels=3`` a slice is ``(amplitude, cos(phi), sin(phi))`` and the output
+    is ``(v_amp, v_phi)``; at ``in_channels=2`` it is ``(Re, Im)`` and ``(v_re,
+    v_im)``. Both geometries emit 2 velocity channels, so only the input width
+    moves - the same property :class:`CylindricalUNetAttention` has.
 
     Args:
         base_channels: Width of the first encoder stage.
@@ -100,6 +104,8 @@ class CylindricalUNetCrossSlice(nn.Module):
             of pooling levels, so ``H`` and ``W`` must be divisible by
             ``2 ** (len(channel_mults) - 1)``.
         attn_heads: Heads for the cross-slice attention.
+        in_channels: Channels of the state, i.e. ``Manifold.state_channels``.
+            Defaults to the cylindrical 3.
     """
 
     def __init__(
@@ -107,6 +113,7 @@ class CylindricalUNetCrossSlice(nn.Module):
         base_channels: int = 96,
         channel_mults: list | None = None,
         attn_heads: int = 4,
+        in_channels: int = 3,
     ):
         super().__init__()
 
@@ -121,8 +128,6 @@ class CylindricalUNetCrossSlice(nn.Module):
             nn.SiLU(),
             nn.Linear(time_emb_dim, time_emb_dim),
         )
-
-        self.init_conv = nn.Conv2d(3, base_channels, kernel_size=3, padding=1)
 
         # === SHARED ENCODER (applied to every slice) ===
         self.downs = nn.ModuleList()
@@ -158,11 +163,19 @@ class CylindricalUNetCrossSlice(nn.Module):
 
         self.final_conv = nn.Conv2d(base_channels, 2, kernel_size=1)
 
+        # Initial convolution, from the manifold's state channels. Constructed last
+        # for the same reason as in CylindricalUNetAttention: it is the one module
+        # whose shape depends on the geometry, so building it after everything else
+        # leaves both arms drawing from the RNG at the same stream position. With
+        # one seed the cylindrical and Euclidean 2.5D models then start from
+        # element-wise identical weights everywhere except here.
+        self.init_conv = nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1)
+
     def forward(self, x: torch.Tensor, time: torch.Tensor) -> torch.Tensor:
         """Predict the center slice's velocity from a window of neighbouring slices.
 
         Args:
-            x: Cylindrical slice window, shape ``[B, S, 3, H, W]`` with ``S`` odd.
+            x: Slice window, shape ``[B, S, in_channels, H, W]`` with ``S`` odd.
             time: Diffusion time, shape ``[B]``. One value per sample: every slice
                 in a window belongs to the same training example and so shares a
                 time.
