@@ -5,6 +5,7 @@ import torch
 
 from cfm.utils.metrics import (
     circular_phase_error,
+    data_consistency_error,
     peak_signal_noise_ratio,
     shortest_angular_difference,
     structural_similarity,
@@ -189,3 +190,139 @@ class TestValueErrorGuards:
         z = _random_complex(2, 16, 16, seed=20)
         with pytest.raises(ValueError):
             peak_signal_noise_ratio(z, z, reduction="bogus")
+
+
+class TestDataConsistencyError:
+    """Relative k-space residual on the sampled trajectories.
+
+    ``||M*(F(x_hat) - F(x))||^2 / (||M*F(x)||^2 + eps)``
+    """
+
+    @staticmethod
+    def _full_mask(h: int = 16, w: int = 16) -> torch.Tensor:
+        return torch.ones(1, 1, h, w)
+
+    @staticmethod
+    def _center_line_mask(h: int = 16, w: int = 16) -> torch.Tensor:
+        """Keep a couple of central (low-frequency) columns, centered convention."""
+        mask = torch.zeros(1, 1, h, w)
+        mask[..., w // 2 - 1 : w // 2 + 1] = 1.0
+        return mask
+
+    def test_identical_inputs_give_exactly_zero(self) -> None:
+        """The headline guarantee: x_hat == x implies DC error is strictly 0.
+
+        Asserted as exact equality rather than a tolerance. Both FFTs run on the
+        same tensor and so are bit-identical, making the difference exactly zero;
+        an approx check here would mask a genuine regression.
+        """
+        z = _random_complex(3, 16, 16, seed=30)
+        error = data_consistency_error(z, z, self._full_mask())
+
+        assert error.item() == 0.0
+        assert torch.all(data_consistency_error(z, z, self._full_mask(), reduction="none") == 0.0)
+
+    def test_identical_inputs_are_zero_under_a_partial_mask(self) -> None:
+        z = _random_complex(3, 16, 16, seed=31)
+        assert data_consistency_error(z, z, self._center_line_mask()).item() == 0.0
+
+    def test_zero_outside_mask(self) -> None:
+        """Perturbations in omitted k-space lines must not affect the score."""
+        torch.manual_seed(32)
+        target = _random_complex(1, 16, 16, seed=32)
+
+        mask = self._center_line_mask()
+        # Perturb k-space at a location the mask keeps, and at one it drops.
+        target_k = torch.fft.fftshift(
+            torch.fft.fftn(target, dim=(-2, -1), norm="ortho"), dim=(-2, -1)
+        )
+
+        def perturb_at(col: int) -> torch.Tensor:
+            k = target_k.clone()
+            k[..., col] += 5.0 + 5.0j
+            unshifted = torch.fft.ifftshift(k, dim=(-2, -1))
+            return torch.fft.ifftn(unshifted, dim=(-2, -1), norm="ortho")
+
+        inside = perturb_at(16 // 2)  # within the kept center columns
+        outside = perturb_at(0)  # far periphery, dropped by the mask
+
+        assert data_consistency_error(inside, target, mask).item() > 1.0
+        assert data_consistency_error(outside, target, mask).item() == pytest.approx(0.0, abs=1e-6)
+
+    def test_full_mask_matches_the_image_space_relative_error(self) -> None:
+        """With every point sampled, Parseval makes this the image-space ratio."""
+        a = _random_complex(2, 16, 16, seed=33)
+        b = _random_complex(2, 16, 16, seed=34)
+
+        k_space = data_consistency_error(a, b, self._full_mask(), reduction="none")
+        image_space = ((a - b).abs() ** 2).sum(dim=(1, 2, 3)) / (b.abs() ** 2).sum(dim=(1, 2, 3))
+
+        torch.testing.assert_close(k_space, image_space, rtol=1e-4, atol=1e-4)
+
+    def test_is_scale_invariant(self) -> None:
+        """Scaling both sides leaves the ratio unchanged, unlike a raw squared L2."""
+        a = _random_complex(2, 16, 16, seed=35)
+        b = _random_complex(2, 16, 16, seed=36)
+        mask = self._center_line_mask()
+
+        base = data_consistency_error(a, b, mask, reduction="none")
+        scaled = data_consistency_error(a * 10.0, b * 10.0, mask, reduction="none")
+
+        torch.testing.assert_close(base, scaled, rtol=1e-4, atol=1e-6)
+
+    def test_eps_keeps_an_empty_mask_finite(self) -> None:
+        """No reference energy on the sampled lines must not divide by zero."""
+        a = _random_complex(2, 16, 16, seed=37)
+        b = _random_complex(2, 16, 16, seed=38)
+        empty = torch.zeros(1, 1, 16, 16)
+
+        error = data_consistency_error(a, b, empty)
+        assert torch.isfinite(error)
+        assert error.item() == 0.0
+
+    def test_accepts_3d_input(self) -> None:
+        """[B, H, W] is supported alongside [B, C, H, W]."""
+        a = _random_complex(2, 16, 16, seed=48).squeeze(1)
+        b = _random_complex(2, 16, 16, seed=49).squeeze(1)
+        assert a.dim() == 3
+
+        mask = torch.ones(1, 16, 16)
+        assert data_consistency_error(a, b, mask, reduction="none").shape == (2,)
+        assert data_consistency_error(a, a, mask).item() == 0.0
+
+    def test_reduction_none_returns_per_sample_shape(self) -> None:
+        a = _random_complex(5, 16, 16, seed=39)
+        b = _random_complex(5, 16, 16, seed=40)
+        assert data_consistency_error(a, b, self._full_mask(), reduction="none").shape == (5,)
+
+    def test_mask_broadcasts_from_several_shapes(self) -> None:
+        a = _random_complex(2, 16, 16, seed=41)
+        b = _random_complex(2, 16, 16, seed=42)
+        expected = data_consistency_error(a, b, torch.ones(1, 1, 16, 16))
+
+        for shape in [(16, 16), (1, 16, 16), (2, 1, 16, 16)]:
+            torch.testing.assert_close(data_consistency_error(a, b, torch.ones(*shape)), expected)
+
+    def test_non_complex_input_raises(self) -> None:
+        real = torch.rand(2, 1, 16, 16)
+        z = _random_complex(2, 16, 16, seed=43)
+        with pytest.raises(ValueError, match="complex"):
+            data_consistency_error(real, z, self._full_mask())
+        with pytest.raises(ValueError, match="complex"):
+            data_consistency_error(z, real, self._full_mask())
+
+    def test_shape_mismatch_raises(self) -> None:
+        a = _random_complex(2, 16, 16, seed=44)
+        b = _random_complex(2, 8, 8, seed=45)
+        with pytest.raises(ValueError, match="same shape"):
+            data_consistency_error(a, b, self._full_mask())
+
+    def test_non_broadcastable_mask_raises(self) -> None:
+        z = _random_complex(2, 16, 16, seed=46)
+        with pytest.raises(ValueError, match="does not broadcast"):
+            data_consistency_error(z, z, torch.ones(1, 1, 8, 8))
+
+    def test_unknown_reduction_raises(self) -> None:
+        z = _random_complex(2, 16, 16, seed=47)
+        with pytest.raises(ValueError):
+            data_consistency_error(z, z, self._full_mask(), reduction="bogus")
