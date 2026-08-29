@@ -12,6 +12,7 @@ from __future__ import annotations
 import math
 import os
 from collections.abc import Callable
+from typing import Any
 
 import hydra
 import matplotlib.pyplot as plt
@@ -20,17 +21,8 @@ import torch
 from omegaconf import DictConfig
 
 from cfm.data.dataset import SKMTEADataset
-from cfm.data.transforms import (
-    AmplitudeNormalize,
-    CenterCropModulo,
-    ComplexToCylinderTransform,
-    Compose,
-)
 from cfm.evaluate import integrate_from_t
-from cfm.flow.bridge import GeodesicFlowBridge
-from cfm.flow.solver import CylindricalODESolver
-from cfm.manifolds.cylindrical import sample_cylindrical_noise
-from cfm.utils.complex_ops import cylinder_to_complex
+from cfm.manifolds import Manifold, build_manifold
 from cfm.utils.inference import build_model, load_weights, resolve_checkpoint
 from cfm.utils.metrics import (
     circular_phase_error,
@@ -42,19 +34,19 @@ from cfm.utils.metrics import (
 
 def reconstruct_slice(
     model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-    solver: CylindricalODESolver,
-    bridge: GeodesicFlowBridge,
+    manifold: Manifold,
+    solver: Any,
     x_1: torch.Tensor,
     t_start: float,
     generator: torch.Generator | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Run flow reconstruction on a single cylindrical slice from t_start to t=1.
+    """Run flow reconstruction on a single slice from t_start to t=1.
 
     Args:
         model: Velocity field (state, time) -> velocity.
-        solver: Cylindrical ODE solver.
-        bridge: Geodesic flow bridge for noising to t_start.
-        x_1: Target cylindrical tensor [1, 3, H, W].
+        solver: ODE solver.
+        manifold: Manifold for noise prior and bridge.
+        x_1: Target tensor [1, C, H, W].
         t_start: Where on the noise-to-data path to start from (e.g. 0.5).
         generator: Optional RNG generator.
 
@@ -65,10 +57,10 @@ def reconstruct_slice(
         x_1 = x_1.unsqueeze(0)
 
     b, _, h, w = x_1.shape
-    x_0 = sample_cylindrical_noise(b, h, w, x_1.device, generator)
+    x_0 = manifold.sample_noise(b, h, w, x_1.device, generator)
 
     t = torch.full((b, 1, 1, 1), t_start, device=x_1.device, dtype=torch.float32)
-    x_t, _ = bridge.forward(cyl_noise=x_0, cyl_data=x_1, t=t)
+    x_t, _ = manifold.bridge(x_0, x_1, t)
 
     x_pred = integrate_from_t(model, solver, x_t, t_start)
     return x_pred, x_t
@@ -236,7 +228,13 @@ def main(cfg: DictConfig) -> None:
         checkpoint_path = resolve_checkpoint(cfg, section="reconstruct", orig_cwd=orig_cwd)
 
     print(f"Loading checkpoint: {checkpoint_path}")
-    model = build_model(cfg, device)
+    manifold = build_manifold(cfg).to(device)
+    model = build_model(
+        cfg,
+        device,
+        in_channels=manifold.state_channels,
+        out_channels=manifold.velocity_channels,
+    )
     load_weights(model, checkpoint_path, device)
 
     # --- 2. Load Dataset Slice ---
@@ -246,9 +244,7 @@ def main(cfg: DictConfig) -> None:
     if not os.path.isabs(data_dir):
         data_dir = os.path.join(orig_cwd, data_dir)
 
-    pipeline = Compose(
-        [ComplexToCylinderTransform(), AmplitudeNormalize(), CenterCropModulo(base=16)]
-    )
+    pipeline = manifold.build_transform(crop_base=16)
     dataset = SKMTEADataset(data_dir=data_dir, transform=pipeline)
 
     if sample_idx < 0 or sample_idx >= len(dataset):
@@ -260,28 +256,27 @@ def main(cfg: DictConfig) -> None:
     sample_id = f"{os.path.basename(file_path)}_slice_{slice_num}"
     print(f"Selected target slice: {sample_id} (index {sample_idx})")
 
-    # Load cylindrical target slice [1, 3, H, W]
+    # Load target slice [1, C, H, W]
     x_1 = dataset[sample_idx].unsqueeze(0).to(device)
 
     # --- 3. Run Reconstruction ---
-    solver = CylindricalODESolver(num_steps=num_steps)
-    bridge = GeodesicFlowBridge()
+    solver = manifold.make_solver(num_steps)
 
     print(f"Running reconstruction from t_start={t_start} with {num_steps} Heun steps...")
     with torch.no_grad():
-        x_pred_cyl, x_corrupted_cyl = reconstruct_slice(
+        x_pred_state, x_corrupted_state = reconstruct_slice(
             model=model,
+            manifold=manifold,
             solver=solver,
-            bridge=bridge,
             x_1=x_1,
             t_start=t_start,
             generator=generator,
         )
 
     # --- 4. Domain Mapping & Metrics ---
-    corrupted_complex = cylinder_to_complex(x_corrupted_cyl)
-    pred_complex = cylinder_to_complex(x_pred_cyl)
-    target_complex = cylinder_to_complex(x_1)
+    corrupted_complex = manifold.to_complex(x_corrupted_state)
+    pred_complex = manifold.to_complex(x_pred_state)
+    target_complex = manifold.to_complex(x_1)
 
     metrics = compute_slice_metrics(
         pred_complex=pred_complex,

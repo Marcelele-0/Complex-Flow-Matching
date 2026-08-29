@@ -6,8 +6,7 @@ import matplotlib.pyplot as plt
 import pytest
 import torch
 
-from cfm.flow.bridge import GeodesicFlowBridge
-from cfm.flow.solver import CylindricalODESolver
+from cfm.manifolds.cylindrical import CylindricalManifold
 from cfm.reconstruct import (
     compute_slice_metrics,
     reconstruct_slice,
@@ -30,13 +29,13 @@ def _synthetic_cylindrical_slice(h: int = 32, w: int = 32) -> torch.Tensor:
 class TestReconstructLogic:
     def test_reconstruct_slice_shape_and_dtype(self) -> None:
         x_1 = _synthetic_cylindrical_slice(16, 16)
-        solver = CylindricalODESolver(num_steps=3)
-        bridge = GeodesicFlowBridge()
+        manifold = CylindricalManifold()
+        solver = manifold.make_solver(num_steps=3)
 
         out, x_corr = reconstruct_slice(
             model=_dummy_model,
+            manifold=manifold,
             solver=solver,
-            bridge=bridge,
             x_1=x_1,
             t_start=0.5,
         )
