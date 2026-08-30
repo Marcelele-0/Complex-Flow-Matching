@@ -37,4 +37,4 @@ where $M$ denotes a tissue mask thresholded at $5\%$ of peak amplitude to avoid 
     \vspace{-2mm}
 \end{table}
 
-For the downstream reconstruction task, we employ the trained cylindrical flow as a learned generative prior within a generative flow restoration framework at $4\times$ Cartesian acceleration, strictly enforcing physical k-space constraints at every step of ODE integration.
+For the downstream reconstruction task, we employ the trained cylindrical flow as a learned generative prior within a generative flow restoration framework at $4\times$ Cartesian acceleration, maintaining data consistency via interleaved $k$-space projections during ODE integration.
