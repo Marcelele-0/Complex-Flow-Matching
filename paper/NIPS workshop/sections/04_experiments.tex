@@ -1,7 +1,7 @@
 \section{Experiments and Results}
 \label{sec:experiments}
 
-We evaluate Cylindrical Flow Matching on complex-valued MRI synthesis and downstream reconstruction using 2D axial slices from the raw $k$-space SKM-TEA dataset \citep{desai2021skmtea} (single-coil, first-echo image space). Retrospective $4\times$ Cartesian undersampling is simulated using 1D phase-encoding masks with a central 24-line autocalibration signal (ACS) band. We compare our geometry-aware approach directly against the Euclidean baseline; the training and inference pipelines remain exactly the same for both methods.
+We evaluate Cylindrical Flow Matching on complex-valued MRI synthesis and downstream reconstruction using 2D axial slices from the raw $k$-space SKM-TEA-mini dataset \citep{desai2021skmtea} (single-coil, first-echo image space). Retrospective $4\times$ Cartesian undersampling is simulated using 1D phase-encoding masks with a central 24-line autocalibration signal (ACS) band. We compare our geometry-aware approach directly against the Euclidean baseline; the training and inference pipelines remain exactly the same for both methods.
 
 \begin{figure}[!ht]
     \centering
@@ -17,19 +17,19 @@ To evaluate phase fidelity, we compute the Circular Phase Error (CPE) in radians
 \begin{equation}
     \mathrm{CPE}(\theta, \hat{\theta}) = \frac{1}{|M|} \sum_{i \in M} |\operatorname{atan2}(\sin(\theta_i - \hat{\theta}_i),\, \cos(\theta_i - \hat{\theta}_i))|
 \end{equation}
-where $M$ denotes a tissue mask thresholded at $5\%$ of peak amplitude to avoid background noise bias. Table \ref{tab:results_metrics} outlines quantitative results on held-out test data ($N=512$ slices), where both methods enforce exact Data Consistency ($\mathrm{DC\ Error} < 10^{-6}$) via interleaved k-space projections. The $+0.34$ dB PSNR and $-21\%$ phase error improvements are statistically significant (paired $t$-test, $p < 10^{-5}$).
+where $M$ denotes a tissue mask thresholded at $5\%$ of peak amplitude to avoid background noise bias. Table \ref{tab:results_metrics} outlines descriptive quantitative results on the held-out test volume (SKM-TEA-mini, $N=512$ slices), where both methods enforce exact Data Consistency ($\mathrm{DC\ Error} < 10^{-6}$) via interleaved k-space projections.
 
 \begin{table}[t]
     \centering
-    \caption{\textbf{Quantitative metrics.} Evaluation benchmark on held-out test volumes ($4\times$ Cartesian reconstruction with exact Data Consistency projections).}
+    \caption{\textbf{Quantitative metrics.} Descriptive evaluation across 512 contiguous slices of a held-out test volume ($4\times$ Cartesian reconstruction with exact Data Consistency projections).}
     \vspace{-1mm}
     \resizebox{\columnwidth}{!}{%
-    \begin{tabular}{lcccc}
+    \begin{tabular}{lccc}
         \toprule
-        \textbf{Method} & \textbf{PSNR (dB) $\uparrow$} & \textbf{SSIM $\uparrow$} & \textbf{NMSE $\downarrow$} & \textbf{CPE (rad) $\downarrow$} \\
+        \textbf{Method} & \textbf{PSNR (dB) $\uparrow$} & \textbf{SSIM $\uparrow$} & \textbf{CPE (rad) $\downarrow$} \\
         \midrule
-        Euclidean ($\mathbb{R}^2$) & 24.13 $\pm$ 1.18 & 0.530 $\pm$ 0.06 & 0.028 $\pm$ 0.005 & 0.513 $\pm$ 0.07 \\
-        \textbf{Cylindrical Flow (Ours)} & \textbf{24.47} $\pm$ \textbf{1.16} & \textbf{0.588} $\pm$ \textbf{0.04} & \textbf{0.021} $\pm$ \textbf{0.003} & \textbf{0.405} $\pm$ \textbf{0.05} \\
+        Euclidean ($\mathbb{R}^2$) & 24.13 $\pm$ 1.18 & 0.530 $\pm$ 0.06 & 0.513 $\pm$ 0.07 \\
+        \textbf{Cylindrical Flow (Ours)} & \textbf{24.47} $\pm$ \textbf{1.16} & \textbf{0.588} $\pm$ \textbf{0.04} & \textbf{0.405} $\pm$ \textbf{0.05} \\
         \bottomrule
     \end{tabular}%
     }
@@ -37,4 +37,4 @@ where $M$ denotes a tissue mask thresholded at $5\%$ of peak amplitude to avoid 
     \vspace{-2mm}
 \end{table}
 
-For the downstream reconstruction task, we employ the trained cylindrical flow as a learned generative prior within a posterior sampling framework at $4\times$ Cartesian acceleration, strictly enforcing physical k-space constraints at every step of ODE integration.
+For the downstream reconstruction task, we employ the trained cylindrical flow as a learned generative prior within a generative flow restoration framework at $4\times$ Cartesian acceleration, strictly enforcing physical k-space constraints at every step of ODE integration.
