@@ -8,7 +8,7 @@ We evaluate Cylindrical Flow Matching on complex-valued MRI synthesis and downst
     \resizebox{\linewidth}{!}{%
     \begin{tabular}{@{}l@{\hspace{2pt}}c@{\hspace{2pt}}c@{\hspace{10pt}}l@{\hspace{2pt}}c@{\hspace{2pt}}c@{\hspace{5pt}}c@{\hspace{2pt}}c@{\hspace{10pt}}l@{\hspace{2pt}}c@{\hspace{2pt}}c@{\hspace{5pt}}c@{\hspace{2pt}}c@{}}
         % Block (a) Ground Truth
-        \parbox[t]{1.4cm}{\vspace{0pt}\raggedright \textbf{\scriptsize (a) Ground}\\[-1pt]\textbf{\scriptsize Truth}\\[2pt]\tiny Reference\\[-1pt]\tiny Target} &
+        \parbox[t]{1.4cm}{\vspace{0pt}\raggedright \textbf{\scriptsize (a) Ground}\\[-1pt]\textbf{\scriptsize Truth}\\[2pt]\tiny Target:\\[-1pt]\tiny $A$ \ \ $\theta$} &
         \parbox[t]{0.75cm}{\vspace{0pt}\includegraphics[height=2.35cm]{figures/panels/gt_mag.png}} &
         \parbox[t]{0.75cm}{\vspace{0pt}\includegraphics[height=2.35cm]{figures/panels/gt_pha.png}} &
         % Block (b) Euclidean Baseline
@@ -26,7 +26,7 @@ We evaluate Cylindrical Flow Matching on complex-valued MRI synthesis and downst
     \end{tabular}%
     }
     \vspace{1mm}
-    \caption{\textbf{Qualitative reconstruction on a representative held-out test slice.} Each method block presents its quantitative metrics followed by: reconstructed Amplitude $A$ and Phase $\theta$ ($[-\pi, \pi]$), alongside corresponding residual error maps $|\Delta A|$ and Geodesic Phase Error $|\Delta\theta|$ (Inferno colormap; Ground Truth displays reference $A$ and $\theta$). While the Euclidean baseline ($\mathbb{R}^2$) suffers from severe phase seam jumps and boundary amplitude attenuation, Cylindrical Flow Matching ($S^1 \times \mathbb{R}^+$) natively preserves circular topology, yielding continuous phase fields and sharper anatomical fidelity.}
+    \caption{\textbf{Qualitative comparison on a held-out test slice.} Columns per method: Reconstructed $(A, \theta)$ followed by error maps $(|\Delta A|, |\Delta\theta|)$ in Inferno scale. The Euclidean baseline exhibits severe phase seams and boundary magnitude cancellation, natively avoided by Cylindrical Flow.}
     \label{fig:results_visual}
     \vspace{-3mm}
 \end{figure}
