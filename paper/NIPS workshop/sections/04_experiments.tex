@@ -3,10 +3,27 @@
 
 We evaluate Cylindrical Flow Matching on complex-valued MRI synthesis and downstream reconstruction using the raw $k$-space SKM-TEA-mini dataset \citep{desai2021skmtea} (single-coil, first-echo image space, comprising 3 complete 3D knee volumes with 1536 axial slices total). We partition the dataset into 2 patient volumes for training (1024 slices) and 1 completely held-out patient volume ($N=512$ contiguous slices) for testing. This constrained data regime provides a rigorous test of topological inductive bias: while Euclidean models must waste parameter capacity trying to approximate non-physical phase branch cuts, our cylindrical formulation natively respects $S^1 \times \mathbb{R}^+$ geometry, yielding superior generalization on unseen anatomy. Retrospective $4\times$ Cartesian undersampling is simulated using 1D phase-encoding masks with a central 24-line autocalibration signal (ACS) band, with exact Data Consistency ($\mathrm{DC\ Error} < 10^{-6}$) enforced via interleaved $k$-space projections.
 
-\begin{figure}[!ht]
+\begin{figure}[!t]
     \centering
-    \includegraphics[width=\linewidth]{figures/figure2_results.png}
-    \caption{\textbf{Qualitative comparison on a representative test slice.} From left to right: (a) Ground Truth reference (Magnitude and Phase), (b) Euclidean Flow baseline ($\mathbb{R}^2$), and (c) Cylindrical Flow (Ours, $S^1 \times \mathbb{R}^+$). Each method block displays the reconstructed Magnitude glued to its absolute error map $|\Delta\mathrm{Mag}|$, separated by a 4px white gap from the reconstructed Phase glued to its geodesic angular error map $|\Delta\mathrm{Phase}|$. Note the severe phase seam errors and magnitude boundary attenuation in the Euclidean baseline, which are substantially mitigated by our cylindrical formulation.}
+    \begin{subfigure}[t]{0.22\columnwidth}
+        \centering
+        {\scriptsize \textbf{(a) Ground Truth}}\\[1pt]
+        \includegraphics[width=\linewidth]{figures/panels/gt_pair.png}\\[1pt]
+        {\tiny \ Mag \hfill Phase \ }
+    \end{subfigure}\hfill
+    \begin{subfigure}[t]{0.38\columnwidth}
+        \centering
+        {\scriptsize \textbf{(b) Euclidean Flow} ($\mathbb{R}^2$)}\\[1pt]
+        \includegraphics[width=\linewidth]{figures/panels/euc_quad.png}\\[1pt]
+        {\tiny Mag \ \ $|\Delta\mathrm{M}|$ \hfill Pha \ \ $|\Delta\Phi|$}
+    \end{subfigure}\hfill
+    \begin{subfigure}[t]{0.38\columnwidth}
+        \centering
+        {\scriptsize \textbf{(c) Cylindrical Flow} (Ours)}\\[1pt]
+        \includegraphics[width=\linewidth]{figures/panels/cyl_quad.png}\\[1pt]
+        {\tiny Mag \ \ $|\Delta\mathrm{M}|$ \hfill Pha \ \ $|\Delta\Phi|$}
+    \end{subfigure}
+    \caption{\textbf{Qualitative comparison on a representative test slice.} Magnitude and Phase reconstructions alongside corresponding residual error maps ($|\Delta\mathrm{Mag}|$ and $|\Delta\mathrm{Phase}|$). The Euclidean baseline ($\mathbb{R}^2$) exhibits severe phase seam artifacts and boundary magnitude attenuation, which are natively resolved by Cylindrical Flow Matching ($S^1 \times \mathbb{R}^+$).}
     \label{fig:results_visual}
     \vspace{-3mm}
 \end{figure}
