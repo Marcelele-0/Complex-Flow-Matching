@@ -12,7 +12,7 @@ where $M$ denotes a tissue mask thresholded at $5\%$ of peak amplitude to avoid 
 \begin{table}[t]
     \centering
     \small
-    \caption{\textbf{Quantitative metrics.} Descriptive evaluation across 512 contiguous slices of the held-out test volume ($4\times$ Cartesian reconstruction with exact Data Consistency projections).}
+    \caption{\textbf{Quantitative metrics.} Mean $\pm$ standard deviation across all 512 slices of the held-out test volume ($4\times$ Cartesian reconstruction with exact Data Consistency projections).}
     \vspace{1mm}
     \begin{tabular}{lccc}
         \toprule
@@ -54,4 +54,4 @@ where $M$ denotes a tissue mask thresholded at $5\%$ of peak amplitude to avoid 
     \vspace{-3mm}
 \end{figure}
 
-As presented quantitatively in Table \ref{tab:results_metrics} and visually in Figure \ref{fig:results_visual}, the Euclidean model struggles with phase wrapping, generating artificial branch-cut seams that induce destructive interference and signal cancellations near tissue boundaries. In contrast, by explicitly modeling phase on $S^1$, Cylindrical Flow Matching preserves smooth phase transitions and prevents mid-trajectory amplitude collapse, leading to sharper anatomical edges and consistent performance gains across all evaluated metrics.
+As presented quantitatively across the full volume in Table \ref{tab:results_metrics} (mean $\pm$ std) and qualitatively on a representative central slice in Figure \ref{fig:results_visual}, the Euclidean model struggles with phase wrapping, generating artificial branch-cut seams that induce destructive interference and signal cancellations near tissue boundaries. In contrast, by explicitly modeling phase on $S^1$, Cylindrical Flow Matching preserves smooth phase transitions and prevents mid-trajectory amplitude collapse, leading to sharper anatomical edges and consistent performance gains across all evaluated metrics.
