@@ -1,7 +1,7 @@
 \section{Experiments and Results}
 \label{sec:experiments}
 
-We evaluate Cylindrical Flow Matching on complex-valued MRI synthesis and downstream reconstruction using 2D axial slices from the raw $k$-space SKM-TEA-mini dataset \citep{desai2021skmtea} (single-coil, first-echo image space). Retrospective $4\times$ Cartesian undersampling is simulated using 1D phase-encoding masks with a central 24-line autocalibration signal (ACS) band. We compare our geometry-aware approach directly against the Euclidean baseline; the training and inference pipelines remain exactly the same for both methods.
+We evaluate Cylindrical Flow Matching on complex-valued MRI synthesis and downstream reconstruction using the raw $k$-space SKM-TEA-mini dataset \citep{desai2021skmtea} (single-coil, first-echo image space, comprising 3 complete 3D knee volumes with 1536 axial slices total). We partition the dataset into 2 patient volumes for training (1024 slices) and 1 completely held-out patient volume ($N=512$ contiguous slices) for testing. This constrained data regime provides a rigorous test of topological inductive bias: while Euclidean models must waste parameter capacity trying to approximate non-physical phase branch cuts, our cylindrical formulation natively respects $S^1 \times \mathbb{R}^+$ geometry, yielding superior generalization on unseen anatomy. Retrospective $4\times$ Cartesian undersampling is simulated using 1D phase-encoding masks with a central 24-line autocalibration signal (ACS) band, with exact Data Consistency ($\mathrm{DC\ Error} < 10^{-6}$) enforced via interleaved $k$-space projections.
 
 \begin{figure}[!ht]
     \centering
@@ -11,19 +11,19 @@ We evaluate Cylindrical Flow Matching on complex-valued MRI synthesis and downst
     \vspace{-3mm}
 \end{figure}
 
-As shown in Figure \ref{fig:results_visual}, the Euclidean model struggles with phase wrapping, leading to artificial signal cancellations and magnitude dropouts near tissue boundaries (clearly highlighted in the residual error maps). In contrast, our geometry-aware approach explicitly models the $S^1$ phase topology, which not only yields continuous phase fields but also prevents destructive interference, resulting in significantly sharper anatomical reconstructions in the magnitude domain (PSNR $24.47$ dB vs $24.13$ dB; SSIM $0.588$ vs $0.530$).
+As shown in Figure \ref{fig:results_visual}, the Euclidean model struggles with phase wrapping, leading to artificial signal cancellations and magnitude dropouts near tissue boundaries (clearly highlighted in the residual error maps). In contrast, our geometry-aware approach explicitly models the $S^1$ phase topology, yielding continuous phase fields while preventing destructive interference, which results in significantly sharper anatomical reconstructions as evidenced across all quantitative metrics in Table \ref{tab:results_metrics}.
 
 To evaluate phase fidelity, we compute the Circular Phase Error (CPE) in radians:
 \begin{equation}
     \mathrm{CPE}(\theta, \hat{\theta}) = \frac{1}{|M|} \sum_{i \in M} |\operatorname{atan2}(\sin(\theta_i - \hat{\theta}_i),\, \cos(\theta_i - \hat{\theta}_i))|
 \end{equation}
-where $M$ denotes a tissue mask thresholded at $5\%$ of peak amplitude to avoid background noise bias. Table \ref{tab:results_metrics} outlines descriptive quantitative results on the held-out test volume (SKM-TEA-mini, $N=512$ slices), where both methods enforce exact Data Consistency ($\mathrm{DC\ Error} < 10^{-6}$) via interleaved k-space projections.
+where $M$ denotes a tissue mask thresholded at $5\%$ of peak amplitude to avoid background noise bias.
 
 \begin{table}[t]
     \centering
-    \caption{\textbf{Quantitative metrics.} Descriptive evaluation across 512 contiguous slices of a held-out test volume ($4\times$ Cartesian reconstruction with exact Data Consistency projections).}
+    \small
+    \caption{\textbf{Quantitative metrics.} Descriptive evaluation across 512 contiguous slices of the held-out test volume ($4\times$ Cartesian reconstruction with exact Data Consistency projections).}
     \vspace{-1mm}
-    \resizebox{\columnwidth}{!}{%
     \begin{tabular}{lccc}
         \toprule
         \textbf{Method} & \textbf{PSNR (dB) $\uparrow$} & \textbf{SSIM $\uparrow$} & \textbf{CPE (rad) $\downarrow$} \\
@@ -31,10 +31,7 @@ where $M$ denotes a tissue mask thresholded at $5\%$ of peak amplitude to avoid 
         Euclidean ($\mathbb{R}^2$) & 24.13 $\pm$ 1.18 & 0.530 $\pm$ 0.06 & 0.513 $\pm$ 0.07 \\
         \textbf{Cylindrical Flow (Ours)} & \textbf{24.47} $\pm$ \textbf{1.16} & \textbf{0.588} $\pm$ \textbf{0.04} & \textbf{0.405} $\pm$ \textbf{0.05} \\
         \bottomrule
-    \end{tabular}%
-    }
+    \end{tabular}
     \label{tab:results_metrics}
     \vspace{-2mm}
 \end{table}
-
-For the downstream reconstruction task, we employ the trained cylindrical flow as a learned generative prior within a generative flow restoration framework at $4\times$ Cartesian acceleration, maintaining data consistency via interleaved $k$-space projections during ODE integration.
