@@ -18,29 +18,27 @@ cyl_mag_err = plt.imread(f"{out_dir}/cyl_mag_err.png")
 cyl_pha = plt.imread(f"{out_dir}/cyl_pha.png")
 cyl_pha_err = plt.imread(f"{out_dir}/cyl_pha_err.png")
 
-# Width ratios with explicit micro-gaps:
-# (a) Text, Mag, Pha
-# Gap AB
-# (b) Text, Mag, Pha, GapReconErr, MagErr, PhaErr
-# Gap BC
-# (c) Text, Mag, Pha, GapReconErr, MagErr, PhaErr
+# Width ratios and precise micro-gaps:
+# Between Amp and Phase pair: tight (~2px equivalent)
+# Between Recon pair and Error pair: medium (~5px equivalent)
+# Between main blocks (a), (b), (c): clear separating gap
 
 width_ratios = [
-    # (a) Ground Truth (3 cols)
+    # (a) Ground Truth: Text, Mag, Pha
     1.45, 1.0, 1.0,
     # Gap (a) -> (b)
     0.45,
-    # (b) Euclidean (6 cols: Text, Mag, Pha, mid-gap, MagErr, PhaErr)
-    1.45, 1.0, 1.0, 0.15, 1.0, 1.0,
+    # (b) Euclidean: Text, Mag, Pha, mid-gap (5px), MagErr, PhaErr
+    1.45, 1.0, 1.0, 0.05, 1.0, 1.0,
     # Gap (b) -> (c)
     0.45,
-    # (c) Cylindrical (6 cols: Text, Mag, Pha, mid-gap, MagErr, PhaErr)
-    1.45, 1.0, 1.0, 0.15, 1.0, 1.0,
+    # (c) Cylindrical: Text, Mag, Pha, mid-gap (5px), MagErr, PhaErr
+    1.45, 1.0, 1.0, 0.05, 1.0, 1.0,
 ]
 
-# Slightly taller and larger for maximum sharpness:
 fig = plt.figure(figsize=(16.5, 2.1), dpi=300)
-gs = GridSpec(1, len(width_ratios), figure=fig, width_ratios=width_ratios, wspace=0.03, left=0.01, right=0.99, top=0.96, bottom=0.04)
+# wspace=0.015 gives ~2px between immediately adjacent subplots
+gs = GridSpec(1, len(width_ratios), figure=fig, width_ratios=width_ratios, wspace=0.015, left=0.01, right=0.99, top=0.96, bottom=0.04)
 
 # ==================== (a) Ground Truth ====================
 ax_t0 = fig.add_subplot(gs[0, 0])
@@ -56,7 +54,7 @@ ax_a_pha = fig.add_subplot(gs[0, 2])
 ax_a_pha.imshow(gt_pha)
 ax_a_pha.axis("off")
 
-# Gap
+# Gap (a) -> (b)
 fig.add_subplot(gs[0, 3]).axis("off")
 
 # ==================== (b) Euclidean Baseline ====================
@@ -65,7 +63,7 @@ ax_t1.text(0.0, 0.70, "(b) Euclidean ($\\mathbb{R}^2$)", fontsize=10.5, fontweig
 ax_t1.text(0.0, 0.32, "PSNR: 25.35 dB\nSSIM: 0.6460\nCPE: 0.5261 rad", fontsize=8.0, color="#222222", va="center", linespacing=1.25)
 ax_t1.axis("off")
 
-# Reconstructions: Amp & Phase
+# Reconstructions: Amp & Phase (~2px gap via wspace)
 ax_b_mag = fig.add_subplot(gs[0, 5])
 ax_b_mag.imshow(euc_mag)
 ax_b_mag.axis("off")
@@ -74,10 +72,10 @@ ax_b_pha = fig.add_subplot(gs[0, 6])
 ax_b_pha.imshow(euc_pha)
 ax_b_pha.axis("off")
 
-# 15px-equivalent mid-gap between recon pair and error pair
+# ~5px gap between recon pair and error pair
 fig.add_subplot(gs[0, 7]).axis("off")
 
-# Error Maps: |dMag| & |dPhase|
+# Error Maps: |dMag| & |dPhase| (~2px gap via wspace)
 ax_b_mag_err = fig.add_subplot(gs[0, 8])
 ax_b_mag_err.imshow(euc_mag_err)
 ax_b_mag_err.axis("off")
@@ -86,7 +84,7 @@ ax_b_pha_err = fig.add_subplot(gs[0, 9])
 ax_b_pha_err.imshow(euc_pha_err)
 ax_b_pha_err.axis("off")
 
-# Gap
+# Gap (b) -> (c)
 fig.add_subplot(gs[0, 10]).axis("off")
 
 # ==================== (c) Cylindrical Flow (Ours) ====================
@@ -104,7 +102,7 @@ ax_c_pha = fig.add_subplot(gs[0, 13])
 ax_c_pha.imshow(cyl_pha)
 ax_c_pha.axis("off")
 
-# 15px-equivalent mid-gap
+# ~5px gap between recon pair and error pair
 fig.add_subplot(gs[0, 14]).axis("off")
 
 # Error Maps: |dMag| & |dPhase|
@@ -119,4 +117,4 @@ ax_c_pha_err.axis("off")
 out_file = "paper/NIPS workshop/figures/figure2_results.png"
 plt.savefig(out_file, bbox_inches="tight", pad_inches=0.01)
 plt.close()
-print("Saved newly ordered and scaled Figure 2 to", out_file)
+print("Saved newly tuned Figure 2 to", out_file)
