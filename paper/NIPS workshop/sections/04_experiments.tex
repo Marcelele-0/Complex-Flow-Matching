@@ -5,25 +5,26 @@ We evaluate Cylindrical Flow Matching on complex-valued MRI synthesis and downst
 
 \begin{figure}[!t]
     \centering
-    \begin{subfigure}[t]{0.22\columnwidth}
+    \begin{subfigure}[t]{0.20\columnwidth}
         \centering
         {\scriptsize \textbf{(a) Ground Truth}}\\[1pt]
-        \includegraphics[width=\linewidth]{figures/panels/gt_pair.png}\\[1pt]
-        {\tiny \ Mag \hfill Phase \ }
+        {\tiny Reference}\\[2pt]
+        \includegraphics[width=\linewidth]{figures/panels/gt_pair.png}
     \end{subfigure}\hfill
-    \begin{subfigure}[t]{0.38\columnwidth}
+    \begin{subfigure}[t]{0.39\columnwidth}
         \centering
         {\scriptsize \textbf{(b) Euclidean Flow} ($\mathbb{R}^2$)}\\[1pt]
-        \includegraphics[width=\linewidth]{figures/panels/euc_quad.png}\\[1pt]
-        {\tiny Mag \ \ $|\Delta\mathrm{M}|$ \hfill Pha \ \ $|\Delta\Phi|$}
+        {\tiny 25.35 dB / 0.646 SSIM / 0.526 rad}\\[2pt]
+        \includegraphics[width=\linewidth]{figures/panels/euc_quad.png}
     \end{subfigure}\hfill
-    \begin{subfigure}[t]{0.38\columnwidth}
+    \begin{subfigure}[t]{0.39\columnwidth}
         \centering
         {\scriptsize \textbf{(c) Cylindrical Flow} (Ours)}\\[1pt]
-        \includegraphics[width=\linewidth]{figures/panels/cyl_quad.png}\\[1pt]
-        {\tiny Mag \ \ $|\Delta\mathrm{M}|$ \hfill Pha \ \ $|\Delta\Phi|$}
+        {\tiny \textbf{28.39 dB} / \textbf{0.762 SSIM} / \textbf{0.235 rad}}\\[2pt]
+        \includegraphics[width=\linewidth]{figures/panels/cyl_quad.png}
     \end{subfigure}
-    \caption{\textbf{Qualitative comparison on a representative test slice.} Magnitude and Phase reconstructions alongside corresponding residual error maps ($|\Delta\mathrm{Mag}|$ and $|\Delta\mathrm{Phase}|$). The Euclidean baseline ($\mathbb{R}^2$) exhibits severe phase seam artifacts and boundary magnitude attenuation, which are natively resolved by Cylindrical Flow Matching ($S^1 \times \mathbb{R}^+$).}
+    \vspace{1mm}
+    \caption{\textbf{Qualitative reconstruction on a representative held-out test slice.} Each method block displays (from left to right): reconstructed Amplitude, Amplitude Error $|\Delta A|$, reconstructed Phase, and Angular Phase Error $|\Delta\theta|$ (Ground Truth shows reference Amplitude and Phase). Test slice metrics are listed above each block. The Euclidean baseline exhibits severe phase seams and boundary magnitude cancellation, natively avoided by Cylindrical Flow.}
     \label{fig:results_visual}
     \vspace{-3mm}
 \end{figure}
