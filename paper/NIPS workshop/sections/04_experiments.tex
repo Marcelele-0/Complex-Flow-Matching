@@ -26,7 +26,7 @@ We evaluate Cylindrical Flow Matching on complex-valued MRI synthesis and downst
     \end{tabular}%
     }
     \vspace{1mm}
-    \caption{\textbf{Qualitative comparison on a representative held-out test slice.} Left to right: Method and slice metrics, Reconstructed Amplitude, Reconstructed Phase, Amplitude Error $|\Delta A|$, and Geodesic Phase Error $|\Delta\theta|$ (Ground Truth shows reference Amplitude and Phase). The Euclidean baseline exhibits severe phase seams and boundary magnitude cancellation, natively avoided by Cylindrical Flow.}
+    \caption{\textbf{Qualitative reconstruction on a representative held-out test slice.} Each method block presents its quantitative metrics followed by: reconstructed Amplitude $A$ and Phase $\theta$ ($[-\pi, \pi]$), alongside corresponding residual error maps $|\Delta A|$ and Geodesic Phase Error $|\Delta\theta|$ (Inferno colormap; Ground Truth displays reference $A$ and $\theta$). While the Euclidean baseline ($\mathbb{R}^2$) suffers from severe phase seam jumps and boundary amplitude attenuation, Cylindrical Flow Matching ($S^1 \times \mathbb{R}^+$) natively preserves circular topology, yielding continuous phase fields and sharper anatomical fidelity.}
     \label{fig:results_visual}
     \vspace{-3mm}
 \end{figure}
