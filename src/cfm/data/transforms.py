@@ -1,20 +1,8 @@
-"""Transformation pipeline, split into per-slice and per-window stages.
+"""Preprocessing and transformation pipelines for complex MRI tensors."""
 
-Per-slice transforms (ComplexToCylinderTransform, AmplitudeNormalize) take a
-single slice, [C, H, W] or [1, H, W] before the cylindrical projection.
+from __future__ import annotations
 
-Window transforms (WindowAmplitudeNormalize, WindowEuclideanNormalize) take a
-stacked [S, C, H, W] window assembled by SKMTEADataset after the per-slice stage.
-
-The two are NOT interchangeable. At num_slices=3 the slice axis and the
-channel axis are both of size 3, so a transform applied at the wrong stage
-would index the wrong axis and corrupt data silently instead of raising -
-AmplitudeNormalize on a stacked window would rescale slice 0's cos/sin phase
-channels. Window transforms therefore assert rank 4; CenterCropModulo is the
-only rank-agnostic one, because it only ever touches the trailing two axes.
-"""
-
-from typing import Callable
+from collections.abc import Callable
 
 import torch
 
@@ -22,15 +10,22 @@ from cfm.utils.complex_ops import complex_to_cylinder, complex_to_euclidean
 
 
 class ComplexToCylinderTransform:
-    """Maps a raw complex tensor to a 3-channel cylindrical topology."""
+    """Maps complex tensor to 3-channel cylindrical manifold representation."""
+
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        # Protect against dim=1 error: [C, H, W] -> [1, C, H, W]
+        """Convert complex tensor to cylindrical state.
+
+        Args:
+            x: Complex tensor [1, H, W] or [H, W] complex64.
+
+        Returns:
+            Cylindrical tensor [3, H, W] (amplitude, cos(phi), sin(phi)).
+        """
         if x.dim() == 3:
             x = x.unsqueeze(0)
 
         cyl_data = complex_to_cylinder(x)
 
-        # Squeeze back to 3D: [1, 3, H, W] -> [3, H, W]
         if cyl_data.dim() == 4:
             cyl_data = cyl_data.squeeze(0)
 
@@ -38,12 +33,17 @@ class ComplexToCylinderTransform:
 
 
 class AmplitudeNormalize:
-    """
-    Normalizes only the amplitude channel (index 0) to the [0, 1] range.
-    Phase channels (index 1 and 2) remain untouched (R=1).
-    """
+    """Normalizes amplitude channel (index 0) to [0, 1] range."""
+
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        # Input: [3, H, W] on the cylinder
+        """Normalize amplitude of cylindrical slice.
+
+        Args:
+            x: Cylindrical tensor [3, H, W].
+
+        Returns:
+            Normalized cylindrical tensor [3, H, W] with amplitude in [0, 1].
+        """
         amp = x[0:1, :, :]
         amp_max = amp.max()
 
@@ -55,18 +55,20 @@ class AmplitudeNormalize:
 
 
 class WindowAmplitudeNormalize:
-    """Normalizes the amplitude channel across an entire multi-slice window.
-
-    Input/output: [S, C, H, W] (slice x channel x H x W). All slices are
-    divided by a single scalar - the maximum amplitude over the whole
-    window - so relative brightness between neighbouring slices is
-    preserved. Exactly one slice attains 1.0; the rest stay below it.
-
-    Unlike AmplitudeNormalize this is NOT a per-slice transform and must run
-    after stacking.
-    """
+    """Normalizes amplitude channel across multi-slice window by shared peak."""
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        """Normalize entire multi-slice window by global peak amplitude.
+
+        Args:
+            x: Window tensor [S, 3, H, W].
+
+        Returns:
+            Normalized window [S, 3, H, W].
+
+        Raises:
+            ValueError: If input tensor is not rank 4.
+        """
         if x.dim() != 4:
             raise ValueError(
                 f"WindowAmplitudeNormalize expects a stacked [S, C, H, W] window, "
@@ -81,23 +83,20 @@ class WindowAmplitudeNormalize:
 
 
 class WindowEuclideanNormalize:
-    """Divides an entire window by its peak modulus, putting |z| in the [0, 1] range.
-
-    The window-scoped counterpart of EuclideanNormalize, and the Euclidean twin
-    of WindowAmplitudeNormalize: one scalar - the largest modulus anywhere in the
-    window - divides every slice, so relative brightness between neighbouring
-    slices is preserved. Exactly one pixel attains 1.0.
-
-    Scaling both channels by one factor divides the modulus by its max and leaves
-    the argument untouched, so this and WindowAmplitudeNormalize put the *same*
-    complex signal in front of the model. That is what keeps a 2.5D
-    cylindrical-vs-Euclidean comparison a comparison of geometries.
-
-    Like its cylindrical twin this is NOT a per-slice transform and must run
-    after stacking.
-    """
+    """Normalizes 2-channel Euclidean window by shared peak modulus."""
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        """Normalize entire multi-slice window by global peak modulus.
+
+        Args:
+            x: Window tensor [S, 2, H, W].
+
+        Returns:
+            Normalized window [S, 2, H, W].
+
+        Raises:
+            ValueError: If input tensor is not rank 4.
+        """
         if x.dim() != 4:
             raise ValueError(
                 f"WindowEuclideanNormalize expects a stacked [S, C, H, W] window, "
@@ -114,16 +113,22 @@ class WindowEuclideanNormalize:
 
 
 class ComplexToEuclideanTransform:
-    """Maps a raw complex tensor to the flat 2-channel Euclidean representation."""
+    """Maps complex tensor to flat 2-channel Euclidean representation (Re, Im)."""
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        # Protect against dim=1 error: [C, H, W] -> [1, C, H, W]
+        """Convert complex tensor to Euclidean 2-channel state.
+
+        Args:
+            x: Complex tensor [1, H, W] or [H, W] complex64.
+
+        Returns:
+            Euclidean tensor [2, H, W] (real, imag).
+        """
         if x.dim() == 3:
             x = x.unsqueeze(0)
 
         euc_data = complex_to_euclidean(x)
 
-        # Squeeze back to 3D: [1, 2, H, W] -> [2, H, W]
         if euc_data.dim() == 4:
             euc_data = euc_data.squeeze(0)
 
@@ -131,22 +136,17 @@ class ComplexToEuclideanTransform:
 
 
 class EuclideanNormalize:
-    """
-    Divides both channels by the peak modulus, putting |z| in the [0, 1] range.
-
-    This is the exact counterpart of AmplitudeNormalize: scaling the real and
-    imaginary parts by one common factor divides the modulus by its max and
-    leaves the argument untouched. Both pipelines therefore carry the *identical*
-    complex signal, differing only in how it is coordinatised - which is what
-    makes PSNR's data_range=1.0 valid on both sides and the cylindrical-vs-
-    Euclidean comparison meaningful.
-
-    Applied before the crop, as AmplitudeNormalize is, so both geometries divide
-    by a peak taken over the same (uncropped) slice.
-    """
+    """Normalizes real and imaginary channels by peak complex modulus to [0, 1]."""
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        # Input: [2, H, W]
+        """Normalize Euclidean slice by peak modulus.
+
+        Args:
+            x: Euclidean tensor [2, H, W].
+
+        Returns:
+            Normalized Euclidean tensor [2, H, W].
+        """
         modulus = torch.sqrt(x[0:1, :, :] ** 2 + x[1:2, :, :] ** 2)
         peak = modulus.max()
 
@@ -157,16 +157,24 @@ class EuclideanNormalize:
 
 
 class CenterCropModulo:
+    """Center crops image spatial dimensions to nearest multiple of base.
+
+    Args:
+        base: Divisibility factor (e.g. 16 for standard 4-level U-Nets).
     """
-    Crops the image from the center to the nearest multiple of the given base (e.g., 16).
-    Protects the U-Net architecture from Up-sampling errors.
-    """
+
     def __init__(self, base: int = 16) -> None:
         self.base = base
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        # Rank-agnostic: works on [C, H, W] and stacked [S, C, H, W] alike,
-        # since it only ever touches the two trailing spatial axes.
+        """Center crop trailing spatial dimensions.
+
+        Args:
+            x: Tensor [..., H, W].
+
+        Returns:
+            Cropped tensor [..., H_new, W_new] where H_new, W_new are multiples of base.
+        """
         h, w = x.shape[-2], x.shape[-1]
         new_h = (h // self.base) * self.base
         new_w = (w // self.base) * self.base
@@ -181,11 +189,24 @@ class CenterCropModulo:
 
 
 class Compose:
-    """Connects a list of transformations into a single sequential pipeline."""
-    def __init__(self, transforms: list[Callable]) -> None:
+    """Sequentially chains a list of data transforms.
+
+    Args:
+        transforms: Sequence of transform callables.
+    """
+
+    def __init__(self, transforms: list[Callable[[torch.Tensor], torch.Tensor]]) -> None:
         self.transforms = transforms
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply transforms sequentially.
+
+        Args:
+            x: Input tensor.
+
+        Returns:
+            Transformed output tensor.
+        """
         for t in self.transforms:
             x = t(x)
         return x

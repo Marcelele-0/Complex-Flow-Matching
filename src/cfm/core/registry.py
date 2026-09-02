@@ -107,7 +107,7 @@ class Registry(Generic[T]):
         """
         if name not in self._registry:
             raise KeyError(
-                f"'{name}' not found in registry '{self._name}'. " f"Available: {self.list()}"
+                f"'{name}' not found in registry '{self._name}'. Available: {self.list()}"
             )
         return self._registry[name]
 

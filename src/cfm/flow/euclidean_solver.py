@@ -1,4 +1,4 @@
-"""Flat-space ODE solver: the Euclidean counterpart of ``CylindricalODESolver``."""
+"""Flat-space ODE solver for Euclidean flow matching baseline."""
 
 from __future__ import annotations
 
@@ -12,33 +12,21 @@ from cfm.flow.solver import HeunODESolver
 @SOLVERS.register("euclidean_heun")
 @SOLVERS.register("euclidean_ode")
 class EuclideanODESolver(HeunODESolver):
-    """Integrates the velocity field in flat R^2 with a plain Euler update.
-
-    ``x_{t+dt} = x_t + v(x_t, t) * dt``, on the same Heun schedule the
-    cylindrical solver uses.
-
-    The absence is the point: no amplitude clamp, no ``atan2`` -> add ->
-    ``(cos, sin)`` re-projection, no modulo, no trigonometric embedding. A state
-    may acquire negative modulus or leave the region a normalised complex image
-    occupies, and nothing pulls it back. That repair is what the cylindrical
-    formulation contributes, so adding any of it here would hand the baseline the
-    advantage being measured. Do not "fix" this.
-    """
+    """2nd-order Heun ODE solver in flat Euclidean space R^2."""
 
     def step(self, x_t: torch.Tensor, v_t: torch.Tensor, dt: float) -> torch.Tensor:
-        """Performs a single Euler step in R^2. No projection, no constraint.
+        """Perform a single Euler step in flat Euclidean space.
 
         Args:
-            x_t (torch.Tensor): Current state [B, 2, H, W] (Re, Im)
-            v_t (torch.Tensor): Predicted velocity [B, 2, H, W] (v_re, v_im)
-            dt (float): Time step size
+            x_t: Current state [B, 2, H, W] (real, imag).
+            v_t: Predicted velocity [B, 2, H, W] (v_re, v_im).
+            dt: Time step size scalar.
 
         Returns:
-            torch.Tensor: Next state [B, 2, H, W]
+            Next state [B, 2, H, W] in R^2.
 
         Raises:
-            ValueError: If state and velocity channel counts disagree - a wiring
-                bug that broadcasting would otherwise hide.
+            ValueError: If state and velocity channel dimensions mismatch.
         """
         if x_t.shape[1] != v_t.shape[1]:
             raise ValueError(

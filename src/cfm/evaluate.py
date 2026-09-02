@@ -40,6 +40,7 @@ import json
 import os
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
+from typing import Any, cast
 
 import hydra
 import torch
@@ -48,9 +49,9 @@ from torch.fft import fft2, fftshift, ifft2, ifftshift
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
+from cfm.core.solver import BaseODESolver
 from cfm.data.dataset import SKMTEADataset
 from cfm.data.splits import load_split_file_names, select_indices
-from cfm.flow.solver import HeunODESolver
 from cfm.manifolds import Manifold, build_manifold
 from cfm.utils.inference import (
     build_model,
@@ -90,7 +91,7 @@ def dc_project(
 @torch.no_grad()
 def integrate_from_t(
     model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-    solver: HeunODESolver,
+    solver: BaseODESolver,
     x_start: torch.Tensor,
     t_start: float,
     manifold: Manifold | None = None,
@@ -113,6 +114,10 @@ def integrate_from_t(
         t_start: Absolute start time in ``[0, 1]``. At ``0`` this reproduces
             ``sample`` bit-for-bit; at ``1`` the interval is empty and the state
             returns unchanged up to whatever re-projection ``step`` applies.
+        manifold: Optional geometry manifold for data consistency projections.
+        y_measured_kspace: Optional measured k-space for data consistency.
+        sampling_mask: Optional binary sampling mask.
+        use_dc_projection: Whether to apply data consistency projections.
 
     Returns:
         The state at ``t=1``, shape ``[B, C, H, W]``.
@@ -134,10 +139,6 @@ def integrate_from_t(
     x_t = x_start
 
     for i in range(num_steps):
-        # Absolute times in [t_start, 1), not step indices. Written as
-        # t_start + span * (i / num_steps) rather than t_start + i * dt so
-        # t_start=0 collapses to exactly i / num_steps, matching the float
-        # solver.sample() feeds the model, with no drift accumulation.
         t_val = t_start + span * (i / num_steps)
         t_next_val = t_start + span * ((i + 1) / num_steps)
 
@@ -181,7 +182,7 @@ def integrate_from_t(
 def reconstruct_batch(
     model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     manifold: Manifold,
-    solver: HeunODESolver,
+    solver: BaseODESolver,
     x_1: torch.Tensor,
     t_start: float,
     generator: torch.Generator | None = None,
@@ -579,11 +580,12 @@ def main(cfg: DictConfig) -> None:
 
     if use_wandb and HAS_WANDB:
         print("Weights & Biases logging enabled.")
+        config_dict = cast(dict[str, Any], OmegaConf.to_container(cfg, resolve=True))
         wandb.init(
             project=cfg.get("logging", {}).get("project_name", "Cylindrical-Flow-Matching"),
             name=f"eval_{manifold.name}_{run_name}_t{t_start}",
             dir=output_dir,
-            config=OmegaConf.to_container(cfg, resolve=True),
+            config=config_dict,
         )
     else:
         use_wandb = False

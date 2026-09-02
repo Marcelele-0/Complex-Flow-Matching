@@ -1,12 +1,15 @@
+"""Lazy-loading dataset implementation for SKM-TEA MRI knee cohort."""
+
+from __future__ import annotations
+
 import glob
 import hashlib
 import os
-from typing import Callable, Optional
+from collections.abc import Callable
 
 import h5py
 import numpy as np
 import torch
-from torch.utils.data import Dataset
 
 from cfm.core.dataset import BaseComplexDataset
 from cfm.core.registry import DATASETS
@@ -15,36 +18,31 @@ from cfm.core.registry import DATASETS
 @DATASETS.register("skm_tea")
 @DATASETS.register("skmtea")
 class SKMTEADataset(BaseComplexDataset):
-    """
-    Lazy-loading dataset for the SKM-TEA dataset.
-    Opens HDF5 files and applies the transformation pipeline on the fly.
+    """Lazy-loading dataset for SKM-TEA knee MRI cohort.
 
-    With num_slices > 1, each sample is a [num_slices, C, H, W] window of
-    neighboring slices from the same volume (slice x channel x H x W),
-    transformed per-slice, stacked, then optionally passed through
-    window_transform (e.g. WindowAmplitudeNormalize, which needs to see the
-    whole window at once and so cannot run per-slice). Volume edges are
-    reflect-padded without duplicating the boundary slice
-    (np.pad(mode="reflect")), so __len__ is unaffected by num_slices.
-
-    Note: the window's center slice is NOT identical to what num_slices=1
-    returns for the same idx whenever window_transform rescales relative to
-    the whole window (e.g. WindowAmplitudeNormalize divides every slice by
-    the window's amplitude maximum, not its own) - only the raw read before
-    any such window-level rescaling is shared with the num_slices=1 path.
+    Args:
+        data_dir: Path to directory containing HDF5 files.
+        transform: Optional per-slice transform callable.
+        window_transform: Optional multi-slice window transform callable.
+        num_slices: Number of contiguous slices in window (must be positive odd).
+        mode: Operation mode ('generation' or 'reconstruction').
+        acceleration: Undersampling acceleration factor (e.g. 4 or 8).
+        mask_seed: Optional fixed seed for mask generation reproducibility.
+        pre_transform: Optional transform before undersampling.
+        post_transform: Optional transform after undersampling.
     """
 
     def __init__(
         self,
         data_dir: str,
-        transform: Optional[Callable] = None,
-        window_transform: Optional[Callable] = None,
+        transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
+        window_transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
         num_slices: int = 1,
         mode: str = "generation",
         acceleration: int = 4,
-        mask_seed: Optional[int] = None,
-        pre_transform: Optional[Callable] = None,
-        post_transform: Optional[Callable] = None,
+        mask_seed: int | None = None,
+        pre_transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
+        post_transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
     ) -> None:
         if num_slices <= 0 or num_slices % 2 == 0:
             raise ValueError(f"num_slices must be a positive odd integer, got {num_slices}")
@@ -54,9 +52,7 @@ class SKMTEADataset(BaseComplexDataset):
 
         if mode == "reconstruction" and num_slices != 1:
             raise ValueError(
-                f"mode='reconstruction' currently supports num_slices=1 only, got {num_slices}. "
-                "Multi-slice reconstruction needs a decision on whether the whole window "
-                "shares one mask (one acquisition) or gets independent masks; out of scope here."
+                f"mode='reconstruction' currently supports num_slices=1 only, got {num_slices}."
             )
 
         if acceleration < 1:
@@ -74,10 +70,9 @@ class SKMTEADataset(BaseComplexDataset):
         self.mask_seed = mask_seed
         self.pre_transform = pre_transform
         self.post_transform = post_transform
-        self.slice_map = []
+        self.slice_map: list[tuple[str, int]] = []
         self._volume_depths: dict[str, int] = {}
 
-        # Create a map of pointers to individual image slices
         for f_path in self.files:
             with h5py.File(f_path, "r") as f:
                 depth = f["target"].shape[0]
@@ -86,11 +81,12 @@ class SKMTEADataset(BaseComplexDataset):
                     self.slice_map.append((f_path, i))
 
     def __len__(self) -> int:
+        """Total number of slices across all volumes in dataset."""
         return len(self.slice_map)
 
     @staticmethod
     def _reflect_index(i: int, depth: int) -> int:
-        """Reflects an out-of-range slice index without duplicating the boundary."""
+        """Reflect out-of-range slice index without duplicating boundary."""
         if depth <= 1:
             return 0
         while i < 0 or i > depth - 1:
@@ -98,18 +94,14 @@ class SKMTEADataset(BaseComplexDataset):
         return i
 
     def _mask_seed(self, f_path: str, slice_idx: int) -> int:
-        """Deterministic seed from (file, slice, acceleration[, mask_seed]), stable
-        across processes/workers (unlike Python's randomized hash())."""
+        """Compute deterministic seed from file path, slice index, and acceleration."""
         key = f"{os.path.basename(f_path)}:{slice_idx}:{self.acceleration}"
         if self.mask_seed is not None:
             key = f"{key}:{self.mask_seed}"
         return int.from_bytes(hashlib.sha256(key.encode()).digest()[:4], "big")
 
     def _undersampling_mask(self, f_path: str, slice_idx: int, h: int, w: int) -> torch.Tensor:
-        """Builds a deterministic 1D Cartesian phase-encoding mask along the last
-        (Nz) axis: a fixed center ACS region is always kept, and the remaining
-        lines needed to reach `self.acceleration` are chosen uniformly at random
-        with a per-(file, slice) seed, then tiled to [1, H, W]."""
+        """Construct deterministic 1D Cartesian phase-encoding mask [1, H, W]."""
         rng = np.random.default_rng(self._mask_seed(f_path, slice_idx))
 
         num_center_lines = min(24, w)
@@ -130,7 +122,16 @@ class SKMTEADataset(BaseComplexDataset):
         mask = np.tile(line_mask, (h, 1))
         return torch.from_numpy(mask).unsqueeze(0)
 
-    def __getitem__(self, idx: int) -> torch.Tensor:
+    def __getitem__(self, idx: int) -> torch.Tensor | dict[str, torch.Tensor]:
+        """Retrieve slice or multi-slice window by index.
+
+        Args:
+            idx: Slice index in flat dataset map.
+
+        Returns:
+            In generation mode: state tensor [1, H, W] or [S, C, H, W].
+            In reconstruction mode: dict with 'input', 'mask', and 'target' tensors.
+        """
         f_path, slice_idx = self.slice_map[idx]
 
         if self.mode == "reconstruction":

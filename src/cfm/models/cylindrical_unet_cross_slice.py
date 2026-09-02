@@ -1,49 +1,13 @@
-"""2.5D cylindrical U-Net: shared 2D encoders per slice, fused by cross-slice attention.
-
-A full 3D U-Net over an MRI volume is expensive and mostly wasteful: neighbouring
-slices are highly correlated, so the useful cross-slice signal is a thin
-correction rather than a whole extra dimension of convolution. This model keeps
-the encoder and decoder purely 2D and buys volumetric consistency with a single
-attention step at the bottleneck.
-
-Data flow, for a window of ``S`` neighbouring slices centred on ``z``::
-
-    h_s      = Shared2DEncoder(x_s, t)        for every s in {z-S//2 .. z+S//2}
-    H'       = CrossSliceAttention(stack(h_s))          # bottleneck only
-    v_center = Shared2DDecoder(H'_center, skips_center, t)
-
-Only the **center** slice's velocity is produced, so the loss supervises the
-center alone. Neighbours exist to inform it, not to be predicted. That is why
-this model cannot yet drive :class:`~cfm.flow.solver.CylindricalODESolver`, which
-needs a velocity matching the shape of the state it is advancing.
-
-Weight sharing is structural rather than enforced: the encoder is applied once to
-a tensor with the slice axis folded into the batch, so there are no per-slice
-parameters and ``S`` may change between calls without touching the model.
-
-Memory versus :class:`~cfm.models.cylindrical_unet_attention.CylindricalUNetAttention`
---------------------------------------------------------------------------------------
-Two effects pull in opposite directions and the net result is not obvious a priori:
-
-* The encoder runs on ``B*S`` images instead of ``B``, so encoder activations
-  scale roughly with ``S``. The decoder is unaffected: it runs at ``B``.
-* The bottleneck gets cheaper. Spatial self-attention in the baseline costs
-  ``O((h*w)^2)`` per sample, which is 1024 tokens attending to 1024 at a 32x32
-  bottleneck. Cross-slice attention costs ``O(S^2)`` per spatial position, i.e.
-  9 for ``S=3``.
-
-Measure with ``torch.cuda.max_memory_allocated()`` before trusting any figure;
-as a starting point, expect to roughly halve ``batch_size`` at ``S=3``.
-"""
+"""2.5D cylindrical U-Net: shared 2D encoders per slice, fused by cross-slice attention."""
 
 from __future__ import annotations
+
+from typing import cast
 
 import torch
 import torch.nn as nn
 
 from cfm.core.registry import MODELS
-
-# Reuse the building blocks rather than adding a third copy to the codebase.
 from cfm.models.cylindrical_unet_attention import (
     SinusoidalPositionEmbeddings,
     TimeConditionedBlock,
@@ -51,41 +15,32 @@ from cfm.models.cylindrical_unet_attention import (
 
 
 class CrossSliceAttention(nn.Module):
-    """Multi-head attention along the slice axis, independently per spatial position.
+    """Multi-head attention across the slice axis independently per spatial position.
 
-    Each spatial position of the bottleneck feature map becomes its own sequence
-    of ``S`` tokens, one per slice, so a pixel in the center slice can look at the
-    same anatomical location in its neighbours. Spatial mixing is deliberately not
-    done here: the 2D encoder already handles that.
-
-    The sequence length is ``S`` (typically 3), which makes this far cheaper than
-    the spatial self-attention it replaces.
+    Args:
+        channels: Feature channel count.
+        heads: Number of attention heads.
     """
 
-    def __init__(self, channels: int, heads: int = 4):
+    def __init__(self, channels: int, heads: int = 4) -> None:
         super().__init__()
         self.norm = nn.GroupNorm(8, channels)
         self.mha = nn.MultiheadAttention(embed_dim=channels, num_heads=heads, batch_first=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Fuse information across slices.
+        """Fuse feature information across slice window.
 
         Args:
-            x: Bottleneck features, shape ``[B, S, C, h, w]``.
+            x: Bottleneck features [B, S, C, H, W].
 
         Returns:
-            Fused features of the same shape, as a residual update of ``x``.
+            Fused features [B, S, C, H, W].
         """
         b, s, c, h, w = x.shape
 
-        # GroupNorm expects [N, C, H, W], so normalise in the folded layout.
         normed = self.norm(x.reshape(b * s, c, h, w)).reshape(b, s, c, h * w)
-        # Sequence of spatial positions across slices
         seq = normed.permute(0, 3, 1, 2).reshape(b * h * w, s, c)
-
         attn_out, _ = self.mha(seq, seq, seq, need_weights=False)
-
-        # Reshape back to B x S x C x H x W
         attn_out = attn_out.reshape(b, h * w, s, c).permute(0, 2, 3, 1).reshape(b, s, c, h, w)
         return x + attn_out
 
@@ -93,32 +48,22 @@ class CrossSliceAttention(nn.Module):
 @MODELS.register("c_unet_cross_slice")
 @MODELS.register("cylindrical_unet_cross_slice")
 class CylindricalUNetCrossSlice(nn.Module):
-    """2.5D U-Net predicting the center slice's velocity from a window of slices.
-
-    Input is ``[B, S, in_channels, H, W]`` and output is ``[B, 2, H, W]`` - the
-    velocity for the center slice only. The trunk is geometry-agnostic: at
-    ``in_channels=3`` a slice is ``(amplitude, cos(phi), sin(phi))`` and the output
-    is ``(v_amp, v_phi)``; at ``in_channels=2`` it is ``(Re, Im)`` and ``(v_re,
-    v_im)``. Both geometries emit 2 velocity channels, so only the input width
-    moves - the same property :class:`CylindricalUNetAttention` has.
+    """2.5D U-Net predicting center slice velocity from multi-slice window.
 
     Args:
         base_channels: Width of the first encoder stage.
-        channel_mults: Per-stage width multipliers. Length minus one is the number
-            of pooling levels, so ``H`` and ``W`` must be divisible by
-            ``2 ** (len(channel_mults) - 1)``.
-        attn_heads: Heads for the cross-slice attention.
-        in_channels: Channels of the state, i.e. ``Manifold.state_channels``.
-            Defaults to the cylindrical 3.
+        channel_mults: Per-stage width multipliers.
+        attn_heads: Heads for cross-slice attention.
+        in_channels: Input state channels [B, S, in_channels, H, W].
     """
 
     def __init__(
         self,
         base_channels: int = 96,
-        channel_mults: list | None = None,
+        channel_mults: list[int] | None = None,
         attn_heads: int = 4,
         in_channels: int = 3,
-    ):
+    ) -> None:
         super().__init__()
 
         if channel_mults is None:
@@ -166,29 +111,20 @@ class CylindricalUNetCrossSlice(nn.Module):
             in_ch = out_ch
 
         self.final_conv = nn.Conv2d(base_channels, 2, kernel_size=1)
-
-        # Initial convolution, from the manifold's state channels. Constructed last
-        # for the same reason as in CylindricalUNetAttention: it is the one module
-        # whose shape depends on the geometry, so building it after everything else
-        # leaves both arms drawing from the RNG at the same stream position. With
-        # one seed the cylindrical and Euclidean 2.5D models then start from
-        # element-wise identical weights everywhere except here.
         self.init_conv = nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1)
 
     def forward(self, x: torch.Tensor, time: torch.Tensor) -> torch.Tensor:
-        """Predict the center slice's velocity from a window of neighbouring slices.
+        """Predict center slice velocity field from a window of slices.
 
         Args:
-            x: Slice window, shape ``[B, S, in_channels, H, W]`` with ``S`` odd.
-            time: Diffusion time, shape ``[B]``. One value per sample: every slice
-                in a window belongs to the same training example and so shares a
-                time.
+            x: Slice window tensor [B, S, in_channels, H, W] with S odd.
+            time: Diffusion time values [B].
 
         Returns:
-            Velocity for the center slice, shape ``[B, 2, H, W]``.
+            Center slice velocity field [B, 2, H, W].
 
         Raises:
-            ValueError: If ``x`` is not 5D or ``S`` is even (no unique center).
+            ValueError: If x is not 5D or S is even.
         """
         if x.dim() != 5:
             raise ValueError(
@@ -203,9 +139,6 @@ class CylindricalUNetCrossSlice(nn.Module):
         center = s // 2
 
         t_emb = self.time_mlp(time)
-        # The encoder sees B*S folded images, so the time embedding is repeated to
-        # match. repeat_interleave (not repeat) keeps each sample's slices adjacent,
-        # which is what reshape(b, s, ...) assumes when unfolding later.
         t_emb_slices = t_emb.repeat_interleave(s, dim=0)
 
         # === Shared encoder over every slice ===
@@ -213,25 +146,28 @@ class CylindricalUNetCrossSlice(nn.Module):
 
         skips = []
         for down_module in self.downs:
-            block, pool = down_module[0], down_module[1]
+            down_list = cast(nn.ModuleList, down_module)
+            block = cast(TimeConditionedBlock, down_list[0])
+            pool = cast(nn.MaxPool2d, down_list[1])
             hidden = block(hidden, t_emb_slices)
             skips.append(hidden)
             hidden = pool(hidden)
 
-        # === Bottleneck: the only place slices talk to each other ===
+        # === Bottleneck: fuse across slices ===
         hidden = self.bottleneck1(hidden, t_emb_slices)
 
         _, bott_c, bott_h, bott_w = hidden.shape
         hidden = self.cross_slice_attn(hidden.reshape(b, s, bott_c, bott_h, bott_w))
 
-        # Collapse to the center slice. Everything below is B-sized, so the decoder
-        # costs the same as the 2D baseline and t_emb is used unrepeated again.
+        # Collapse to center slice
         hidden = hidden[:, center]
         hidden = self.bottleneck2(hidden, t_emb)
 
-        # === Decoder on the center slice, using the center slice's skips ===
+        # === Decoder on center slice ===
         for up_module, skip in zip(self.ups, reversed(skips), strict=False):
-            upsample, block = up_module[0], up_module[1]
+            up_list = cast(nn.ModuleList, up_module)
+            upsample = cast(nn.Upsample, up_list[0])
+            block = cast(TimeConditionedBlock, up_list[1])
             hidden = upsample(hidden)
             skip_center = skip.reshape(b, s, *skip.shape[1:])[:, center]
             hidden = torch.cat([hidden, skip_center], dim=1)
