@@ -64,3 +64,9 @@ notebooks/presentation
 .DS_Store
 Thumbs.db
 overleaf_cache/
+
+# Local Project Memory & Agent Context (Private)
+GEMINI.md
+AGENTS.md
+PROJECT_MEMORY.md
+.agy_session*

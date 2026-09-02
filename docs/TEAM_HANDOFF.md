@@ -4,7 +4,7 @@
 > **Repository:** `Marcelele-0/Complex-Flow-Matching`
 > **Project Board:** [GitHub Project #5 — Complex FM](https://github.com/users/Marcelele-0/projects/5)
 
-This document is the **single source of truth** for both **Human Engineers** (Marcel, Damian, Iga, Anna) and **Autonomous AI Agents** (Jarvis, Gemini Pro, Claude, Copilot) on how to pick tasks, write code, submit Pull Requests, and leverage the automated Self-Driving Kanban system.
+This document is the **single source of truth** for both **Human Engineers** (Marcel, Damian, Iga, Anna) and **Autonomous AI Agents** (Gemini Pro, Claude, Copilot) on how to pick tasks, write code, submit Pull Requests, and leverage the automated Self-Driving Kanban system.
 
 ---
 

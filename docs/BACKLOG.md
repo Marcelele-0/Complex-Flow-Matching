@@ -1,7 +1,7 @@
 # Project Roadmap & Deadline Backlog
 
-> **Primary Milestone:** NeurIPS 2026 Workshop on Geometric Distributional Deep Learning (GDDL)  
-> **Submission Deadline:** September 2, 2026 (AoE)  
+> **Primary Milestone:** NeurIPS 2026 Workshop on Geometric Distributional Deep Learning (GDDL)
+> **Submission Deadline:** September 2, 2026 (AoE)
 > **Format:** Short Paper (2–4 pages strict limit inclusive of references)
 
 ---
@@ -33,7 +33,7 @@
 
 | Task | Priority | Assignee | Status | Target |
 |:---|:---:|:---:|:---:|:---|
-| **#7: Write THE PAPER** | P0 | Marcel / Jarvis | 🟢 4-page draft complete (3x Accept) | Overleaf synced |
+| **#7: Write THE PAPER** | P0 | Marcel | 🟢 4-page draft complete (3x Accept) | Overleaf synced |
 | **#9: Euclidean Flow Baseline** | P0 | Damian Ryczko | 🔵 In progress | Needed for Table 1 Row 2 |
 | **#10: 4x k-space Undersampling** | P1 | Open (Ready to pick up) | ⚪ Open | Reconstruction task |
 | **#11: Data Consistency (DC) Metric**| P1 | Iga Wolanin | 🔵 In progress | Added to `metrics.py` |
