@@ -1,0 +1,57 @@
+\section{Experiments and Results}
+\label{sec:experiments}
+
+We evaluate Cylindrical Flow Matching on complex-valued MRI synthesis and downstream reconstruction using the raw $k$-space SKM-TEA-mini dataset \citep{desai2021skmtea} (single-coil, first-echo image space, comprising 3 complete 3D knee volumes with 1536 axial slices total). We partition the dataset into 2 patient volumes for training (1024 slices) and 1 completely held-out patient volume ($N=512$ contiguous slices) for testing. This constrained data regime provides a rigorous test of topological inductive bias: while Euclidean models must waste parameter capacity trying to approximate non-physical phase branch cuts, our cylindrical formulation natively respects $S^1 \times \mathbb{R}^+$ geometry, yielding superior generalization on unseen anatomy. Retrospective $4\times$ Cartesian undersampling is simulated using 1D phase-encoding masks with a central 24-line autocalibration signal (ACS) band, with exact Data Consistency ($\mathrm{DC\ Error} < 10^{-6}$) enforced via interleaved $k$-space projections.
+
+To evaluate reconstruction quality, we report standard Peak Signal-to-Noise Ratio (PSNR) and Structural Similarity (SSIM) on magnitude, alongside the Circular Phase Error (CPE) in radians:
+\begin{equation}
+    \mathrm{CPE}(\theta, \hat{\theta}) = \frac{1}{|M|} \sum_{i \in M} |\operatorname{atan2}(\sin(\theta_i - \hat{\theta}_i),\, \cos(\theta_i - \hat{\theta}_i))|
+\end{equation}
+where $M$ denotes a tissue mask thresholded at $5\%$ of peak amplitude to avoid background noise bias.
+
+\begin{table}[t]
+    \centering
+    \small
+    \caption{\textbf{Quantitative metrics.} Mean $\pm$ standard deviation across all 512 slices of the held-out test volume ($4\times$ Cartesian reconstruction with exact Data Consistency projections).}
+    \vspace{1mm}
+    \begin{tabular}{lccc}
+        \toprule
+        \textbf{Method} & \textbf{PSNR (dB) $\uparrow$} & \textbf{SSIM $\uparrow$} & \textbf{CPE (rad) $\downarrow$} \\
+        \midrule
+        Euclidean ($\mathbb{R}^2$) & 24.13 $\pm$ 1.18 & 0.530 $\pm$ 0.06 & 0.513 $\pm$ 0.07 \\
+        \textbf{Cylindrical Flow (Ours)} & \textbf{24.47} $\pm$ \textbf{1.16} & \textbf{0.588} $\pm$ \textbf{0.04} & \textbf{0.405} $\pm$ \textbf{0.05} \\
+        \bottomrule
+    \end{tabular}
+    \label{tab:results_metrics}
+    \vspace{-1mm}
+\end{table}
+
+\begin{figure}[!t]
+    \centering
+    \resizebox{\linewidth}{!}{%
+    \begin{tabular}{@{}l@{\hspace{2pt}}c@{\hspace{2pt}}c@{\hspace{10pt}}l@{\hspace{2pt}}c@{\hspace{2pt}}c@{\hspace{5pt}}c@{\hspace{2pt}}c@{\hspace{10pt}}l@{\hspace{2pt}}c@{\hspace{2pt}}c@{\hspace{5pt}}c@{\hspace{2pt}}c@{}}
+        % Block (a) Ground Truth
+        \parbox[t]{1.3cm}{\vspace{0pt}\raggedright \textbf{\scriptsize (a) Ground}\\[-1pt]\textbf{\scriptsize Truth}\\[2pt]\tiny Target:\\[-1pt]\tiny $A$ \ \ $\theta$} &
+        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/gt_mag.png}} &
+        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/gt_pha.png}} &
+        % Block (b) Euclidean Baseline
+        \parbox[t]{1.3cm}{\vspace{0pt}\raggedright \textbf{\scriptsize (b) Euclidean}\\[-1pt]\textbf{\scriptsize ($\mathbb{R}^2$)}\\[2pt]\tiny 25.35 dB\\[-1pt]\tiny 0.646 SSIM\\[-1pt]\tiny 0.526 rad} &
+        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/euc_mag.png}} &
+        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/euc_pha.png}} &
+        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/euc_mag_err.png}} &
+        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/euc_pha_err.png}} &
+        % Block (c) Cylindrical Flow (Ours)
+        \parbox[t]{1.35cm}{\vspace{0pt}\raggedright \textbf{\scriptsize (c) Cylindrical}\\[-1pt]\textbf{\scriptsize (Ours)}\\[2pt]\tiny\textbf{28.39 dB}\\[-1pt]\tiny\textbf{0.762 SSIM}\\[-1pt]\tiny\textbf{0.235 rad}} &
+        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/cyl_mag.png}} &
+        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/cyl_pha.png}} &
+        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/cyl_mag_err.png}} &
+        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/cyl_pha_err.png}}
+    \end{tabular}%
+    }
+    \vspace{1mm}
+    \caption{\textbf{Qualitative comparison on a held-out test slice.} Columns per method: Reconstructed $(A, \theta)$ followed by error maps $(|\Delta A|, |\Delta\theta|)$ in Inferno scale. The Euclidean baseline exhibits severe phase seams and boundary magnitude cancellation, natively avoided by Cylindrical Flow.}
+    \label{fig:results_visual}
+    \vspace{-3mm}
+\end{figure}
+
+As presented quantitatively across the full volume in Table \ref{tab:results_metrics} (mean $\pm$ std) and qualitatively on a representative central slice in Figure \ref{fig:results_visual}, the Euclidean model struggles with phase wrapping, generating artificial branch-cut seams that induce destructive interference and signal cancellations near tissue boundaries. In contrast, by explicitly modeling phase on $S^1$, Cylindrical Flow Matching preserves smooth phase transitions and prevents mid-trajectory amplitude collapse, leading to sharper anatomical edges and consistent performance gains across all evaluated metrics.

@@ -1,0 +1,25 @@
+\section{Methodology: Cylindrical Flow Matching}
+\label{sec:method}
+
+To construct a topology-aware generative model for complex-valued MRI data, we formulate continuous normalizing flows directly on the intrinsic manifold of the signal \citep{lipman2023flow, chen2024flow}. Each complex pixel $z = A e^{i\theta} \in \mathbb{C}$ naturally resides on a cylindrical manifold $\mathcal{M} = \mathbb{R}^+ \times S^1$, equipped with the product metric $g = dA^2 + d\theta^2$, such that a 2D complex image is modeled on $\mathcal{M}^{H \times W}$. In contrast, the Euclidean baseline naively operates on 2-channel Cartesian inputs $(\mathrm{Re}(z), \mathrm{Im}(z)) \in \mathbb{R}^2$, regressing straight Euclidean paths $z_t = (1-t)z_0 + t z_1$ toward target velocity $u_{\mathrm{euc}} = z_1 - z_0$ with an unweighted $L_1$ objective $\mathcal{L}_{\mathrm{euc}}(\phi) = \mathbb{E}[|v_x - u_x| + |v_y - u_y|]$. Our cylindrical formulation explicitly decouples amplitude and phase transport: geodesics interpolate each component independently along the shortest angular path on $S^1$, preventing the amplitude collapse inherent to Euclidean interpolation where antipodal trajectories $(\Delta\theta = \pi)$ are forced through the origin ($A \to 0$). Furthermore, this avoids the singular polar metric $g_{\mathrm{polar}} = dA^2 + A^2 d\theta^2 \cong \mathbb{C} \setminus \{0\}$, whose straight Euclidean geodesics also collapse near the removed origin.
+
+While the cylinder possesses vanishing Riemann curvature ($K=0$), it exhibits a non-trivial fundamental group ($\pi_1(\mathcal{M}) = \mathbb{Z}$), which causes phase seam defects in flat models. Moreover, the cylinder is a parallelizable manifold with trivial global frame $(\partial_A, \partial_\theta)$, allowing direct velocity regression without pushforward operators. Crucially, under Cartesian flow, the induced angular velocity $\dot{\theta} = (x u_y - y u_x) / A^2 = \mathcal{O}(A^{-1})$ diverges near the origin $A \to 0$ with unbounded variance. In contrast, our cylindrical target velocity is globally bounded, $|u_\theta| \le \pi$, guaranteeing numerical stability. Furthermore, the product metric cost decomposes separably, creating a natural theoretical bridge to closed-form Optimal Transport on $S^1$ via circular CDF shifts \citep{delon2010fast}.
+
+\subsection{Continuous Network Embedding}
+To circumvent artificial jump discontinuities at the branch cut $[-\pi, \pi)$, our network operates on a 3-channel continuous trigonometric embedding $x = (A, \cos\theta, \sin\theta) \in \mathbb{R}^3$ as input. The neural network then predicts a 2-channel velocity field $u_t = (v_A, v_\theta) \in T_{(A, \theta)}\mathcal{M}$, corresponding to the tangent space of the amplitude and phase.
+
+\subsection{Loss Formulation}
+Given paired samples $x_0 = (A_0, \theta_0) \sim p_0$ and $x_1 = (A_1, \theta_1) \sim p_1$ (where $p_1$ denotes the empirical target distribution of complex-valued MRI data), we construct geodesic probability paths along each component: $A_t = (1-t)A_0 + t A_1$ and $\theta_t = \exp_{\theta_0}^{S^1}(t\, u_\theta)$. The target velocity field on the product manifold is:
+\begin{equation}
+    u_A = A_1 - A_0, \quad u_\theta = \operatorname{atan2}(\sin(\theta_1 - \theta_0),\, \cos(\theta_1 - \theta_0))
+\end{equation}
+where $u_\theta$ computes the shortest signed angular difference via the $S^1$ logarithmic map, correctly resolving transport across the $\pm\pi$ boundary.
+
+The network $v_\phi(t, x)$ regresses the target velocity field $u_t(x_t)$ via an edge-preserving $L_1$ objective:
+\begin{equation}
+    \mathcal{L}(\phi) = \mathbb{E}_{t, x_0, x_1} \left[ |v_A - u_A| + \lambda \frac{A_1}{\bar{A}_1} |v_\theta - u_\theta| \right]
+\end{equation}
+where $\lambda = 1.0$ and $\bar{A}_1$ is the batch mean amplitude. Modulating the phase loss by $A_1$ acts as an empirical SNR heuristic inspired by phase Fisher information (which formally scales as $A_1^2$ under complex Gaussian noise), concentrating capacity on tissue while mitigating ill-defined phase in background noise. Furthermore, we model amplitude $A$ linearly rather than logarithmically to avoid numerical instabilities as $A \to 0$.
+
+\subsection{Base Distribution and Inference}
+We construct our generative process from the base distribution $p_0 = \mathcal{U}([0,1]) \otimes \mathcal{U}(S^1)$, a uniform prior on the unit cylinder (clamped with $\epsilon = 10^{-6}$ for numerical stability at the origin). Crucially, because the target velocity field is computed via $\mathcal{O}(1)$ closed-form geodesics, training completely bypasses forward simulation; numerical integration (via a 2nd-order Heun solver) is strictly reserved for the inference generation phase.
