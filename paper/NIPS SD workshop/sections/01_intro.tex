@@ -11,9 +11,9 @@ To bridge the gap between generative modeling and the structured nature of physi
 
 In summary, our contributions are as follows:
 \begin{itemize}
-    \item We define the representation, geometry, loss, and inference procedure for \textbf{Cylindrical Flow Matching}, modeling nonnegative physical amplitudes on $\mathbb{R}_+$ and numerical phase coordinates on $S^1$.
-    \item We test this hypothesis through controlled ablations on complex-valued generation against a standard Euclidean baseline, demonstrating that substituting the Euclidean assumption natively prevents phase discontinuities and signal cancellation.
-    \item We demonstrate the practical value of this geometry-aware prior in a downstream reconstruction experiment using simulated Cartesian $k$-space undersampling.
+    \item \textbf{Mathematical Foundations for Learning Dynamics:} We demonstrate how the geometry of the state space shapes probability paths, analytically proving that flat Euclidean paths suffer from non-physical destructive interference ($1 - \mathbb{E}[\cos(\Delta\theta/2)] \approx 36.3\%$ mid-point attenuation), whereas our paths follow intrinsic cylindrical geodesics.
+    \item \textbf{Structure-Preserving Dynamics:} We show how continuous trigonometric embeddings and intrinsic velocity regression globally bound angular velocity ($|u_\theta| \le \pi$), guaranteeing numerical stability for continuous ODE/SDE solvers (e.g., 2nd-order Heun).
+    \item We demonstrate the practical value of this geometry-aware prior in a downstream reconstruction experiment using simulated Cartesian $4\times$ $k$-space undersampling.
 \end{itemize}
 
 % ----------------------------------------

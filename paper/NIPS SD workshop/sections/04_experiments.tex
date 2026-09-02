@@ -28,26 +28,7 @@ where $M$ denotes a tissue mask thresholded at $5\%$ of peak amplitude to avoid 
 
 \begin{figure}[!t]
     \centering
-    \resizebox{\linewidth}{!}{%
-    \begin{tabular}{@{}l@{\hspace{2pt}}c@{\hspace{2pt}}c@{\hspace{10pt}}l@{\hspace{2pt}}c@{\hspace{2pt}}c@{\hspace{5pt}}c@{\hspace{2pt}}c@{\hspace{10pt}}l@{\hspace{2pt}}c@{\hspace{2pt}}c@{\hspace{5pt}}c@{\hspace{2pt}}c@{}}
-        % Block (a) Ground Truth
-        \parbox[t]{1.3cm}{\vspace{0pt}\raggedright \textbf{\scriptsize (a) Ground}\\[-1pt]\textbf{\scriptsize Truth}\\[2pt]\tiny Target:\\[-1pt]\tiny $A$ \ \ $\theta$} &
-        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/gt_mag.png}} &
-        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/gt_pha.png}} &
-        % Block (b) Euclidean Baseline
-        \parbox[t]{1.3cm}{\vspace{0pt}\raggedright \textbf{\scriptsize (b) Euclidean}\\[-1pt]\textbf{\scriptsize ($\mathbb{R}^2$)}\\[2pt]\tiny 25.35 dB\\[-1pt]\tiny 0.646 SSIM\\[-1pt]\tiny 0.526 rad} &
-        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/euc_mag.png}} &
-        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/euc_pha.png}} &
-        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/euc_mag_err.png}} &
-        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/euc_pha_err.png}} &
-        % Block (c) Cylindrical Flow (Ours)
-        \parbox[t]{1.35cm}{\vspace{0pt}\raggedright \textbf{\scriptsize (c) Cylindrical}\\[-1pt]\textbf{\scriptsize (Ours)}\\[2pt]\tiny\textbf{28.39 dB}\\[-1pt]\tiny\textbf{0.762 SSIM}\\[-1pt]\tiny\textbf{0.235 rad}} &
-        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/cyl_mag.png}} &
-        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/cyl_pha.png}} &
-        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/cyl_mag_err.png}} &
-        \parbox[t]{1.2cm}{\vspace{0pt}\includegraphics[height=3.8cm]{figures/panels/cyl_pha_err.png}}
-    \end{tabular}%
-    }
+    \includegraphics[width=\linewidth]{figures/figure2_results.png}
     \vspace{1mm}
     \caption{\textbf{Qualitative comparison on a held-out test slice.} Columns per method: Reconstructed $(A, \theta)$ followed by error maps $(|\Delta A|, |\Delta\theta|)$ in Inferno scale. The Euclidean baseline exhibits severe phase seams and boundary magnitude cancellation, natively avoided by Cylindrical Flow.}
     \label{fig:results_visual}
