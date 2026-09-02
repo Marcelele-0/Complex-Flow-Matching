@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import torch
 
+from cfm.core.registry import SOLVERS
 from cfm.flow.solver import HeunODESolver
 
 
+@SOLVERS.register("euclidean")
+@SOLVERS.register("euclidean_heun")
+@SOLVERS.register("euclidean_ode")
 class EuclideanODESolver(HeunODESolver):
     """Integrates the velocity field in flat R^2 with a plain Euler update.
 
@@ -22,8 +26,7 @@ class EuclideanODESolver(HeunODESolver):
     """
 
     def step(self, x_t: torch.Tensor, v_t: torch.Tensor, dt: float) -> torch.Tensor:
-        """
-        Performs a single Euler step in R^2. No projection, no constraint.
+        """Performs a single Euler step in R^2. No projection, no constraint.
 
         Args:
             x_t (torch.Tensor): Current state [B, 2, H, W] (Re, Im)

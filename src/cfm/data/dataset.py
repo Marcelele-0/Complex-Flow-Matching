@@ -8,8 +8,13 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+from cfm.core.dataset import BaseComplexDataset
+from cfm.core.registry import DATASETS
 
-class SKMTEADataset(Dataset):
+
+@DATASETS.register("skm_tea")
+@DATASETS.register("skmtea")
+class SKMTEADataset(BaseComplexDataset):
     """
     Lazy-loading dataset for the SKM-TEA dataset.
     Opens HDF5 files and applies the transformation pipeline on the fly.

@@ -41,6 +41,8 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
+from cfm.core.registry import MODELS
+
 # Reuse the building blocks rather than adding a third copy to the codebase.
 from cfm.models.cylindrical_unet_attention import (
     SinusoidalPositionEmbeddings,
@@ -88,6 +90,8 @@ class CrossSliceAttention(nn.Module):
         return x + attn_out
 
 
+@MODELS.register("c_unet_cross_slice")
+@MODELS.register("cylindrical_unet_cross_slice")
 class CylindricalUNetCrossSlice(nn.Module):
     """2.5D U-Net predicting the center slice's velocity from a window of slices.
 

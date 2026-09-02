@@ -3,6 +3,8 @@ import math
 import torch
 import torch.nn as nn
 
+from cfm.core.registry import MODELS
+
 
 class SinusoidalPositionEmbeddings(nn.Module):
     """
@@ -80,6 +82,8 @@ class SelfAttention2d(nn.Module):
         return out.transpose(1, 2).view(b, c, h, w)
 
 
+@MODELS.register("c_unet_attention")
+@MODELS.register("cylindrical_unet_attention")
 class CylindricalUNetAttention(nn.Module):
     """
     Dynamic U-Net built from configuration parameters, with optional

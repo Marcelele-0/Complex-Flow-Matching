@@ -1,10 +1,15 @@
-from abc import ABC, abstractmethod
+from __future__ import annotations
+
+from abc import abstractmethod
 from collections.abc import Callable
 
 import torch
 
+from cfm.core.registry import SOLVERS
+from cfm.core.solver import BaseODESolver
 
-class HeunODESolver(ABC):
+
+class HeunODESolver(BaseODESolver):
     """Heun (2nd-order) integration of a predicted velocity field from t=0 to t=1.
 
     The time schedule, the predictor/corrector pairing and the Euler-only final
@@ -16,7 +21,7 @@ class HeunODESolver(ABC):
     """
 
     def __init__(self, num_steps: int = 50) -> None:
-        self.num_steps = num_steps
+        super().__init__(num_steps=num_steps)
 
     @abstractmethod
     def step(self, x_t: torch.Tensor, v_t: torch.Tensor, dt: float) -> torch.Tensor:
@@ -35,8 +40,7 @@ class HeunODESolver(ABC):
     def sample(
         self, model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor], noise: torch.Tensor
     ) -> torch.Tensor:
-        """
-        Solves the ODE from t=0 to t=1 using Heun's Method.
+        """Solves the ODE from t=0 to t=1 using Heun's Method.
 
         Args:
             model: A callable (neural network) taking (state, time) and returning velocity.
@@ -80,16 +84,18 @@ class HeunODESolver(ABC):
         return x_t
 
 
+@SOLVERS.register("cylindrical")
+@SOLVERS.register("cylindrical_heun")
+@SOLVERS.register("cylindrical_ode")
 class CylindricalODESolver(HeunODESolver):
-    """
-    Heun ODE solver (2nd order) tailored for the decoupled cylindrical manifold.
+    """Heun ODE solver (2nd order) tailored for the decoupled cylindrical manifold.
+
     Integrates the predicted velocity field over time to reconstruct
     clean MRI data from pure noise, providing sharper reconstructions than Euler.
     """
 
     def step(self, x_t: torch.Tensor, v_t: torch.Tensor, dt: float) -> torch.Tensor:
-        """
-        Performs a single integration step and safely projects back onto the Cylinder.
+        """Performs a single integration step and safely projects back onto the Cylinder.
 
         Args:
             x_t (torch.Tensor): Current state [B, 3, H, W]

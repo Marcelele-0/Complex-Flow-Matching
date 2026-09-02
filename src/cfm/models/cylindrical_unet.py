@@ -3,6 +3,8 @@ import math
 import torch
 import torch.nn as nn
 
+from cfm.core.registry import MODELS
+
 
 class SinusoidalPositionEmbeddings(nn.Module):
     """
@@ -65,6 +67,8 @@ class TimeConditionedBlock(nn.Module):
         return self.silu(h + self.residual(x))
 
 
+@MODELS.register("c_unet")
+@MODELS.register("cylindrical_unet")
 class CylindricalUNet(nn.Module):
     """
     U-Net for flow matching on complex-valued MRI.

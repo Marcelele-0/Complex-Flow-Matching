@@ -4,7 +4,7 @@ This module adds no mathematics. It is an adapter that presents the existing
 :class:`~cfm.flow.bridge.GeodesicFlowBridge`,
 :class:`~cfm.flow.solver.CylindricalODESolver` and
 :class:`~cfm.flow.torus_math.DecoupledCylindricalLoss` through the
-:class:`~cfm.manifolds.base.Manifold` interface, so that introducing a second
+:class:`~cfm.core.manifold.BaseManifold` interface, so that introducing a second
 geometry could not change the behaviour of the first.
 """
 
@@ -15,6 +15,8 @@ from collections.abc import Callable
 
 import torch
 
+from cfm.core.manifold import BaseManifold
+from cfm.core.registry import MANIFOLDS
 from cfm.data.transforms import (
     AmplitudeNormalize,
     CenterCropModulo,
@@ -25,7 +27,6 @@ from cfm.data.transforms import (
 from cfm.flow.bridge import GeodesicFlowBridge
 from cfm.flow.solver import CylindricalODESolver
 from cfm.flow.torus_math import DecoupledCylindricalLoss
-from cfm.manifolds.base import Manifold
 from cfm.utils.complex_ops import cylinder_to_complex
 
 
@@ -60,7 +61,8 @@ def sample_cylindrical_noise(
     return torch.cat([amp, torch.cos(phi), torch.sin(phi)], dim=1)
 
 
-class CylindricalManifold(Manifold):
+@MANIFOLDS.register("cylindrical")
+class CylindricalManifold(BaseManifold):
     """Amplitude on the half-line, phase on the circle, carried as ``[m, cos, sin]``.
 
     Args:
@@ -73,6 +75,7 @@ class CylindricalManifold(Manifold):
 
     name = "cylindrical"
     state_channels = 3
+    velocity_channels = 2
 
     def __init__(
         self,
@@ -94,6 +97,67 @@ class CylindricalManifold(Manifold):
     def to(self, device: torch.device) -> CylindricalManifold:
         self._loss = self._loss.to(device)
         return self
+
+    def exp_map(self, x: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+        """Riemannian exp map on cylindrical product manifold R+ x S^1."""
+        m_t = x[:, 0:1, :, :]
+        px_t = x[:, 1:2, :, :]
+        py_t = x[:, 2:3, :, :]
+
+        v_m = v[:, 0:1, :, :]
+        v_phi = v[:, 1:2, :, :]
+
+        m_next = torch.clamp(m_t + v_m, min=0.0)
+        phi_t = torch.atan2(py_t, px_t)
+        phi_next = phi_t + v_phi
+        px_next = torch.cos(phi_next)
+        py_next = torch.sin(phi_next)
+        return torch.cat([m_next, px_next, py_next], dim=1)
+
+    def log_map(self, x_0: torch.Tensor, x_1: torch.Tensor) -> torch.Tensor:
+        """Riemannian log map on cylindrical product manifold R+ x S^1."""
+        m_0 = x_0[:, 0:1, :, :]
+        m_1 = x_1[:, 0:1, :, :]
+        u_m = m_1 - m_0
+
+        phi_0 = torch.atan2(x_0[:, 2:3, :, :], x_0[:, 1:2, :, :])
+        phi_1 = torch.atan2(x_1[:, 2:3, :, :], x_1[:, 1:2, :, :])
+        diff = phi_1 - phi_0
+        u_phi = torch.atan2(torch.sin(diff), torch.cos(diff))
+        return torch.cat([u_m, u_phi], dim=1)
+
+    def geodesic_path(self, x_0: torch.Tensor, x_1: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        """Geodesic curve x_t = (1-t)x_0 + t x_1 on R+ x S^1."""
+        m_0 = x_0[:, 0:1, :, :]
+        m_1 = x_1[:, 0:1, :, :]
+        m_t = (1.0 - t) * m_0 + t * m_1
+
+        phi_0 = torch.atan2(x_0[:, 2:3, :, :], x_0[:, 1:2, :, :])
+        phi_1 = torch.atan2(x_1[:, 2:3, :, :], x_1[:, 1:2, :, :])
+        diff = phi_1 - phi_0
+        u_phi = torch.atan2(torch.sin(diff), torch.cos(diff))
+        phi_t = phi_0 + t * u_phi
+
+        px_t = torch.cos(phi_t)
+        py_t = torch.sin(phi_t)
+        return torch.cat([m_t, px_t, py_t], dim=1)
+
+    def target_velocity(
+        self, x_0: torch.Tensor, x_1: torch.Tensor, t: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        del t
+        return self.log_map(x_0, x_1)
+
+    def metric_tensor(self, x: torch.Tensor) -> torch.Tensor:
+        """Decoupled product metric g = dm^2 + d_theta^2."""
+        return torch.ones(
+            x.shape[0],
+            self.velocity_channels,
+            x.shape[2],
+            x.shape[3],
+            device=x.device,
+            dtype=x.dtype,
+        )
 
     def build_transform(self, crop_base: int = 16) -> Callable[[torch.Tensor], torch.Tensor]:
         return Compose(
