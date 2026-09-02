@@ -7,7 +7,9 @@
 % The authors should use one of these tracks.
 % Before accepting by the NeurIPS conference, select one of the options below.
 % 0. "default" for submission
-\usepackage[preprint] {neurips_2026}
+\usepackage[dblblindworkshop]{neurips_2026}
+\workshoptitle{Geometric Distributional Deep Learning (GDDL)}
+\usepackage{amsmath}
 % the "default" option is equal to the "main" option, which is used for the Main Track with double-blind reviewing.
 % 1. "main" option is used for the Main Track
 %  \usepackage[main]{neurips_2026}
@@ -60,7 +62,16 @@
 \usepackage{microtype}      % microtypography
 \usepackage{xcolor}         % colors
 
-% Note. For the workshop paper template, both \title{} and \workshoptitle{} are required, with the former indicating the paper title shown in the title and the latter indicating the workshop title displayed in the footnote. 
+%OUR
+
+\usepackage{graphicx}
+\usepackage{subcaption}
+\setlength{\abovedisplayskip}{4pt plus 1pt minus 1pt}
+\setlength{\belowdisplayskip}{4pt plus 1pt minus 1pt}
+\setlength{\textfloatsep}{8pt plus 2pt minus 2pt}
+\setlength{\floatsep}{6pt plus 2pt minus 2pt}
+
+% Note. For the workshop paper template, both \title{} and \workshoptitle{} are required, with the former indicating the paper title shown in the title and the latter indicating the workshop title displayed in the footnote.
 \title{Cylindrical Flow Matching for Complex-Valued Medical Image Synthesis}
 
 
@@ -74,26 +85,12 @@
 
 
 \author{%
-  Marcel Musiałek \quad Iga Wolanin\\
+  Marcel Musiałek \quad Iga Wolanin \quad Damian Ryczko \quad Anna Grelewska \quad Oleskii Furman\\
   Wrocław University of Science and Technology \\
   Wrocław, Poland \\
-  \texttt{\{marcel.musialek, 281203\}@student.pwr.edu.pl} 
+  \texttt{\{marcel.musialek, 281203, 281188, 279694\}@student.pwr.edu.pl} \\
+  \texttt{oleksii.furman@pwr.edu.pl}
   % examples of more authors
-  % \And
-  % Coauthor \\
-  % Affiliation \\
-  % Address \\
-  % \texttt{email} \\
-  % \AND
-  % Coauthor \\
-  % Affiliation \\
-  % Address \\
-  % \texttt{email} \\
-  % \And
-  % Coauthor \\
-  % Affiliation \\
-  % Address \\
-  % \texttt{email} \\
   % \And
   % Coauthor \\
   % Affiliation \\
@@ -105,28 +102,29 @@
 \begin{document}
 
 \maketitle
-% Include individual sections from the sections/ folder
+% Individual sections from the sections/ folder
+
 \input{sections/00_abstract.tex}
 \input{sections/01_intro.tex}
-\input{sections/02_related_work.tex}
 \input{sections/03_method.tex}
 \input{sections/04_experiments.tex}
 \input{sections/05_conclusion.tex}
 
-% Automatically generate the bibliography from references.bib
+\renewcommand{\bibfont}{\footnotesize}
+\setlength{\bibsep}{0.5pt}
 \bibliographystyle{plainnat}
 \bibliography{references}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\appendix
+%\appendix
 
 % Optional appendix (comment out if you don't need it)
-\input{sections/06_appendix.tex}
+%\input{sections/06_appendix.tex}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\newpage
-\input{checklist.tex}
+%\newpage
+%\input{checklist.tex}
 
 \end{document}
