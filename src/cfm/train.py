@@ -117,11 +117,20 @@ def main(cfg: DictConfig) -> None:
         slice_pipeline = manifold.build_transform(crop_base=16)
         window_pipeline = None
 
+    echo_idx = cfg.get("dataset", {}).get("echo_idx", 0)
+    coil_idx = cfg.get("dataset", {}).get("coil_idx", 0)
+    use_cache = cfg.get("dataset", {}).get("use_cache", True)
+    cache_dir = cfg.get("dataset", {}).get("cache_dir", ".cache")
+
     dataset = SKMTEADataset(
         data_dir=data_dir,
         transform=slice_pipeline,
         window_transform=window_pipeline,
         num_slices=num_slices,
+        echo_idx=echo_idx,
+        coil_idx=coil_idx,
+        use_cache=use_cache,
+        cache_dir=cache_dir,
     )
 
     # Train only on the volumes the split manifest lists, through the same two
