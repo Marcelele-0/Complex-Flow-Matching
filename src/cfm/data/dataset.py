@@ -6,15 +6,17 @@ import glob
 import hashlib
 import json
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import torch
 
 from cfm.core.dataset import BaseComplexDataset
-from cfm.core.registry import DATASETS
+from cfm.core.registry import DATASETS, MASKS
 from cfm.data.hdf5_manager import WorkerHDF5Manager
+from cfm.data.masks import BaseMaskGenerator
 
 
 def _process_slice_array(
@@ -79,9 +81,7 @@ def _process_slice_array(
     elif str(coil_idx).lower() == "all":
         pass
     else:
-        raise ValueError(
-            f"Unsupported coil_idx={coil_idx!r}. Expected int, 'rss', or 'all'."
-        )
+        raise ValueError(f"Unsupported coil_idx={coil_idx!r}. Expected int, 'rss', or 'all'.")
 
     # raw is now [H, W, E_out, C_out] -> transpose to [E_out, C_out, H, W]
     raw = np.transpose(raw, (2, 3, 0, 1))
@@ -97,9 +97,7 @@ def _compute_index_hash(files: list[str]) -> str:
     for f_path in sorted(files):
         try:
             stat = os.stat(f_path)
-            hasher.update(
-                f"{os.path.abspath(f_path)}:{stat.st_mtime_ns}:{stat.st_size}".encode()
-            )
+            hasher.update(f"{os.path.abspath(f_path)}:{stat.st_mtime_ns}:{stat.st_size}".encode())
         except OSError:
             hasher.update(f"{os.path.abspath(f_path)}".encode())
     return hasher.hexdigest()[:16]
@@ -139,7 +137,8 @@ class SKMTEADataset(BaseComplexDataset):
         window_transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
         num_slices: int = 1,
         mode: str = "generation",
-        acceleration: int = 4,
+        acceleration: int | float = 4,
+        mask: BaseMaskGenerator | Mapping[str, Any] | str | None = None,
         mask_seed: int | None = None,
         pre_transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
         post_transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
@@ -168,7 +167,6 @@ class SKMTEADataset(BaseComplexDataset):
         self.window_transform = window_transform
         self.num_slices = num_slices
         self.mode = mode
-        self.acceleration = acceleration
         self.mask_seed = mask_seed
         self.pre_transform = pre_transform
         self.post_transform = post_transform
@@ -176,6 +174,31 @@ class SKMTEADataset(BaseComplexDataset):
         self.coil_idx = coil_idx
         self.use_cache = use_cache
         self.cache_dir = str(cache_dir)
+
+        # Resolve mask generator from MASKS registry
+        if isinstance(mask, BaseMaskGenerator):
+            self.mask_generator = mask
+        elif isinstance(mask, str):
+            self.mask_generator = MASKS.build(mask, acceleration=acceleration)
+        elif isinstance(mask, Mapping) or (mask is not None and hasattr(mask, "get")):
+            m_dict = dict(mask)
+            if "name" in m_dict:
+                m_name = str(m_dict.pop("name"))
+            elif "type" in m_dict:
+                m_name = str(m_dict.pop("type"))
+            else:
+                m_name = "cartesian"
+            m_accel = m_dict.pop("acceleration", acceleration)
+            self.mask_generator = MASKS.build(m_name, acceleration=m_accel, **m_dict)
+        elif mask is None:
+            self.mask_generator = MASKS.build("cartesian", acceleration=acceleration)
+        else:
+            raise TypeError(f"Unsupported mask specification type: {type(mask)}")
+
+        acc = getattr(self.mask_generator, "acceleration", acceleration)
+        self.acceleration: int | float = (
+            int(acc) if isinstance(acc, int | float) and float(acc).is_integer() else float(acc)
+        )
 
         # File discovery
         if files_pattern is not None:
@@ -261,26 +284,9 @@ class SKMTEADataset(BaseComplexDataset):
         return int.from_bytes(hashlib.sha256(key.encode()).digest()[:4], "big")
 
     def _undersampling_mask(self, f_path: str, slice_idx: int, h: int, w: int) -> torch.Tensor:
-        """Construct deterministic 1D Cartesian phase-encoding mask [1, H, W]."""
-        rng = np.random.default_rng(self._mask_seed(f_path, slice_idx))
-
-        num_center_lines = min(24, w)
-        center_start = w // 2 - num_center_lines // 2
-        center_end = center_start + num_center_lines
-
-        line_mask = np.zeros(w, dtype=np.float32)
-        line_mask[center_start:center_end] = 1.0
-
-        remaining_lines = int(w / self.acceleration) - num_center_lines
-        if remaining_lines > 0:
-            leftover_indices = np.concatenate(
-                [np.arange(0, center_start), np.arange(center_end, w)]
-            )
-            sampled = rng.choice(leftover_indices, remaining_lines, replace=False)
-            line_mask[sampled] = 1.0
-
-        mask = np.tile(line_mask, (h, 1))
-        return torch.from_numpy(mask).unsqueeze(0)
+        """Construct deterministic undersampling mask [1, H, W] via configured mask generator."""
+        seed = self._mask_seed(f_path, slice_idx)
+        return self.mask_generator.generate(shape=(h, w), seed=seed)
 
     def __getitem__(self, idx: int) -> torch.Tensor | dict[str, torch.Tensor]:
         """Retrieve slice or multi-slice window by index.

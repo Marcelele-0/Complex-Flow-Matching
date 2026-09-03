@@ -479,17 +479,28 @@ def main(cfg: DictConfig) -> None:
     seed = int(eval_cfg.get("seed", 0))
     split = eval_cfg.get("split", "test")
 
-    dc_cfg = eval_cfg.get("mask", {})
-    dc_acceleration = int(dc_cfg.get("acceleration", 4))
-    dc_center_fraction = float(dc_cfg.get("center_fraction", 0.08))
+    dc_cfg = eval_cfg.get("mask") or cfg.get("dataset", {}).get("mask") or {}
+    if isinstance(dc_cfg, DictConfig):
+        container = OmegaConf.to_container(dc_cfg, resolve=True)
+        dc_mask_dict: dict[str, Any] = dict(cast(dict[str, Any], container))
+    elif isinstance(dc_cfg, dict):
+        dc_mask_dict = dict(dc_cfg)
+    else:
+        dc_mask_dict = {}
+
+    dc_acceleration = int(dc_mask_dict.get("acceleration", 4))
+    dc_center_fraction = dc_mask_dict.get("center_fraction")
     use_dc_projection = eval_cfg.get("use_dc_projection", False)
 
     if dc_acceleration < 1:
         raise ValueError(f"evaluate.mask.acceleration must be >= 1, got {dc_acceleration}")
-    if not 0.0 <= dc_center_fraction <= 1.0:
-        raise ValueError(
-            f"evaluate.mask.center_fraction must be in [0, 1], got {dc_center_fraction}"
-        )
+    if dc_center_fraction is not None:
+        dc_center_fraction = float(dc_center_fraction)
+        if not 0.0 < dc_center_fraction <= 1.0:
+            raise ValueError(
+                f"evaluate.mask.center_fraction must be in (0, 1], got {dc_center_fraction}"
+            )
+        dc_mask_dict["center_fraction"] = dc_center_fraction
 
     if not 0.0 <= t_start <= 1.0:
         raise ValueError(f"evaluate.t_start must be in [0, 1], got {t_start}")
@@ -549,7 +560,11 @@ def main(cfg: DictConfig) -> None:
     # in the chosen split. Intentional: swallowing a corrupt-data error here is how
     # you end up reporting metrics on half a dataset.
     dataset = SKMTEADataset(
-        data_dir=data_dir, transform=pipeline, mode="reconstruction", acceleration=dc_acceleration
+        data_dir=data_dir,
+        transform=pipeline,
+        mode="reconstruction",
+        acceleration=dc_acceleration,
+        mask=dc_mask_dict,
     )
     file_names = load_split_file_names(data_dir, split)
     indices = select_indices(dataset.slice_map, file_names, max_samples)
@@ -656,7 +671,12 @@ def main(cfg: DictConfig) -> None:
     print(f"  split      : {split}   ({num_files} file(s), {len(indices)} slices)")
     print(f"  t_start    : {t_start:.3f}   num_steps: {num_steps}")
     print(f"  mask thr.  : {mask_threshold}")
-    print(f"  dc mask    : R={dc_acceleration}, center_fraction={dc_center_fraction} (simulated)")
+    if dc_center_fraction is not None:
+        print(
+            f"  dc mask    : R={dc_acceleration}, center_fraction={dc_center_fraction} (simulated)"
+        )
+    else:
+        print(f"  dc mask    : R={dc_acceleration} (simulated)")
     print(f"  batch/dev  : {batch_size} on {device}   seed: {seed}")
     print("=" * 88)
     print(format_summary_table(summaries))

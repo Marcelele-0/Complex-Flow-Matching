@@ -14,12 +14,14 @@ from cfm.core.registry import (
     DATASETS,
     LOSSES,
     MANIFOLDS,
+    MASKS,
     MODELS,
     RECONSTRUCTORS,
     SOLVERS,
     Registry,
 )
 from cfm.core.solver import BaseODESolver
+from cfm.data.masks import BaseMaskGenerator
 
 
 def test_registry_basic_operations() -> None:
@@ -110,6 +112,7 @@ def test_registry_missing_key_error() -> None:
 def test_core_registries_populated() -> None:
     """Verify built-in CFM components are registered in their respective registries."""
     import cfm.data.dataset  # noqa: F401
+    import cfm.data.masks  # noqa: F401
     import cfm.flow.euclidean_solver  # noqa: F401
     import cfm.flow.solver  # noqa: F401
     import cfm.manifolds.cylindrical  # noqa: F401
@@ -148,3 +151,9 @@ def test_core_registries_populated() -> None:
     assert "flow_matching" in RECONSTRUCTORS
     assert issubclass(cast(type, RECONSTRUCTORS.get("zero_filled")), BaseReconstructor)
     assert issubclass(cast(type, RECONSTRUCTORS.get("flow_matching")), BaseReconstructor)
+
+    # MASKS
+    assert "cartesian" in MASKS
+    assert "poisson_disc" in MASKS
+    assert issubclass(cast(type, MASKS.get("cartesian")), BaseMaskGenerator)
+    assert issubclass(cast(type, MASKS.get("poisson_disc")), BaseMaskGenerator)
