@@ -7,7 +7,7 @@ Poisson-Disc undersampling trajectories across arbitrary acceleration factors.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 import torch
@@ -22,14 +22,23 @@ class BaseMaskGenerator(ABC):
         acceleration: Undersampling acceleration factor R >= 1.0.
     """
 
+    _cache: ClassVar[dict[tuple[Any, ...], torch.Tensor]] = {}
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        """Clear cached masks across this class and subclasses."""
+        cls._cache.clear()
+        for subclass in cls.__subclasses__():
+            subclass.clear_cache()
+
     def __init__(self, acceleration: float = 4.0, **kwargs: Any) -> None:
+        if acceleration < 1.0:
+            raise ValueError(f"acceleration must be >= 1.0, got {acceleration}")
         if kwargs:
             raise TypeError(
                 f"Unexpected keyword argument(s) for {self.__class__.__name__}: "
                 f"{', '.join(sorted(kwargs.keys()))}"
             )
-        if acceleration < 1.0:
-            raise ValueError(f"acceleration must be >= 1.0, got {acceleration}")
         self.acceleration = float(acceleration)
 
     @abstractmethod
@@ -78,6 +87,13 @@ class CartesianMaskGenerator(BaseMaskGenerator):
         axis: Dimension along which to undersample (-1 for width, -2 for height).
     """
 
+    _cache: ClassVar[dict[tuple[Any, ...], torch.Tensor]] = {}
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        """Clear cached Cartesian masks."""
+        cls._cache.clear()
+
     def __init__(
         self,
         acceleration: float = 4.0,
@@ -123,6 +139,17 @@ class CartesianMaskGenerator(BaseMaskGenerator):
         if self.acceleration <= 1.0:
             return torch.ones((1, h, w), dtype=torch.float32)
 
+        cache_key = (
+            (h, w),
+            seed,
+            self.acceleration,
+            self.num_center_lines,
+            self.center_fraction,
+            self.axis,
+        )
+        if cache_key in self._cache:
+            return self._cache[cache_key].clone()
+
         target_lines = int(round(dim / self.acceleration))
         target_lines = max(1, min(dim, target_lines))
 
@@ -157,7 +184,9 @@ class CartesianMaskGenerator(BaseMaskGenerator):
         else:
             mask = np.tile(line_mask[:, None], (1, w))
 
-        return torch.from_numpy(mask).unsqueeze(0).to(torch.float32)
+        mask_tensor = torch.from_numpy(mask).unsqueeze(0).to(torch.float32)
+        self._cache[cache_key] = mask_tensor
+        return mask_tensor.clone()
 
 
 @MASKS.register("poisson_disc")
@@ -179,6 +208,13 @@ class PoissonDiscMaskGenerator(BaseMaskGenerator):
         max_iter: Maximum binary search iterations to calibrate radius scale.
         tol: Tolerance for acceleration matching.
     """
+
+    _cache: ClassVar[dict[tuple[Any, ...], torch.Tensor]] = {}
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        """Clear cached Poisson-disc masks."""
+        cls._cache.clear()
 
     def __init__(
         self,
@@ -227,6 +263,28 @@ class PoissonDiscMaskGenerator(BaseMaskGenerator):
         if self.acceleration <= 1.0:
             return torch.ones((1, h, w), dtype=torch.float32)
 
+        calib_size_key = (
+            tuple(self.calib_size) if isinstance(self.calib_size, list | tuple) else self.calib_size
+        )
+        calib_fraction_key = (
+            tuple(self.calib_fraction)
+            if isinstance(self.calib_fraction, list | tuple)
+            else self.calib_fraction
+        )
+        cache_key = (
+            (h, w),
+            seed,
+            self.acceleration,
+            calib_size_key,
+            calib_fraction_key,
+            self.crop_corners,
+            self.power,
+            self.max_iter,
+            self.tol,
+        )
+        if cache_key in self._cache:
+            return self._cache[cache_key].clone()
+
         target_samples = int(round((h * w) / self.acceleration))
         target_samples = max(1, min(h * w, target_samples))
 
@@ -239,7 +297,7 @@ class PoissonDiscMaskGenerator(BaseMaskGenerator):
             else:
                 ch, cw = int(self.calib_size[0]), int(self.calib_size[1])
         elif self.calib_fraction is not None:
-            if isinstance(self.calib_fraction, (int, float)):
+            if isinstance(self.calib_fraction, int | float):
                 fh, fw = float(self.calib_fraction), float(self.calib_fraction)
             else:
                 fh, fw = float(self.calib_fraction[0]), float(self.calib_fraction[1])
@@ -308,7 +366,7 @@ class PoissonDiscMaskGenerator(BaseMaskGenerator):
 
             num_sampled = (c_y1 - c_y0) * (c_x1 - c_x0)
 
-            for yi, xi in zip(y_coords, x_coords):
+            for yi, xi in zip(y_coords, x_coords, strict=True):
                 if num_sampled >= target_samples:
                     break
                 if self.crop_corners and r_unclipped[yi, xi] > 1.0:
@@ -326,7 +384,7 @@ class PoissonDiscMaskGenerator(BaseMaskGenerator):
                 y_min, y_max = max(0, yi - ir), min(h, yi + ir + 1)
                 x_min, x_max = max(0, xi - ir), min(w, xi + ir + 1)
                 dy, dx = np.ogrid[y_min - yi : y_max - yi, x_min - xi : x_max - xi]
-                excluded[y_min:y_max, x_min:x_max] |= (dy**2 + dx**2 < r_val**2)
+                excluded[y_min:y_max, x_min:x_max] |= dy**2 + dx**2 < r_val**2
 
             cur_accel = (h * w) / max(1, num_sampled)
             diff = abs(cur_accel - self.acceleration)
@@ -348,4 +406,6 @@ class PoissonDiscMaskGenerator(BaseMaskGenerator):
         if self.crop_corners:
             best_mask[r_unclipped > 1.0] = 0.0
 
-        return torch.from_numpy(best_mask).unsqueeze(0).to(torch.float32)
+        mask_tensor = torch.from_numpy(best_mask).unsqueeze(0).to(torch.float32)
+        self._cache[cache_key] = mask_tensor
+        return mask_tensor.clone()

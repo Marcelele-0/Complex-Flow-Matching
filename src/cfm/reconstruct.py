@@ -12,13 +12,13 @@ from __future__ import annotations
 import math
 import os
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 import hydra
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from cfm.data.dataset import SKMTEADataset
 from cfm.evaluate import integrate_from_t
@@ -245,7 +245,22 @@ def main(cfg: DictConfig) -> None:
         data_dir = os.path.join(orig_cwd, data_dir)
 
     pipeline = manifold.build_transform(crop_base=16)
-    dataset = SKMTEADataset(data_dir=data_dir, transform=pipeline)
+    dataset_cfg = cfg.get("dataset", {})
+    accel = dataset_cfg.get("acceleration", 4)
+    mask_cfg = dataset_cfg.get("mask")
+    if mask_cfg is not None:
+        if isinstance(mask_cfg, DictConfig):
+            container = OmegaConf.to_container(mask_cfg, resolve=True)
+            mask_cfg = dict(cast(dict[str, Any], container))
+        elif isinstance(mask_cfg, dict):
+            mask_cfg = dict(mask_cfg)
+
+    dataset = SKMTEADataset(
+        data_dir=data_dir,
+        transform=pipeline,
+        acceleration=accel,
+        mask=mask_cfg,
+    )
 
     if sample_idx < 0 or sample_idx >= len(dataset):
         raise IndexError(

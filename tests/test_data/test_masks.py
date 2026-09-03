@@ -9,6 +9,7 @@ from omegaconf import DictConfig
 
 from cfm.core.registry import MASKS
 from cfm.data.masks import (
+    BaseMaskGenerator,
     CartesianMaskGenerator,
     PoissonDiscMaskGenerator,
 )
@@ -62,6 +63,15 @@ def test_base_mask_generator_unconsumed_kwargs_raises() -> None:
         PoissonDiscMaskGenerator(acceleration=4, unknown_param=True)
 
 
+def test_base_mask_generator_kwarg_and_accel_precedence() -> None:
+    """Verify invalid acceleration raises ValueError before TypeError on unexpected kwargs."""
+    with pytest.raises(ValueError, match=r"acceleration must be >= 1.0"):
+        CartesianMaskGenerator(acceleration=0.5, unknown_kwarg="val")
+
+    with pytest.raises(ValueError, match=r"acceleration must be >= 1.0"):
+        PoissonDiscMaskGenerator(acceleration=0.2, invalid_flag=True)
+
+
 # --- CartesianMaskGenerator Tests ---
 
 
@@ -76,10 +86,23 @@ def test_cartesian_multi_acceleration_shapes_and_values(accel: float) -> None:
     assert mask.dtype == torch.float32
     assert torch.all((mask == 0.0) | (mask == 1.0))
 
+    actual_accel = (h * w) / mask.sum().item()
+    assert abs(actual_accel - accel) / accel < 0.05
+
     # Readout lines are full lines (every column has identical row values)
     col_profile = mask[0, 0, :]
     for row in range(h):
         assert torch.equal(mask[0, row, :], col_profile)
+
+
+@pytest.mark.parametrize("accel", [2.0, 4.0, 8.0, 12.0])
+def test_cartesian_effective_acceleration(accel: float) -> None:
+    """Verify CartesianMaskGenerator achieves target acceleration within 5% tolerance."""
+    h, w = 128, 256
+    gen = CartesianMaskGenerator(acceleration=accel)
+    mask = gen((h, w), seed=42)
+    actual_accel = (h * w) / mask.sum().item()
+    assert abs(actual_accel - accel) / accel < 0.05
 
 
 def test_cartesian_sparsity_ordering() -> None:
@@ -379,40 +402,160 @@ def test_dataset_integration_eager_pop_preserved(dummy_h5_dir) -> None:
     assert ds.acceleration == 4
 
 
-def test_poisson_disc_binary_search_monotonicity() -> None:
-    """Verify that larger exclusion radii yield monotonically fewer or equal samples."""
-    h, w = 64, 64
-    rng = np.random.default_rng(42)
-    raw_noise = rng.uniform(0.0, 1.0, size=(h, w))
-
-    y, x = np.ogrid[:h, :w]
-    ny = (y - (h - 1) / 2.0) / (h / 2.0)
-    nx = (x - (w - 1) / 2.0) / (w / 2.0)
-    r_norm = np.clip(np.sqrt(ny**2 + nx**2), 0.0, 1.0)
-
+@pytest.mark.parametrize("seed", [42, 123, 999])
+def test_poisson_disc_binary_search_monotonicity(seed: int) -> None:
+    """Verify monotonicity through public API: mask.sum() decreases as acceleration increases."""
+    h, w = 128, 128
+    accelerations = [2.0, 4.0, 6.0, 8.0, 12.0]
     sample_counts = []
-    # Test increasing radius values
-    for r_mid in [1.0, 2.0, 3.0, 5.0, 8.0]:
-        r_map = r_mid * (1.0 + 2.0 * (r_norm**1.5))
-        weight = 1.0 / np.maximum(r_map, 0.5) ** 2
-        keys = raw_noise / weight
-        flat_idx = np.argsort(keys.ravel())
-        y_coords, x_coords = np.unravel_index(flat_idx, (h, w))
+    for accel in accelerations:
+        gen = PoissonDiscMaskGenerator(acceleration=accel)
+        mask = gen((h, w), seed=seed)
+        sample_counts.append(mask.sum().item())
 
-        num_sampled = 0
-        excluded = np.zeros((h, w), dtype=bool)
-        for yi, xi in zip(y_coords, x_coords, strict=True):
-            if excluded[yi, xi]:
-                continue
-            num_sampled += 1
-            r_val = r_map[yi, xi]
-            ir = int(np.ceil(r_val))
-            y_min, y_max = max(0, yi - ir), min(h, yi + ir + 1)
-            x_min, x_max = max(0, xi - ir), min(w, xi + ir + 1)
-            dy, dx = np.ogrid[y_min - yi : y_max - yi, x_min - xi : x_max - xi]
-            excluded[y_min:y_max, x_min:x_max] |= dy**2 + dx**2 < r_val**2
-        sample_counts.append(num_sampled)
-
-    # Check strictly monotonic non-increasing
+    # Verify that mask.sum() strictly decreases as acceleration increases
     for i in range(len(sample_counts) - 1):
-        assert sample_counts[i] >= sample_counts[i + 1]
+        assert sample_counts[i] > sample_counts[i + 1], (
+            f"Expected mask.sum() for accel={accelerations[i]} ({sample_counts[i]}) "
+            f"to be > accel={accelerations[i + 1]} ({sample_counts[i + 1]})"
+        )
+
+
+def test_poisson_disc_caching() -> None:
+    """Verify identical Poisson-Disc masks are returned from cache without recomputation."""
+    PoissonDiscMaskGenerator.clear_cache()
+    gen = PoissonDiscMaskGenerator(acceleration=4)
+    h, w = 64, 64
+
+    # Initial generation populates cache
+    m1 = gen((h, w), seed=100)
+    assert len(PoissonDiscMaskGenerator._cache) == 1
+
+    # Second call hits cache and returns equal tensor
+    m2 = gen((h, w), seed=100)
+    assert torch.equal(m1, m2)
+
+    # In-place mutation does not affect subsequent cache fetches (clone isolation)
+    m1[0, 0, 0] = 999.0
+    m3 = gen((h, w), seed=100)
+    assert m3[0, 0, 0] != 999.0
+    assert torch.equal(m2, m3)
+
+    # Calling clear_cache empties the cache
+    PoissonDiscMaskGenerator.clear_cache()
+    assert len(PoissonDiscMaskGenerator._cache) == 0
+
+
+def test_cartesian_caching() -> None:
+    """Verify CartesianMaskGenerator caching and clone isolation."""
+    CartesianMaskGenerator.clear_cache()
+    gen = CartesianMaskGenerator(acceleration=4)
+    h, w = 64, 128
+
+    m1 = gen((h, w), seed=50)
+    assert len(CartesianMaskGenerator._cache) == 1
+
+    m2 = gen((h, w), seed=50)
+    assert torch.equal(m1, m2)
+
+    m1[0, 0, 0] = 999.0
+    m3 = gen((h, w), seed=50)
+    assert m3[0, 0, 0] != 999.0
+    assert torch.equal(m2, m3)
+
+    BaseMaskGenerator.clear_cache()
+    assert len(CartesianMaskGenerator._cache) == 0
+
+
+def test_dataset_integration_omegaconf_dict_container(dummy_h5_dir) -> None:
+    """Verify SKMTEADataset accepts dict converted from Hydra DictConfig at call site."""
+    from omegaconf import OmegaConf
+
+    from cfm.data.dataset import SKMTEADataset
+
+    cfg = OmegaConf.create(
+        {
+            "dataset": {
+                "mask": {
+                    "type": "cartesian",
+                    "acceleration": 8,
+                    "center_fraction": 0.1,
+                }
+            }
+        }
+    )
+    mask_cfg = dict(OmegaConf.to_container(cfg.dataset.mask, resolve=True))
+    ds = SKMTEADataset(data_dir=dummy_h5_dir, mode="reconstruction", mask=mask_cfg)
+    assert isinstance(ds.mask_generator, CartesianMaskGenerator)
+    assert ds.acceleration == 8.0
+    assert ds.mask_generator.center_fraction == 0.1
+
+
+def test_evaluate_mask_config_plumbing(dummy_h5_dir) -> None:
+    """Verify evaluate.py mask config plumbing passes center_fraction to mask generator."""
+    from omegaconf import OmegaConf
+
+    from cfm.data.dataset import SKMTEADataset
+
+    cfg = OmegaConf.create(
+        {
+            "evaluate": {
+                "mask": {
+                    "acceleration": 6,
+                    "center_fraction": 0.12,
+                }
+            }
+        }
+    )
+    eval_cfg = cfg.get("evaluate", {})
+    dc_cfg = eval_cfg.get("mask") or {}
+    dc_mask_dict = dict(OmegaConf.to_container(dc_cfg, resolve=True))
+    dc_accel = int(dc_mask_dict.get("acceleration", 4))
+    dc_center_fraction = dc_mask_dict.get("center_fraction")
+    if dc_center_fraction is not None:
+        dc_mask_dict["center_fraction"] = float(dc_center_fraction)
+
+    ds = SKMTEADataset(
+        data_dir=dummy_h5_dir,
+        mode="reconstruction",
+        acceleration=dc_accel,
+        mask=dc_mask_dict,
+    )
+    assert isinstance(ds.mask_generator, CartesianMaskGenerator)
+    assert ds.acceleration == 6.0
+    assert ds.mask_generator.center_fraction == 0.12
+
+
+def test_train_mask_config_plumbing(dummy_h5_dir) -> None:
+    """Verify train.py dataset mask config plumbing passes mask configuration to SKMTEADataset."""
+    from omegaconf import OmegaConf
+
+    from cfm.data.dataset import SKMTEADataset
+
+    cfg = OmegaConf.create(
+        {
+            "dataset": {
+                "acceleration": 8,
+                "mask": {
+                    "type": "poisson_disc",
+                    "acceleration": 8,
+                    "calib_fraction": 0.15,
+                },
+            }
+        }
+    )
+    dataset_cfg = cfg.get("dataset", {})
+    accel = dataset_cfg.get("acceleration", 4)
+    mask_cfg = dataset_cfg.get("mask")
+    if mask_cfg is not None:
+        mask_cfg = dict(OmegaConf.to_container(mask_cfg, resolve=True))
+
+    ds = SKMTEADataset(
+        data_dir=dummy_h5_dir,
+        mode="generation",
+        acceleration=accel,
+        mask=mask_cfg,
+    )
+    assert isinstance(ds.mask_generator, PoissonDiscMaskGenerator)
+    assert ds.acceleration == 8.0
+    assert ds.mask_generator.calib_fraction == 0.15

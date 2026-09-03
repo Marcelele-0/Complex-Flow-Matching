@@ -12,7 +12,6 @@ from typing import Any
 
 import numpy as np
 import torch
-from omegaconf import DictConfig, OmegaConf
 
 from cfm.core.dataset import BaseComplexDataset
 from cfm.core.registry import DATASETS, MASKS
@@ -82,9 +81,7 @@ def _process_slice_array(
     elif str(coil_idx).lower() == "all":
         pass
     else:
-        raise ValueError(
-            f"Unsupported coil_idx={coil_idx!r}. Expected int, 'rss', or 'all'."
-        )
+        raise ValueError(f"Unsupported coil_idx={coil_idx!r}. Expected int, 'rss', or 'all'.")
 
     # raw is now [H, W, E_out, C_out] -> transpose to [E_out, C_out, H, W]
     raw = np.transpose(raw, (2, 3, 0, 1))
@@ -100,9 +97,7 @@ def _compute_index_hash(files: list[str]) -> str:
     for f_path in sorted(files):
         try:
             stat = os.stat(f_path)
-            hasher.update(
-                f"{os.path.abspath(f_path)}:{stat.st_mtime_ns}:{stat.st_size}".encode()
-            )
+            hasher.update(f"{os.path.abspath(f_path)}:{stat.st_mtime_ns}:{stat.st_size}".encode())
         except OSError:
             hasher.update(f"{os.path.abspath(f_path)}".encode())
     return hasher.hexdigest()[:16]
@@ -143,7 +138,7 @@ class SKMTEADataset(BaseComplexDataset):
         num_slices: int = 1,
         mode: str = "generation",
         acceleration: int | float = 4,
-        mask: BaseMaskGenerator | Mapping[str, Any] | DictConfig | str | None = None,
+        mask: BaseMaskGenerator | Mapping[str, Any] | str | None = None,
         mask_seed: int | None = None,
         pre_transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
         post_transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
@@ -185,11 +180,8 @@ class SKMTEADataset(BaseComplexDataset):
             self.mask_generator = mask
         elif isinstance(mask, str):
             self.mask_generator = MASKS.build(mask, acceleration=acceleration)
-        elif isinstance(mask, (Mapping, DictConfig)) or (mask is not None and hasattr(mask, "get")):
-            if isinstance(mask, DictConfig):
-                m_dict = dict(OmegaConf.to_container(mask, resolve=True))  # type: ignore[arg-type]
-            else:
-                m_dict = dict(mask)
+        elif isinstance(mask, Mapping) or (mask is not None and hasattr(mask, "get")):
+            m_dict = dict(mask)
             if "name" in m_dict:
                 m_name = str(m_dict.pop("name"))
             elif "type" in m_dict:
@@ -205,7 +197,7 @@ class SKMTEADataset(BaseComplexDataset):
 
         acc = getattr(self.mask_generator, "acceleration", acceleration)
         self.acceleration: int | float = (
-            int(acc) if isinstance(acc, (int, float)) and float(acc).is_integer() else float(acc)
+            int(acc) if isinstance(acc, int | float) and float(acc).is_integer() else float(acc)
         )
 
         # File discovery
@@ -286,9 +278,7 @@ class SKMTEADataset(BaseComplexDataset):
 
     def _mask_seed(self, f_path: str, slice_idx: int) -> int:
         """Compute deterministic seed from file path, slice index, and acceleration."""
-        acc = self.acceleration
-        acc_key = int(acc) if isinstance(acc, (int, float)) and float(acc).is_integer() else acc
-        key = f"{os.path.basename(f_path)}:{slice_idx}:{acc_key}"
+        key = f"{os.path.basename(f_path)}:{slice_idx}:{self.acceleration}"
         if self.mask_seed is not None:
             key = f"{key}:{self.mask_seed}"
         return int.from_bytes(hashlib.sha256(key.encode()).digest()[:4], "big")
