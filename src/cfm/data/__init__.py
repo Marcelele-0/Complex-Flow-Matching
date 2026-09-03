@@ -4,6 +4,11 @@ from __future__ import annotations
 
 from cfm.data.dataset import SKMTEADataset
 from cfm.data.hdf5_manager import WorkerHDF5Manager
+from cfm.data.masks import (
+    BaseMaskGenerator,
+    CartesianMaskGenerator,
+    PoissonDiscMaskGenerator,
+)
 from cfm.data.splits import load_split_file_names, select_indices
 from cfm.data.transforms import (
     AmplitudeNormalize,
@@ -17,6 +22,9 @@ from cfm.data.transforms import (
 )
 
 __all__ = [
+    "BaseMaskGenerator",
+    "CartesianMaskGenerator",
+    "PoissonDiscMaskGenerator",
     "AmplitudeNormalize",
     "CenterCropModulo",
     "ComplexToCylinderTransform",

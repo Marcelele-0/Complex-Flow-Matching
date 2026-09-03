@@ -117,16 +117,27 @@ def main(cfg: DictConfig) -> None:
         slice_pipeline = manifold.build_transform(crop_base=16)
         window_pipeline = None
 
-    echo_idx = cfg.get("dataset", {}).get("echo_idx", 0)
-    coil_idx = cfg.get("dataset", {}).get("coil_idx", 0)
-    use_cache = cfg.get("dataset", {}).get("use_cache", True)
-    cache_dir = cfg.get("dataset", {}).get("cache_dir", ".cache")
+    dataset_cfg = cfg.get("dataset", {})
+    echo_idx = dataset_cfg.get("echo_idx", 0)
+    coil_idx = dataset_cfg.get("coil_idx", 0)
+    use_cache = dataset_cfg.get("use_cache", True)
+    cache_dir = dataset_cfg.get("cache_dir", ".cache")
+    acceleration = dataset_cfg.get("acceleration", 4)
+    mask_cfg = dataset_cfg.get("mask")
+    if mask_cfg is not None:
+        if isinstance(mask_cfg, DictConfig):
+            container = OmegaConf.to_container(mask_cfg, resolve=True)
+            mask_cfg = dict(cast(dict[str, Any], container))
+        elif isinstance(mask_cfg, dict):
+            mask_cfg = dict(mask_cfg)
 
     dataset = SKMTEADataset(
         data_dir=data_dir,
         transform=slice_pipeline,
         window_transform=window_pipeline,
         num_slices=num_slices,
+        acceleration=acceleration,
+        mask=mask_cfg,
         echo_idx=echo_idx,
         coil_idx=coil_idx,
         use_cache=use_cache,

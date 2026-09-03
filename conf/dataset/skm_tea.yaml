@@ -1,6 +1,9 @@
 data_dir: "data/skm-tea-mini/v1-release"
 num_slices: 1
 acceleration: 4
+mask:
+  type: "cartesian"
+  acceleration: 4
 echo_idx: 0
 coil_idx: 0
 use_cache: true
