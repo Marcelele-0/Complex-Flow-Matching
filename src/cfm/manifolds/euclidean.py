@@ -13,6 +13,8 @@ from collections.abc import Callable
 
 import torch
 
+from cfm.core.manifold import BaseManifold
+from cfm.core.registry import MANIFOLDS
 from cfm.data.transforms import (
     CenterCropModulo,
     ComplexToEuclideanTransform,
@@ -23,7 +25,6 @@ from cfm.data.transforms import (
 from cfm.flow.euclidean_bridge import LinearFlowBridge
 from cfm.flow.euclidean_math import EuclideanVelocityLoss
 from cfm.flow.euclidean_solver import EuclideanODESolver
-from cfm.manifolds.base import Manifold
 from cfm.utils.complex_ops import euclidean_to_complex
 
 # "uniform" first: it is the default, being the only one that is both free of
@@ -127,7 +128,8 @@ def sample_gaussian_noise(
     return torch.randn(batch, 2, height, width, device=device, generator=generator)
 
 
-class EuclideanManifold(Manifold):
+@MANIFOLDS.register("euclidean")
+class EuclideanManifold(BaseManifold):
     """Complex pixels as flat 2-vectors, with no manifold structure imposed.
 
     Args:
@@ -145,6 +147,7 @@ class EuclideanManifold(Manifold):
 
     name = "euclidean"
     state_channels = 2
+    velocity_channels = 2
 
     def __init__(
         self,
@@ -169,6 +172,35 @@ class EuclideanManifold(Manifold):
     def to(self, device: torch.device) -> EuclideanManifold:
         self._loss = self._loss.to(device)
         return self
+
+    def exp_map(self, x: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+        """Exponential map on Euclidean space R^2 is vector addition."""
+        return x + v
+
+    def log_map(self, x_0: torch.Tensor, x_1: torch.Tensor) -> torch.Tensor:
+        """Logarithmic map on Euclidean space R^2 is vector difference."""
+        return x_1 - x_0
+
+    def geodesic_path(self, x_0: torch.Tensor, x_1: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        """Straight-line geodesic interpolation in Euclidean space."""
+        return (1.0 - t) * x_0 + t * x_1
+
+    def target_velocity(
+        self, x_0: torch.Tensor, x_1: torch.Tensor, t: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        del t
+        return x_1 - x_0
+
+    def metric_tensor(self, x: torch.Tensor) -> torch.Tensor:
+        """Flat Euclidean metric tensor."""
+        return torch.ones(
+            x.shape[0],
+            self.velocity_channels,
+            x.shape[2],
+            x.shape[3],
+            device=x.device,
+            dtype=x.dtype,
+        )
 
     def build_transform(self, crop_base: int = 16) -> Callable[[torch.Tensor], torch.Tensor]:
         # Normalise before cropping, exactly as the cylindrical pipeline does, so
@@ -220,3 +252,6 @@ class EuclideanManifold(Manifold):
 
     def to_complex(self, state: torch.Tensor) -> torch.Tensor:
         return euclidean_to_complex(state)
+
+    def from_complex(self, z: torch.Tensor) -> torch.Tensor:
+        return torch.cat([z.real, z.imag], dim=1)

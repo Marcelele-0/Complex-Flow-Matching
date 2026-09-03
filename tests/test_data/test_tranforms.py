@@ -141,7 +141,7 @@ def test_compose_pipeline() -> None:
 
     x = torch.randn(1, 35, 35, dtype=torch.complex64)
     # Give it one huge value to test normalization
-    x[0, 0, 0] = 500.0 + 0j
+    x[0, 0, 0] = torch.tensor(500.0 + 0j, dtype=torch.complex64)
 
     out = pipeline(x)
 
@@ -194,7 +194,7 @@ def test_euclidean_compose_pipeline() -> None:
 
     x = torch.randn(1, 35, 35, dtype=torch.complex64)
     # Give it one huge value to test normalization
-    x[0, 0, 0] = 500.0 + 0j
+    x[0, 0, 0] = torch.tensor(500.0 + 0j, dtype=torch.complex64)
 
     out = pipeline(x)
 
@@ -211,7 +211,7 @@ def test_both_pipelines_normalize_by_the_same_factor() -> None:
     over the same uncropped slice in both cases.
     """
     x = torch.randn(1, 35, 35, dtype=torch.complex64)
-    x[0, 0, 0] = 500.0 + 0j
+    x[0, 0, 0] = torch.tensor(500.0 + 0j, dtype=torch.complex64)
 
     cyl = Compose([ComplexToCylinderTransform(), AmplitudeNormalize(), CenterCropModulo(base=16)])(
         x.clone()

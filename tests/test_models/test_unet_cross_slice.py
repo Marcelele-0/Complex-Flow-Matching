@@ -140,7 +140,7 @@ class TestCrossSliceAttentionModule:
         tested here.
         """
         attn = CrossSliceAttention(channels=16, heads=2)
-        attn.norm = torch.nn.Identity()
+        attn.norm = torch.nn.Identity()  # type: ignore[assignment]
         attn.eval()
 
         x = torch.randn(1, 3, 16, 4, 4)

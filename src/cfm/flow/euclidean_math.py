@@ -1,8 +1,4 @@
-"""Velocity loss for the flat Euclidean baseline.
-
-The counterpart of :mod:`cfm.flow.torus_math`, deliberately much smaller: with
-no manifold there is no decoupling, no angular term and no mask.
-"""
+"""Velocity regression loss for Euclidean flow matching baseline."""
 
 from __future__ import annotations
 
@@ -11,31 +7,16 @@ import torch.nn as nn
 
 from cfm.flow.spectral import high_frequency_penalty
 
-# "l2" and "mse" are aliases for the same squared-error loss, matching the
-# vocabulary DecoupledCylindricalLoss already accepts.
 VALID_VELOCITY_LOSSES = {"l1", "l2", "mse"}
 
 
 class EuclideanVelocityLoss(nn.Module):
-    """Plain regression loss on the 2-channel Euclidean velocity field.
+    """Regression loss on 2-channel Euclidean velocity field (v_re, v_im).
 
-    Velocity contract:
-        Channel 0: v_re - real-part velocity
-        Channel 1: v_im - imaginary-part velocity
-
-    Both channels are scored by one unweighted loss. Two absences are deliberate:
-
-    * **No per-channel weight.** ``lambda_phase`` exists on the cylinder because
-      its channels have different units (amplitude vs rad/unit-time). Re and Im
-      share a unit, so weighting one would be arbitrary.
-    * **No amplitude mask.** The cylindrical loss masks its *phase* term because
-      phase is undefined in air. A Re/Im field has no phase channel, so a mask
-      here would import a cylindrical-specific correction into the baseline
-      rather than remove one. ``target_x1`` is accepted and ignored only so both
-      losses share a signature.
-
-    The high-frequency k-space boost is shared verbatim with the cylindrical loss
-    (:mod:`cfm.flow.spectral`), so an HF ablation means the same thing on both.
+    Args:
+        loss_type: Distance metric ('l1', 'l2', or 'mse').
+        lambda_hf: High-frequency spectral penalty weight.
+        hf_boost_factor: Radial slope of high-frequency weighting.
     """
 
     def __init__(
@@ -64,27 +45,29 @@ class EuclideanVelocityLoss(nn.Module):
         target_v: torch.Tensor,
         target_x1: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Compute total loss with optional high-frequency boosting.
+        """Compute Euclidean velocity regression loss.
 
         Args:
-            pred_v: Predicted velocity [B, 2, H, W] (ch0: v_re, ch1: v_im)
-            target_v: Target velocity from bridge [B, 2, H, W]
-            target_x1: Accepted for interface parity and deliberately unused.
+            pred_v: Predicted velocity [B, 2, H, W] (v_re, v_im).
+            target_v: Target velocity [B, 2, H, W] (v_re, v_im).
+            target_x1: Unused clean data tensor (for interface parity).
 
         Returns:
-            Tuple of (total_loss, loss_vel, loss_hf)
+            Tuple containing:
+                - total_loss: Scalar total loss tensor.
+                - loss_vel: Velocity regression loss scalar.
+                - loss_hf: High-frequency penalty scalar.
 
         Raises:
-            ValueError: If either velocity does not have exactly 2 channels.
+            ValueError: If inputs do not have exactly 2 channels.
         """
-        # Fail loudly rather than silently broadcast a 3-channel cylindrical state.
         if pred_v.shape[1] != 2 or target_v.shape[1] != 2:
             raise ValueError(
                 f"Expected 2-channel velocity (v_re, v_im), got "
                 f"pred_v: {pred_v.shape[1]} channels, target_v: {target_v.shape[1]} channels"
             )
 
-        del target_x1  # see class docstring: no masking in flat space
+        del target_x1
 
         loss_vel = self.velocity_loss_fn(pred_v, target_v)
 

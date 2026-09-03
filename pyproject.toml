@@ -30,9 +30,12 @@ dev = [
     "jupyter>=1.1.1",
     "jupytext>=1.16.0",
     "manim>=0.21.0",
+    "mypy>=2.3.1",
     "plotly>=6.6.0",
     "pre-commit>=4.5.0",
     "pytest>=9.0.2",
+    "ruff>=0.16.5",
+    "types-tqdm>=4.70.0.20260827",
     "wandb>=0.25.1",
 ]
 
@@ -59,3 +62,8 @@ known-first-party = ["cfm"]
 
 [tool.jupytext]
 formats = "ipynb,py:percent"
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+check_untyped_defs = true
