@@ -98,8 +98,9 @@ class FlowMatchingReconstructor(BaseReconstructor):
         sensitivity_maps: torch.Tensor | None = None,
         num_steps: int | None = None,
     ) -> torch.Tensor:
-        del sensitivity_maps
-        b, _, h, w = masked_kspace.shape
+        b = masked_kspace.shape[0]
+        h = masked_kspace.shape[-2]
+        w = masked_kspace.shape[-1]
         device = masked_kspace.device
 
         steps = num_steps if num_steps is not None else 50
@@ -120,9 +121,18 @@ class FlowMatchingReconstructor(BaseReconstructor):
         x_complex = self.manifold.to_complex(x_pred_state)
 
         if self.data_consistency:
-            # Apply exact k-space data consistency projection
-            k_pred = torch.fft.fftshift(torch.fft.fft2(x_complex, norm="ortho"), dim=(-2, -1))
-            k_dc = mask * masked_kspace + (1.0 - mask) * k_pred
-            x_complex = torch.fft.ifft2(torch.fft.ifftshift(k_dc, dim=(-2, -1)), norm="ortho")
+            if sensitivity_maps is not None:
+                # Multi-coil DC: project 1-channel image to coils via sensitivity maps
+                x_coils = sensitivity_maps * x_complex
+                k_pred = torch.fft.fftshift(torch.fft.fft2(x_coils, norm="ortho"), dim=(-2, -1))
+                k_dc = mask * masked_kspace + (1.0 - mask) * k_pred
+                x_dc_coils = torch.fft.ifft2(torch.fft.ifftshift(k_dc, dim=(-2, -1)), norm="ortho")
+                # SENSE combine back to 1 channel: sum(S^* * x)
+                x_complex = (sensitivity_maps.conj() * x_dc_coils).sum(dim=1, keepdim=True)
+            else:
+                # Single-coil DC projection
+                k_pred = torch.fft.fftshift(torch.fft.fft2(x_complex, norm="ortho"), dim=(-2, -1))
+                k_dc = mask * masked_kspace + (1.0 - mask) * k_pred
+                x_complex = torch.fft.ifft2(torch.fft.ifftshift(k_dc, dim=(-2, -1)), norm="ortho")
 
         return x_complex

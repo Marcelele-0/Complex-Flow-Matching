@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from cfm.data.dataset import SKMTEADataset
+from cfm.data.fastmri import FastMRIDataset
 from cfm.data.hdf5_manager import WorkerHDF5Manager
 from cfm.data.masks import (
     BaseMaskGenerator,
@@ -31,6 +32,7 @@ __all__ = [
     "ComplexToEuclideanTransform",
     "Compose",
     "EuclideanNormalize",
+    "FastMRIDataset",
     "SKMTEADataset",
     "WindowAmplitudeNormalize",
     "WindowEuclideanNormalize",

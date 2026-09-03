@@ -19,7 +19,9 @@ from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
+from cfm.core.dataset import BaseComplexDataset
 from cfm.data.dataset import SKMTEADataset
+from cfm.data.fastmri import FastMRIDataset
 from cfm.data.splits import load_split_file_names, select_indices
 from cfm.manifolds import build_manifold
 from cfm.utils.inference import build_model
@@ -131,18 +133,32 @@ def main(cfg: DictConfig) -> None:
         elif isinstance(mask_cfg, dict):
             mask_cfg = dict(mask_cfg)
 
-    dataset = SKMTEADataset(
-        data_dir=data_dir,
-        transform=slice_pipeline,
-        window_transform=window_pipeline,
-        num_slices=num_slices,
-        acceleration=acceleration,
-        mask=mask_cfg,
-        echo_idx=echo_idx,
-        coil_idx=coil_idx,
-        use_cache=use_cache,
-        cache_dir=cache_dir,
-    )
+    dataset_name = dataset_cfg.get("name", "skm_tea")
+    dataset: BaseComplexDataset
+    if dataset_name in ("fastmri", "fast_mri"):
+        dataset = FastMRIDataset(
+            data_dir=data_dir,
+            transform=slice_pipeline,
+            window_transform=window_pipeline,
+            num_slices=num_slices,
+            acceleration=acceleration,
+            mask=mask_cfg,
+            use_cache=use_cache,
+            cache_dir=cache_dir,
+        )
+    else:
+        dataset = SKMTEADataset(
+            data_dir=data_dir,
+            transform=slice_pipeline,
+            window_transform=window_pipeline,
+            num_slices=num_slices,
+            acceleration=acceleration,
+            mask=mask_cfg,
+            echo_idx=echo_idx,
+            coil_idx=coil_idx,
+            use_cache=use_cache,
+            cache_dir=cache_dir,
+        )
 
     # Train only on the volumes the split manifest lists, through the same two
     # functions evaluate.py uses. Without this the loader globs every .h5 and
@@ -158,7 +174,7 @@ def main(cfg: DictConfig) -> None:
         f"Split '{split}': {len(indices)} of {len(dataset.slice_map)} slices "
         f"from {num_files} volume(s)."
     )
-    dataset_subset: SKMTEADataset | Subset[Any] = (
+    dataset_subset: BaseComplexDataset | Subset[Any] = (
         Subset(dataset, indices) if len(indices) < len(dataset.slice_map) else dataset
     )
 

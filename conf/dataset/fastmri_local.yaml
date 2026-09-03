@@ -1,0 +1,12 @@
+name: "fastmri"
+data_dir: "data/fastmri_local"
+num_slices: 1
+acceleration: 4
+mask:
+  type: "poisson_disc"
+  acceleration: 4
+use_cache: true
+cache_dir: ".cache"
+
+# Manifest gating training: null trains on every .h5 in data_dir
+split: null

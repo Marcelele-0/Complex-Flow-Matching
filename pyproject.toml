@@ -17,6 +17,7 @@ dependencies = [
     "matplotlib>=3.10.8",
     "nibabel>=5.4.2",
     "numpy>=2.4.4",
+    "sigpy>=0.1.27",
     "torch>=2.11.0",
     "torchdiffeq>=0.2.5",
     "torchvision>=0.26.0",
