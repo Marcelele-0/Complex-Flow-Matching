@@ -1,8 +1,11 @@
 """Unit tests for k-space undersampling mask generators and registry integration."""
 
+import hashlib
+
 import numpy as np
 import pytest
 import torch
+from omegaconf import DictConfig
 
 from cfm.core.registry import MASKS
 from cfm.data.masks import (
@@ -48,6 +51,15 @@ def test_base_mask_generator_validation() -> None:
     mask1 = gen((48, 128), seed=42)
     mask2 = gen.generate((48, 128), seed=42)
     assert torch.equal(mask1, mask2)
+
+
+def test_base_mask_generator_unconsumed_kwargs_raises() -> None:
+    """Verify BaseMaskGenerator raises TypeError on unconsumed keyword arguments."""
+    with pytest.raises(TypeError, match=r"Unexpected keyword argument"):
+        CartesianMaskGenerator(acceleration=4, centre_fraction=0.1)
+
+    with pytest.raises(TypeError, match=r"Unexpected keyword argument"):
+        PoissonDiscMaskGenerator(acceleration=4, unknown_param=True)
 
 
 # --- CartesianMaskGenerator Tests ---
@@ -234,6 +246,15 @@ def test_poisson_disc_full_sampling() -> None:
     assert torch.all(mask == 1.0)
 
 
+def test_poisson_disc_max_iter_validation() -> None:
+    """Verify max_iter < 1 raises ValueError."""
+    with pytest.raises(ValueError, match=r"max_iter must be >= 1"):
+        PoissonDiscMaskGenerator(acceleration=4, max_iter=0)
+
+    with pytest.raises(ValueError, match=r"max_iter must be >= 1"):
+        PoissonDiscMaskGenerator(acceleration=4, max_iter=-1)
+
+
 # --- SKMTEADataset Integration Tests ---
 
 
@@ -313,7 +334,85 @@ def test_dataset_integration_explicit_mask_generator_instance(dummy_h5_dir) -> N
     ds = SKMTEADataset(
         data_dir=dummy_h5_dir,
         mode="reconstruction",
-        mask_generator=custom_gen,
+        mask=custom_gen,
     )
     assert ds.mask_generator is custom_gen
-    assert ds.acceleration == 6.0
+    assert ds.acceleration == 6
+
+
+def test_dataset_determinism_integral_and_float_seed_key(dummy_h5_dir) -> None:
+    """Verify S1: integral acceleration formats identically to prevent breaking seed determinism."""
+    from cfm.data.dataset import SKMTEADataset
+
+    ds_int = SKMTEADataset(data_dir=dummy_h5_dir, mode="reconstruction", acceleration=4)
+    ds_float = SKMTEADataset(data_dir=dummy_h5_dir, mode="reconstruction", acceleration=4.0)
+
+    # Both must match baseline key "test_scan.h5:0:4" rather than "test_scan.h5:0:4.0"
+    seed_int = ds_int._mask_seed("test_scan.h5", 0)
+    seed_float = ds_float._mask_seed("test_scan.h5", 0)
+
+    expected_key = "test_scan.h5:0:4"
+    expected_seed = int.from_bytes(hashlib.sha256(expected_key.encode()).digest()[:4], "big")
+
+    assert seed_int == expected_seed
+    assert seed_float == expected_seed
+
+
+def test_dataset_integration_dictconfig(dummy_h5_dir) -> None:
+    """Verify SKMTEADataset accepts an OmegaConf DictConfig for mask."""
+    from cfm.data.dataset import SKMTEADataset
+
+    cfg = DictConfig({"type": "cartesian", "acceleration": 8, "num_center_lines": 16})
+    ds = SKMTEADataset(data_dir=dummy_h5_dir, mode="reconstruction", mask=cfg)
+    assert isinstance(ds.mask_generator, CartesianMaskGenerator)
+    assert ds.acceleration == 8
+    assert ds.mask_generator.num_center_lines == 16
+
+
+def test_dataset_integration_eager_pop_preserved(dummy_h5_dir) -> None:
+    """Verify mask dictionary with 'name' does not eagerly pop or corrupt keys."""
+    from cfm.data.dataset import SKMTEADataset
+
+    mask_dict = {"name": "cartesian", "acceleration": 4}
+    ds = SKMTEADataset(data_dir=dummy_h5_dir, mode="reconstruction", mask=mask_dict)
+    assert isinstance(ds.mask_generator, CartesianMaskGenerator)
+    assert ds.acceleration == 4
+
+
+def test_poisson_disc_binary_search_monotonicity() -> None:
+    """Verify that larger exclusion radii yield monotonically fewer or equal samples."""
+    h, w = 64, 64
+    rng = np.random.default_rng(42)
+    raw_noise = rng.uniform(0.0, 1.0, size=(h, w))
+
+    y, x = np.ogrid[:h, :w]
+    ny = (y - (h - 1) / 2.0) / (h / 2.0)
+    nx = (x - (w - 1) / 2.0) / (w / 2.0)
+    r_norm = np.clip(np.sqrt(ny**2 + nx**2), 0.0, 1.0)
+
+    sample_counts = []
+    # Test increasing radius values
+    for r_mid in [1.0, 2.0, 3.0, 5.0, 8.0]:
+        r_map = r_mid * (1.0 + 2.0 * (r_norm**1.5))
+        weight = 1.0 / np.maximum(r_map, 0.5) ** 2
+        keys = raw_noise / weight
+        flat_idx = np.argsort(keys.ravel())
+        y_coords, x_coords = np.unravel_index(flat_idx, (h, w))
+
+        num_sampled = 0
+        excluded = np.zeros((h, w), dtype=bool)
+        for yi, xi in zip(y_coords, x_coords, strict=True):
+            if excluded[yi, xi]:
+                continue
+            num_sampled += 1
+            r_val = r_map[yi, xi]
+            ir = int(np.ceil(r_val))
+            y_min, y_max = max(0, yi - ir), min(h, yi + ir + 1)
+            x_min, x_max = max(0, xi - ir), min(w, xi + ir + 1)
+            dy, dx = np.ogrid[y_min - yi : y_max - yi, x_min - xi : x_max - xi]
+            excluded[y_min:y_max, x_min:x_max] |= dy**2 + dx**2 < r_val**2
+        sample_counts.append(num_sampled)
+
+    # Check strictly monotonic non-increasing
+    for i in range(len(sample_counts) - 1):
+        assert sample_counts[i] >= sample_counts[i + 1]

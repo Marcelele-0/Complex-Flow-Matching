@@ -23,6 +23,11 @@ class BaseMaskGenerator(ABC):
     """
 
     def __init__(self, acceleration: float = 4.0, **kwargs: Any) -> None:
+        if kwargs:
+            raise TypeError(
+                f"Unexpected keyword argument(s) for {self.__class__.__name__}: "
+                f"{', '.join(sorted(kwargs.keys()))}"
+            )
         if acceleration < 1.0:
             raise ValueError(f"acceleration must be >= 1.0, got {acceleration}")
         self.acceleration = float(acceleration)
@@ -187,6 +192,8 @@ class PoissonDiscMaskGenerator(BaseMaskGenerator):
         **kwargs: Any,
     ) -> None:
         super().__init__(acceleration=acceleration, **kwargs)
+        if max_iter < 1:
+            raise ValueError(f"max_iter must be >= 1, got {max_iter}")
         self.calib_size = calib_size
         self.calib_fraction = calib_fraction
         self.crop_corners = crop_corners
@@ -244,9 +251,20 @@ class PoissonDiscMaskGenerator(BaseMaskGenerator):
         ch = min(ch, h)
         cw = min(cw, w)
 
+        # Magic constants:
+        # - 0.6 (ACS budget limit): Caps calibration region to at most 60% of total
+        #   target samples so outer k-space retains at least 40% of the sampling budget.
+        # - 0.5 (Nyquist grid bound): Minimum exclusion radius in pixels; below 0.5,
+        #   adjacent discrete grid coordinates are never excluded.
+        # - max(h, w) / 2.0 (FOV half-span bound): Upper radius search bound ensuring
+        #   the binary search interval brackets any target acceleration factor R >= 1.0.
+        max_calib_ratio = 0.6
+        min_radius = 0.5
+        max_radius = max(h, w) / 2.0
+
         # Ensure calibration region does not exceed target sample budget
-        if ch * cw > target_samples * 0.6:
-            scale = np.sqrt((target_samples * 0.6) / (ch * cw))
+        if ch * cw > target_samples * max_calib_ratio:
+            scale = np.sqrt((target_samples * max_calib_ratio) / (ch * cw))
             ch = max(1, int(ch * scale))
             cw = max(1, int(cw * scale))
 
@@ -261,19 +279,22 @@ class PoissonDiscMaskGenerator(BaseMaskGenerator):
         r_unclipped = np.sqrt(ny**2 + nx**2)
         r_norm = np.clip(r_unclipped, 0.0, 1.0)
 
-        r_low = 0.5
-        r_high = max(h, w) / 2.0
+        r_low = min_radius
+        r_high = max_radius
         best_mask: np.ndarray | None = None
         best_diff = float("inf")
 
-        for it in range(self.max_iter):
+        # Fix random state once before binary search to maintain monotonicity across iterations
+        rng = np.random.default_rng(seed)
+        raw_noise = rng.uniform(0.0, 1.0, size=(h, w))
+
+        for _ in range(self.max_iter):
             r_mid = (r_low + r_high) / 2.0
             r_map = r_mid * (1.0 + 2.0 * (r_norm**self.power))
             r_map[c_y0:c_y1, c_x0:c_x1] = 0.0
 
-            rng = np.random.default_rng(seed + it * 1000 if seed is not None else None)
-            weight = 1.0 / np.maximum(r_map, 0.5) ** 2
-            keys = rng.uniform(0.0, 1.0, size=(h, w)) / weight
+            weight = 1.0 / np.maximum(r_map, min_radius) ** 2
+            keys = raw_noise / weight
             keys[c_y0:c_y1, c_x0:c_x1] = 0.0
 
             flat_idx = np.argsort(keys.ravel())

@@ -6,12 +6,13 @@ import glob
 import hashlib
 import json
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
+from omegaconf import DictConfig, OmegaConf
 
 from cfm.core.dataset import BaseComplexDataset
 from cfm.core.registry import DATASETS, MASKS
@@ -142,10 +143,7 @@ class SKMTEADataset(BaseComplexDataset):
         num_slices: int = 1,
         mode: str = "generation",
         acceleration: int | float = 4,
-        mask: BaseMaskGenerator | dict[str, Any] | str | None = None,
-        mask_type: str | None = None,
-        mask_generator: BaseMaskGenerator | None = None,
-        mask_kwargs: dict[str, Any] | None = None,
+        mask: BaseMaskGenerator | Mapping[str, Any] | DictConfig | str | None = None,
         mask_seed: int | None = None,
         pre_transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
         post_transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
@@ -183,26 +181,32 @@ class SKMTEADataset(BaseComplexDataset):
         self.cache_dir = str(cache_dir)
 
         # Resolve mask generator from MASKS registry
-        extra_kwargs = dict(mask_kwargs or {})
-        if isinstance(mask_generator, BaseMaskGenerator):
-            self.mask_generator: BaseMaskGenerator = mask_generator
-        elif isinstance(mask, BaseMaskGenerator):
+        if isinstance(mask, BaseMaskGenerator):
             self.mask_generator = mask
         elif isinstance(mask, str):
-            self.mask_generator = MASKS.build(mask, acceleration=acceleration, **extra_kwargs)
-        elif mask_type is not None:
-            self.mask_generator = MASKS.build(mask_type, acceleration=acceleration, **extra_kwargs)
-        elif mask is not None and (isinstance(mask, dict) or hasattr(mask, "get")):
-            m_dict = dict(mask)
-            m_name = m_dict.pop("name", m_dict.pop("type", "cartesian"))
+            self.mask_generator = MASKS.build(mask, acceleration=acceleration)
+        elif isinstance(mask, (Mapping, DictConfig)) or (mask is not None and hasattr(mask, "get")):
+            if isinstance(mask, DictConfig):
+                m_dict = dict(OmegaConf.to_container(mask, resolve=True))  # type: ignore[arg-type]
+            else:
+                m_dict = dict(mask)
+            if "name" in m_dict:
+                m_name = str(m_dict.pop("name"))
+            elif "type" in m_dict:
+                m_name = str(m_dict.pop("type"))
+            else:
+                m_name = "cartesian"
             m_accel = m_dict.pop("acceleration", acceleration)
             self.mask_generator = MASKS.build(m_name, acceleration=m_accel, **m_dict)
+        elif mask is None:
+            self.mask_generator = MASKS.build("cartesian", acceleration=acceleration)
         else:
-            self.mask_generator = MASKS.build(
-                "cartesian", acceleration=acceleration, **extra_kwargs
-            )
+            raise TypeError(f"Unsupported mask specification type: {type(mask)}")
 
-        self.acceleration: float = getattr(self.mask_generator, "acceleration", float(acceleration))
+        acc = getattr(self.mask_generator, "acceleration", acceleration)
+        self.acceleration: int | float = (
+            int(acc) if isinstance(acc, (int, float)) and float(acc).is_integer() else float(acc)
+        )
 
         # File discovery
         if files_pattern is not None:
@@ -282,7 +286,9 @@ class SKMTEADataset(BaseComplexDataset):
 
     def _mask_seed(self, f_path: str, slice_idx: int) -> int:
         """Compute deterministic seed from file path, slice index, and acceleration."""
-        key = f"{os.path.basename(f_path)}:{slice_idx}:{self.acceleration}"
+        acc = self.acceleration
+        acc_key = int(acc) if isinstance(acc, (int, float)) and float(acc).is_integer() else acc
+        key = f"{os.path.basename(f_path)}:{slice_idx}:{acc_key}"
         if self.mask_seed is not None:
             key = f"{key}:{self.mask_seed}"
         return int.from_bytes(hashlib.sha256(key.encode()).digest()[:4], "big")
