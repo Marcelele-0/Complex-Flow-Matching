@@ -28,6 +28,7 @@ def test_skm_tea_dataset_loading(dummy_skm_tea_dir) -> None:
     assert len(dataset) == 4
 
     sample = dataset[0]
+    assert isinstance(sample, torch.Tensor)
     # Without pipeline, expect a raw complex tensor [1, H, W]
     assert sample.shape == (1, 32, 32)
     assert sample.dtype == torch.complex64
@@ -39,6 +40,7 @@ def test_skm_tea_dataset_with_transforms(dummy_skm_tea_dir) -> None:
     dataset = SKMTEADataset(data_dir=dummy_skm_tea_dir, transform=pipeline)
 
     sample = dataset[0]
+    assert isinstance(sample, torch.Tensor)
     # With pipeline, expect a cylinder [3, H, W] float32
     assert sample.shape == (3, 32, 32)
     assert sample.dtype == torch.float32
@@ -53,7 +55,10 @@ def test_skm_tea_dataset_num_slices_1_matches_default(dummy_skm_tea_dir) -> None
     assert len(dataset_default) == len(dataset_explicit)
 
     for idx in range(len(dataset_default)):
-        torch.testing.assert_close(dataset_explicit[idx], dataset_default[idx])
+        val_exp = dataset_explicit[idx]
+        val_def = dataset_default[idx]
+        assert isinstance(val_exp, torch.Tensor) and isinstance(val_def, torch.Tensor)
+        torch.testing.assert_close(val_exp, val_def)
 
 
 def test_skm_tea_dataset_num_slices_3_shape(dummy_skm_tea_dir) -> None:
@@ -63,6 +68,7 @@ def test_skm_tea_dataset_num_slices_3_shape(dummy_skm_tea_dir) -> None:
     assert len(dataset_raw) == len(SKMTEADataset(data_dir=dummy_skm_tea_dir))
 
     sample_raw = dataset_raw[0]
+    assert isinstance(sample_raw, torch.Tensor)
     assert sample_raw.shape == (3, 1, 32, 32)
     assert sample_raw.dtype == torch.complex64
 
@@ -71,6 +77,7 @@ def test_skm_tea_dataset_num_slices_3_shape(dummy_skm_tea_dir) -> None:
         data_dir=dummy_skm_tea_dir, transform=pipeline, num_slices=3
     )
     sample_transformed = dataset_transformed[0]
+    assert isinstance(sample_transformed, torch.Tensor)
     assert sample_transformed.shape == (3, 3, 32, 32)
     assert sample_transformed.dtype == torch.float32
 
@@ -136,6 +143,7 @@ def test_reconstruction_energy_inequality(dummy_skm_tea_dir_large) -> None:
 def test_reconstruction_sample_shape_and_keys(dummy_skm_tea_dir_large) -> None:
     dataset = _reconstruction_dataset(dummy_skm_tea_dir_large)
     sample = dataset[0]
+    assert isinstance(sample, dict)
 
     assert set(sample.keys()) == {"input", "mask", "target"}
     assert sample["input"].shape == (3, 48, 128)
@@ -148,6 +156,7 @@ def test_reconstruction_sample_shape_and_keys(dummy_skm_tea_dir_large) -> None:
 def test_reconstruction_mask_deterministic_across_instances(dummy_skm_tea_dir_large) -> None:
     sample_a = _reconstruction_dataset(dummy_skm_tea_dir_large)[0]
     sample_b = _reconstruction_dataset(dummy_skm_tea_dir_large)[0]
+    assert isinstance(sample_a, dict) and isinstance(sample_b, dict)
 
     torch.testing.assert_close(sample_a["mask"], sample_b["mask"])
 
@@ -161,7 +170,9 @@ def test_reconstruction_mask_is_1d_along_phase_encode_axis(dummy_skm_tea_dir_lar
     """Trajectory is 1D Cartesian phase-encoding: every row shares the same
     pattern of sampled columns, not an independently-sampled 2D mask."""
     dataset = _reconstruction_dataset(dummy_skm_tea_dir_large)
-    mask = dataset[0]["mask"][0]  # [H, W]
+    sample = dataset[0]
+    assert isinstance(sample, dict)
+    mask = sample["mask"][0]  # [H, W]
 
     assert torch.all(mask == mask[0:1, :])
 
@@ -172,8 +183,12 @@ def test_reconstruction_acceleration_8x_yields_sparser_mask(dummy_skm_tea_dir_la
     dataset_4x = _reconstruction_dataset(dummy_skm_tea_dir_large, acceleration=4)
     dataset_8x = _reconstruction_dataset(dummy_skm_tea_dir_large, acceleration=8)
 
-    kept_4x = dataset_4x[0]["mask"].sum()
-    kept_8x = dataset_8x[0]["mask"].sum()
+    sample_4x = dataset_4x[0]
+    sample_8x = dataset_8x[0]
+    assert isinstance(sample_4x, dict) and isinstance(sample_8x, dict)
+
+    kept_4x = sample_4x["mask"].sum()
+    kept_8x = sample_8x["mask"].sum()
 
     assert kept_8x < kept_4x
 

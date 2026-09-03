@@ -1,45 +1,153 @@
+"""Streaming HDF5 dataset implementation for SKM-TEA MRI knee cohort."""
+
+from __future__ import annotations
+
 import glob
 import hashlib
+import json
 import os
-from typing import Callable, Optional
+from collections.abc import Callable
+from pathlib import Path
 
-import h5py
 import numpy as np
 import torch
-from torch.utils.data import Dataset
+
+from cfm.core.dataset import BaseComplexDataset
+from cfm.core.registry import DATASETS
+from cfm.data.hdf5_manager import WorkerHDF5Manager
 
 
-class SKMTEADataset(Dataset):
+def _process_slice_array(
+    raw: np.ndarray,
+    echo_idx: int | str = 0,
+    coil_idx: int | str = 0,
+) -> torch.Tensor:
+    """Process raw numpy slice array into a complex PyTorch tensor.
+
+    Args:
+        raw: Array of shape [H, W], [H, W, E], or [H, W, E, C].
+        echo_idx: Echo selector (int index, 'both', 'all', 'average', or 'mean').
+        coil_idx: Coil selector (int index, 'rss', 'root_sum_squares', or 'all').
+
+    Returns:
+        Complex tensor of shape [C_total, H, W] with dtype torch.complex64.
     """
-    Lazy-loading dataset for the SKM-TEA dataset.
-    Opens HDF5 files and applies the transformation pipeline on the fly.
+    # Handle compound complex dtypes if present
+    if raw.dtype.names is not None:
+        if "r" in raw.dtype.names and "i" in raw.dtype.names:
+            raw = raw["r"] + 1j * raw["i"]
+        elif "real" in raw.dtype.names and "imag" in raw.dtype.names:
+            raw = raw["real"] + 1j * raw["imag"]
 
-    With num_slices > 1, each sample is a [num_slices, C, H, W] window of
-    neighboring slices from the same volume (slice x channel x H x W),
-    transformed per-slice, stacked, then optionally passed through
-    window_transform (e.g. WindowAmplitudeNormalize, which needs to see the
-    whole window at once and so cannot run per-slice). Volume edges are
-    reflect-padded without duplicating the boundary slice
-    (np.pad(mode="reflect")), so __len__ is unaffected by num_slices.
+    raw = np.nan_to_num(raw)
 
-    Note: the window's center slice is NOT identical to what num_slices=1
-    returns for the same idx whenever window_transform rescales relative to
-    the whole window (e.g. WindowAmplitudeNormalize divides every slice by
-    the window's amplitude maximum, not its own) - only the raw read before
-    any such window-level rescaling is shared with the num_slices=1 path.
+    # Standardize dimensions to [H, W, E, C]
+    if raw.ndim == 2:
+        raw = raw[:, :, np.newaxis, np.newaxis]
+    elif raw.ndim == 3:
+        raw = raw[:, :, :, np.newaxis]
+    elif raw.ndim == 4:
+        pass
+    else:
+        raise ValueError(f"Unexpected slice dimensionality: {raw.ndim}, shape: {raw.shape}")
+
+    h, w, num_echoes, num_coils = raw.shape
+
+    # 1. Echo Selection / Combination
+    if isinstance(echo_idx, int):
+        if echo_idx < 0 or echo_idx >= num_echoes:
+            raise IndexError(f"echo_idx={echo_idx} is out of bounds for {num_echoes} echoes.")
+        raw = raw[:, :, echo_idx : echo_idx + 1, :]
+    elif str(echo_idx).lower() in ("both", "all"):
+        pass
+    elif str(echo_idx).lower() in ("average", "mean"):
+        raw = np.mean(raw, axis=2, keepdims=True)
+    else:
+        raise ValueError(
+            f"Unsupported echo_idx={echo_idx!r}. Expected int, 'both', 'all', 'average', or 'mean'."
+        )
+
+    # 2. Coil Selection / Combination
+    if isinstance(coil_idx, int):
+        if coil_idx < 0 or coil_idx >= num_coils:
+            raise IndexError(f"coil_idx={coil_idx} is out of bounds for {num_coils} coils.")
+        raw = raw[:, :, :, coil_idx : coil_idx + 1]
+    elif str(coil_idx).lower() in ("rss", "root_sum_squares"):
+        # Root-sum-of-squares across coils
+        rss = np.sqrt(np.sum(np.abs(raw) ** 2, axis=3, keepdims=True))
+        raw = rss.astype(raw.dtype)
+    elif str(coil_idx).lower() == "all":
+        pass
+    else:
+        raise ValueError(
+            f"Unsupported coil_idx={coil_idx!r}. Expected int, 'rss', or 'all'."
+        )
+
+    # raw is now [H, W, E_out, C_out] -> transpose to [E_out, C_out, H, W]
+    raw = np.transpose(raw, (2, 3, 0, 1))
+    # Flatten channels: [E_out * C_out, H, W]
+    raw = raw.reshape(-1, h, w)
+
+    return torch.from_numpy(raw).to(torch.complex64)
+
+
+def _compute_index_hash(files: list[str]) -> str:
+    """Compute deterministic SHA256 hash from sorted file paths and metadata."""
+    hasher = hashlib.sha256()
+    for f_path in sorted(files):
+        try:
+            stat = os.stat(f_path)
+            hasher.update(
+                f"{os.path.abspath(f_path)}:{stat.st_mtime_ns}:{stat.st_size}".encode()
+            )
+        except OSError:
+            hasher.update(f"{os.path.abspath(f_path)}".encode())
+    return hasher.hexdigest()[:16]
+
+
+@DATASETS.register("skm_tea")
+@DATASETS.register("skmtea")
+@DATASETS.register("skmtea_streaming")
+@DATASETS.register("skmtea_full")
+class SKMTEADataset(BaseComplexDataset):
+    """High-throughput streaming dataset for SKM-TEA knee MRI cohort.
+
+    Supports persistent index caching, worker-safe HDF5 handles, multi-echo,
+    multi-coil, and contiguous 2.5D multi-slice window streaming.
+
+    Args:
+        data_dir: Path to directory containing HDF5 files.
+        transform: Optional per-slice transform callable.
+        window_transform: Optional multi-slice window transform callable.
+        num_slices: Number of contiguous slices in window (must be positive odd).
+        mode: Operation mode ('generation' or 'reconstruction').
+        acceleration: Undersampling acceleration factor (e.g. 4 or 8).
+        mask_seed: Optional fixed seed for mask generation reproducibility.
+        pre_transform: Optional transform before undersampling.
+        post_transform: Optional transform after undersampling.
+        echo_idx: Echo selector (int index, 'both', 'all', 'average', or 'mean').
+        coil_idx: Coil selector (int index, 'rss', or 'all').
+        use_cache: Whether to use persistent disk index caching.
+        cache_dir: Directory to store index cache files.
+        files_pattern: Optional glob pattern relative to data_dir.
     """
 
     def __init__(
         self,
         data_dir: str,
-        transform: Optional[Callable] = None,
-        window_transform: Optional[Callable] = None,
+        transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
+        window_transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
         num_slices: int = 1,
         mode: str = "generation",
         acceleration: int = 4,
-        mask_seed: Optional[int] = None,
-        pre_transform: Optional[Callable] = None,
-        post_transform: Optional[Callable] = None,
+        mask_seed: int | None = None,
+        pre_transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
+        post_transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
+        echo_idx: int | str = 0,
+        coil_idx: int | str = 0,
+        use_cache: bool = True,
+        cache_dir: str | Path = ".cache",
+        files_pattern: str | None = None,
     ) -> None:
         if num_slices <= 0 or num_slices % 2 == 0:
             raise ValueError(f"num_slices must be a positive odd integer, got {num_slices}")
@@ -49,18 +157,13 @@ class SKMTEADataset(Dataset):
 
         if mode == "reconstruction" and num_slices != 1:
             raise ValueError(
-                f"mode='reconstruction' currently supports num_slices=1 only, got {num_slices}. "
-                "Multi-slice reconstruction needs a decision on whether the whole window "
-                "shares one mask (one acquisition) or gets independent masks; out of scope here."
+                f"mode='reconstruction' currently supports num_slices=1 only, got {num_slices}."
             )
 
         if acceleration < 1:
             raise ValueError(f"acceleration must be >= 1, got {acceleration}")
 
-        self.files = glob.glob(f"{data_dir}/files_recon_calib-24/*.h5")
-        if not self.files:
-            raise FileNotFoundError(f"No .h5 files found in: {data_dir}")
-
+        self.data_dir = str(data_dir)
         self.transform = transform
         self.window_transform = window_transform
         self.num_slices = num_slices
@@ -69,23 +172,81 @@ class SKMTEADataset(Dataset):
         self.mask_seed = mask_seed
         self.pre_transform = pre_transform
         self.post_transform = post_transform
-        self.slice_map = []
+        self.echo_idx = echo_idx
+        self.coil_idx = coil_idx
+        self.use_cache = use_cache
+        self.cache_dir = str(cache_dir)
+
+        # File discovery
+        if files_pattern is not None:
+            self.files = sorted(glob.glob(os.path.join(self.data_dir, files_pattern)))
+        else:
+            self.files = sorted(glob.glob(f"{self.data_dir}/files_recon_calib-24/*.h5"))
+            if not self.files:
+                self.files = sorted(glob.glob(f"{self.data_dir}/*.h5"))
+
+        if not self.files:
+            raise FileNotFoundError(f"No .h5 files found in: {self.data_dir}")
+
+        self.slice_map: list[tuple[str, int]] = []
         self._volume_depths: dict[str, int] = {}
 
-        # Create a map of pointers to individual image slices
-        for f_path in self.files:
-            with h5py.File(f_path, "r") as f:
-                depth = f["target"].shape[0]
+        self._load_or_build_index()
+
+    def _load_or_build_index(self) -> None:
+        """Load scan index from persistent cache or build from HDF5 volume headers."""
+        cache_hash = _compute_index_hash(self.files)
+        cache_file = os.path.join(self.cache_dir, f"skmtea_index_{cache_hash}.json")
+
+        loaded = False
+        if self.use_cache and os.path.isfile(cache_file):
+            try:
+                with open(cache_file, encoding="utf-8") as fh:
+                    payload = json.load(fh)
+                volume_depths: dict[str, int] = payload["volume_depths"]
+                slice_map_raw: list[list[str | int]] = payload["slice_map"]
+
+                # Verify all files match
+                if set(volume_depths.keys()) == set(self.files):
+                    self._volume_depths = volume_depths
+                    self.slice_map = [(str(p), int(idx)) for p, idx in slice_map_raw]
+                    loaded = True
+            except Exception:
+                loaded = False
+
+        if not loaded:
+            self.slice_map = []
+            self._volume_depths = {}
+            manager = WorkerHDF5Manager.get_instance()
+            for f_path in self.files:
+                handle = manager.get_handle(f_path)
+                depth = int(handle["target"].shape[0])
                 self._volume_depths[f_path] = depth
                 for i in range(depth):
                     self.slice_map.append((f_path, i))
 
+            if self.use_cache:
+                try:
+                    os.makedirs(self.cache_dir, exist_ok=True)
+                    tmp_cache = f"{cache_file}.tmp.{os.getpid()}"
+                    payload = {
+                        "files": self.files,
+                        "volume_depths": self._volume_depths,
+                        "slice_map": self.slice_map,
+                    }
+                    with open(tmp_cache, "w", encoding="utf-8") as fh:
+                        json.dump(payload, fh)
+                    os.replace(tmp_cache, cache_file)
+                except Exception:
+                    pass
+
     def __len__(self) -> int:
+        """Total number of slices across all volumes in dataset."""
         return len(self.slice_map)
 
     @staticmethod
     def _reflect_index(i: int, depth: int) -> int:
-        """Reflects an out-of-range slice index without duplicating the boundary."""
+        """Reflect out-of-range slice index without duplicating boundary."""
         if depth <= 1:
             return 0
         while i < 0 or i > depth - 1:
@@ -93,18 +254,14 @@ class SKMTEADataset(Dataset):
         return i
 
     def _mask_seed(self, f_path: str, slice_idx: int) -> int:
-        """Deterministic seed from (file, slice, acceleration[, mask_seed]), stable
-        across processes/workers (unlike Python's randomized hash())."""
+        """Compute deterministic seed from file path, slice index, and acceleration."""
         key = f"{os.path.basename(f_path)}:{slice_idx}:{self.acceleration}"
         if self.mask_seed is not None:
             key = f"{key}:{self.mask_seed}"
         return int.from_bytes(hashlib.sha256(key.encode()).digest()[:4], "big")
 
     def _undersampling_mask(self, f_path: str, slice_idx: int, h: int, w: int) -> torch.Tensor:
-        """Builds a deterministic 1D Cartesian phase-encoding mask along the last
-        (Nz) axis: a fixed center ACS region is always kept, and the remaining
-        lines needed to reach `self.acceleration` are chosen uniformly at random
-        with a per-(file, slice) seed, then tiled to [1, H, W]."""
+        """Construct deterministic 1D Cartesian phase-encoding mask [1, H, W]."""
         rng = np.random.default_rng(self._mask_seed(f_path, slice_idx))
 
         num_center_lines = min(24, w)
@@ -125,15 +282,23 @@ class SKMTEADataset(Dataset):
         mask = np.tile(line_mask, (h, 1))
         return torch.from_numpy(mask).unsqueeze(0)
 
-    def __getitem__(self, idx: int) -> torch.Tensor:
+    def __getitem__(self, idx: int) -> torch.Tensor | dict[str, torch.Tensor]:
+        """Retrieve slice or multi-slice window by index.
+
+        Args:
+            idx: Slice index in flat dataset map.
+
+        Returns:
+            In generation mode: state tensor [C, H, W] or [S, C, H, W].
+            In reconstruction mode: dict with 'input', 'mask', and 'target' tensors.
+        """
         f_path, slice_idx = self.slice_map[idx]
+        manager = WorkerHDF5Manager.get_instance()
+        handle = manager.get_handle(f_path)
 
         if self.mode == "reconstruction":
-            with h5py.File(f_path, "r") as f:
-                img_np = f["target"][slice_idx, :, :, 0, 0]
-
-            img_np = np.nan_to_num(img_np)
-            img_complex = torch.from_numpy(img_np).to(torch.complex64).unsqueeze(0)
+            raw_slice = handle["target"][slice_idx]
+            img_complex = _process_slice_array(raw_slice, self.echo_idx, self.coil_idx)
 
             if self.pre_transform is not None:
                 img_complex = self.pre_transform(img_complex)
@@ -145,9 +310,7 @@ class SKMTEADataset(Dataset):
             y_under = y * mask
             x_alias = torch.fft.ifft2(torch.fft.ifftshift(y_under, dim=(-2, -1)), norm="ortho")
 
-            # Shared scalar so input/target stay on the same amplitude scale;
-            # AmplitudeNormalize would normalize each independently and break
-            # the y_under = mask * fft(target) relationship between the pair.
+            # Shared scalar so input/target stay on the same amplitude scale
             scale = img_complex.abs().max().clamp(min=1e-8)
             x_gt = img_complex / scale
             x_alias = x_alias / scale
@@ -159,42 +322,28 @@ class SKMTEADataset(Dataset):
             return {"input": x_alias, "mask": mask, "target": x_gt}
 
         if self.num_slices == 1:
-            with h5py.File(f_path, "r") as f:
-                # target shape: (Nx, Ny, Nz, echoes, coils)
-                # Select specific slice, first echo, first coil
-                img_np = f["target"][slice_idx, :, :, 0, 0]
+            raw_slice = handle["target"][slice_idx]
+            img_complex = _process_slice_array(raw_slice, self.echo_idx, self.coil_idx)
 
-            # Protect against NaNs from MRI scans
-            img_np = np.nan_to_num(img_np)
-
-            # Convert to PyTorch complex tensor
-            img_complex = torch.from_numpy(img_np).to(torch.complex64)
-
-            # Force shape [1, H, W] for transformations
-            img_complex = img_complex.unsqueeze(0)
-
-            # Apply the pipeline
             if self.transform is not None:
                 img_complex = self.transform(img_complex)
 
             return img_complex
 
+        # 2.5D Multi-slice window: read contiguous memory block [lo:hi] once
         depth = self._volume_depths[f_path]
         half = self.num_slices // 2
         indices = [
             self._reflect_index(slice_idx + offset, depth) for offset in range(-half, half + 1)
         ]
 
-        # Reflected indices aren't monotonic at edges (e.g. [1, 0, 1]), so read
-        # the covering contiguous block once and index into it by offset.
         lo, hi = min(indices), max(indices) + 1
-        with h5py.File(f_path, "r") as f:
-            block = f["target"][lo:hi, :, :, 0, 0]
+        raw_block = handle["target"][lo:hi]
 
         slices = []
         for i in indices:
-            img_np = np.nan_to_num(block[i - lo])
-            img_complex = torch.from_numpy(img_np).to(torch.complex64).unsqueeze(0)
+            raw_slice = raw_block[i - lo]
+            img_complex = _process_slice_array(raw_slice, self.echo_idx, self.coil_idx)
 
             if self.transform is not None:
                 img_complex = self.transform(img_complex)

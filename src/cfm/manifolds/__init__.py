@@ -8,11 +8,14 @@ from __future__ import annotations
 
 from omegaconf import DictConfig
 
+from cfm.core.manifold import BaseManifold
+from cfm.core.registry import MANIFOLDS
 from cfm.manifolds.base import Manifold
 from cfm.manifolds.cylindrical import CylindricalManifold
 from cfm.manifolds.euclidean import EuclideanManifold
 
 __all__ = [
+    "BaseManifold",
     "CylindricalManifold",
     "EuclideanManifold",
     "Manifold",
@@ -20,8 +23,10 @@ __all__ = [
 ]
 
 
-def build_manifold(cfg: DictConfig) -> Manifold:
+def build_manifold(cfg: DictConfig) -> BaseManifold:
     """Instantiate the geometry named by ``cfg.manifold.name``.
+
+    Uses the MANIFOLDS registry to dynamically resolve and build the manifold instance.
 
     Loss hyper-parameters are read from ``cfg.training.loss`` rather than from
     the manifold group, so the existing overrides (``training.loss.lambda_phase``,
@@ -37,7 +42,7 @@ def build_manifold(cfg: DictConfig) -> Manifold:
         a config predating the manifold group behaves as it always did.
 
     Raises:
-        ValueError: If ``cfg.manifold.name`` is not a known geometry.
+        ValueError: If ``cfg.manifold.name`` is not a known geometry in MANIFOLDS.
     """
     manifold_cfg = cfg.get("manifold", {}) or {}
     name = manifold_cfg.get("name", "cylindrical")
@@ -47,9 +52,16 @@ def build_manifold(cfg: DictConfig) -> Manifold:
     lambda_hf = loss_cfg.get("lambda_hf", 0.0)
     hf_boost_factor = loss_cfg.get("hf_boost_factor", 4.0)
 
+    if not MANIFOLDS.contains(name):
+        raise ValueError(
+            f"Unknown manifold name specified in config: {name}. "
+            f"Expected one of {MANIFOLDS.list()}."
+        )
+
     match name:
         case "cylindrical":
-            manifold: Manifold = CylindricalManifold(
+            manifold: BaseManifold = MANIFOLDS.build(
+                "cylindrical",
                 amp_loss_type=loss_cfg.get("amp_loss_type", "l1"),
                 phase_loss_type=loss_cfg.get("phase_loss_type", "l1"),
                 lambda_phase=loss_cfg.get("lambda_phase", 1.0),
@@ -58,7 +70,8 @@ def build_manifold(cfg: DictConfig) -> Manifold:
             )
 
         case "euclidean":
-            manifold = EuclideanManifold(
+            manifold = MANIFOLDS.build(
+                "euclidean",
                 noise_prior=manifold_cfg.get("noise_prior", "uniform"),
                 loss_type=loss_cfg.get("vel_loss_type", "l1"),
                 lambda_hf=lambda_hf,
@@ -66,10 +79,7 @@ def build_manifold(cfg: DictConfig) -> Manifold:
             )
 
         case _:
-            raise ValueError(
-                f"Unknown manifold name specified in config: {name}. "
-                f"Expected one of ['cylindrical', 'euclidean']."
-            )
+            manifold = MANIFOLDS.build(name, **manifold_cfg)
 
     print(f"Using manifold: {manifold.name} ({manifold.state_channels}-channel state)")
     return manifold

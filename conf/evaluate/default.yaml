@@ -62,3 +62,7 @@ mask:
   # Fraction of phase-encode lines always kept at the k-space center. If this
   # block alone exceeds the budget, the center wins and the achieved R is lower.
   center_fraction: 0.08
+
+# Enable DC projection during ODE integration for posterior sampling.
+# When true, measured k-space lines are enforced after each solver step.
+use_dc_projection: true

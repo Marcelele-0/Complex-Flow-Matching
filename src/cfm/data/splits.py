@@ -42,22 +42,28 @@ def load_split_file_names(
     if split is None:
         return None
 
-    manifest = os.path.join(data_dir, annotations_subdir, f"{split}.json")
-    if not os.path.isfile(manifest):
-        available = sorted(glob.glob(os.path.join(data_dir, annotations_subdir, "*.json")))
-        names = [os.path.basename(p) for p in available] or "none"
-        raise FileNotFoundError(
-            f"No manifest for split={split!r} at {manifest}. Available: {names}. "
-            f"Use {config_key}=null to evaluate every file in data_dir."
-        )
+    all_file_names = set()
+    splits = [s.strip() for s in split.split(",")]
 
-    with open(manifest, encoding="utf-8") as fh:
-        payload = json.load(fh)
+    for s in splits:
+        manifest = os.path.join(data_dir, annotations_subdir, f"{s}.json")
+        if not os.path.isfile(manifest):
+            available = sorted(glob.glob(os.path.join(data_dir, annotations_subdir, "*.json")))
+            names = [os.path.basename(p) for p in available] or "none"
+            raise FileNotFoundError(
+                f"No manifest for split={s!r} at {manifest}. Available: {names}. "
+                f"Use {config_key}=null to evaluate every file in data_dir."
+            )
 
-    file_names = {os.path.basename(img["file_name"]) for img in payload.get("images", [])}
-    if not file_names:
-        raise ValueError(f"Manifest {manifest} lists no images under 'images'.")
-    return file_names
+        with open(manifest, encoding="utf-8") as fh:
+            payload = json.load(fh)
+
+        file_names = {os.path.basename(img["file_name"]) for img in payload.get("images", [])}
+        if not file_names:
+            raise ValueError(f"Manifest {manifest} lists no images under 'images'.")
+        all_file_names.update(file_names)
+
+    return all_file_names
 
 
 def select_indices(

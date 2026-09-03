@@ -319,7 +319,7 @@ def data_consistency_error(
 
     if pred.dim() not in (3, 4):
         raise ValueError(
-            "data_consistency_error expects [B, C, H, W] or [B, H, W], " f"got {tuple(pred.shape)}"
+            f"data_consistency_error expects [B, C, H, W] or [B, H, W], got {tuple(pred.shape)}"
         )
 
     try:

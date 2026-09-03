@@ -3,18 +3,29 @@ import math
 import torch
 import torch.nn as nn
 
+from cfm.core.registry import MODELS
+
 
 class SinusoidalPositionEmbeddings(nn.Module):
-    """
-    Translates a time scalar t into a high-dimensional feature vector (embedding).
-    This allows the network to "understand" the progression of time during generation.
+    """Sinusoidal time position embedding.
+
+    Args:
+        dim: Embedding dimension.
     """
 
-    def __init__(self, dim: int):
+    def __init__(self, dim: int) -> None:
         super().__init__()
         self.dim = dim
 
     def forward(self, time: torch.Tensor) -> torch.Tensor:
+        """Embed scalar diffusion time into feature vectors.
+
+        Args:
+            time: Diffusion time values [B].
+
+        Returns:
+            Time embeddings [B, dim].
+        """
         device = time.device
         half_dim = self.dim // 2
         inv_freq_scale = math.log(10000) / (half_dim - 1)
@@ -25,12 +36,15 @@ class SinusoidalPositionEmbeddings(nn.Module):
 
 
 class TimeConditionedBlock(nn.Module):
-    """
-    Residual Block that takes an image spatial map
-    and injects information about the current time step.
+    """Residual convolutional block conditioned on diffusion time embedding.
+
+    Args:
+        in_channels: Input feature channels.
+        out_channels: Output feature channels.
+        time_emb_dim: Dimension of time embedding vector.
     """
 
-    def __init__(self, in_channels: int, out_channels: int, time_emb_dim: int):
+    def __init__(self, in_channels: int, out_channels: int, time_emb_dim: int) -> None:
         super().__init__()
         self.time_mlp = nn.Sequential(nn.SiLU(), nn.Linear(time_emb_dim, out_channels))
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
@@ -65,27 +79,20 @@ class TimeConditionedBlock(nn.Module):
         return self.silu(h + self.residual(x))
 
 
+@MODELS.register("c_unet")
+@MODELS.register("cylindrical_unet")
 class CylindricalUNet(nn.Module):
-    """
-    U-Net for flow matching on complex-valued MRI.
-
-    The trunk is geometry-agnostic: only ``in_channels`` records which
-    representation is being consumed, so the cylindrical and Euclidean
-    experiments run the same architecture and differ by one convolution's input
-    width. The name is kept for checkpoint and config compatibility.
-
-    Input: [B, in_channels, H, W]
-        cylindrical: 3 channels (Amplitude, p_x, p_y)
-        euclidean:   2 channels (Re, Im)
-    Output: [B, out_channels, H, W] - the velocity field, 2 channels either way.
+    """U-Net architecture for Continuous Flow Matching on complex MRI representations.
 
     Args:
         base_channels: Width of the first feature level.
-        in_channels: Channels of the state, i.e. ``Manifold.state_channels``.
-        out_channels: Channels of the velocity, i.e. ``Manifold.velocity_channels``.
+        in_channels: Channels of input state tensor [B, C_in, H, W].
+        out_channels: Channels of output velocity field [B, C_out, H, W].
     """
 
-    def __init__(self, base_channels: int = 64, in_channels: int = 3, out_channels: int = 2):
+    def __init__(
+        self, base_channels: int = 64, in_channels: int = 3, out_channels: int = 2
+    ) -> None:
         super().__init__()
 
         time_emb_dim = base_channels * 4
@@ -128,10 +135,14 @@ class CylindricalUNet(nn.Module):
         self.init_conv = nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1)
 
     def forward(self, x: torch.Tensor, time: torch.Tensor) -> torch.Tensor:
-        """
+        """Predict velocity field for state at given diffusion time.
+
         Args:
-            x: State tensor from the manifold's transform [B, in_channels, H, W]
-            time: Time scalars for each sample in the batch [B]
+            x: Manifold state tensor [B, in_channels, H, W].
+            time: Diffusion time values [B].
+
+        Returns:
+            Predicted velocity field [B, out_channels, H, W].
         """
         t_emb = self.time_mlp(time)
 

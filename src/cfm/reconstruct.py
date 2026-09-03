@@ -257,7 +257,11 @@ def main(cfg: DictConfig) -> None:
     print(f"Selected target slice: {sample_id} (index {sample_idx})")
 
     # Load target slice [1, C, H, W]
-    x_1 = dataset[sample_idx].unsqueeze(0).to(device)
+    sample_data = dataset[sample_idx]
+    if isinstance(sample_data, dict):
+        x_1 = sample_data["target"].unsqueeze(0).to(device)
+    else:
+        x_1 = sample_data.unsqueeze(0).to(device)
 
     # --- 3. Run Reconstruction ---
     solver = manifold.make_solver(num_steps)

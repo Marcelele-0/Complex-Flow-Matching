@@ -7,8 +7,11 @@ cylindrical and Euclidean experiments are the *same* run with one config value
 changed - same data, same architecture, same optimizer, same schedule.
 """
 
+from __future__ import annotations
+
 import os
 from collections.abc import Callable
+from typing import Any, cast
 
 import hydra
 import torch
@@ -68,11 +71,12 @@ def main(cfg: DictConfig) -> None:
         print("Weights & Biases logging enabled.")
         output_dir = cfg.get("paths", {}).get("output_dir", ".")
         os.makedirs(output_dir, exist_ok=True)
+        config_dict = cast(dict[str, Any], OmegaConf.to_container(cfg, resolve=True))
         wandb.init(
             project=cfg.get("logging", {}).get("project_name", "Cylindrical-Flow-Matching"),
             name=cfg.get("logging", {}).get("experiment_name", "uniform_noise_run"),
             dir=output_dir,
-            config=OmegaConf.to_container(cfg, resolve=True),
+            config=config_dict,
         )
     else:
         use_wandb = False
@@ -113,11 +117,20 @@ def main(cfg: DictConfig) -> None:
         slice_pipeline = manifold.build_transform(crop_base=16)
         window_pipeline = None
 
+    echo_idx = cfg.get("dataset", {}).get("echo_idx", 0)
+    coil_idx = cfg.get("dataset", {}).get("coil_idx", 0)
+    use_cache = cfg.get("dataset", {}).get("use_cache", True)
+    cache_dir = cfg.get("dataset", {}).get("cache_dir", ".cache")
+
     dataset = SKMTEADataset(
         data_dir=data_dir,
         transform=slice_pipeline,
         window_transform=window_pipeline,
         num_slices=num_slices,
+        echo_idx=echo_idx,
+        coil_idx=coil_idx,
+        use_cache=use_cache,
+        cache_dir=cache_dir,
     )
 
     # Train only on the volumes the split manifest lists, through the same two
@@ -134,13 +147,14 @@ def main(cfg: DictConfig) -> None:
         f"Split '{split}': {len(indices)} of {len(dataset.slice_map)} slices "
         f"from {num_files} volume(s)."
     )
-    if len(indices) < len(dataset.slice_map):
-        dataset = Subset(dataset, indices)
+    dataset_subset: SKMTEADataset | Subset[Any] = (
+        Subset(dataset, indices) if len(indices) < len(dataset.slice_map) else dataset
+    )
 
     batch_size = cfg.get("training", {}).get("batch_size", 4)
     num_workers = cfg.get("training", {}).get("num_workers", 4)
     dataloader = DataLoader(
-        dataset,
+        dataset_subset,
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
@@ -150,7 +164,7 @@ def main(cfg: DictConfig) -> None:
 
     # --- Model Initialization ---
     # Identical trunk for both geometries; only the input width follows the state.
-    model = build_model(
+    model: torch.nn.Module = build_model(
         cfg,
         device,
         in_channels=manifold.state_channels,
@@ -159,7 +173,8 @@ def main(cfg: DictConfig) -> None:
 
     if cfg.get("training", {}).get("compile", True):
         print("Compiling model via Triton (this may take a minute during the first epoch)...")
-        model = torch.compile(model)
+        compiled_model = torch.compile(model)
+        model = cast(torch.nn.Module, compiled_model)
     else:
         print("torch.compile disabled (training.compile=false).")
 
@@ -312,10 +327,8 @@ def main(cfg: DictConfig) -> None:
         if (epoch + 1) % 10 == 0 or (epoch + 1) == epochs:
             checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_epoch_{epoch + 1}.pt")
 
-            # Extract basic weights bypassing _orig_mod wrapper
-            state_dict = (
-                model._orig_mod.state_dict() if hasattr(model, "_orig_mod") else model.state_dict()
-            )
+            unwrapped_model = getattr(model, "_orig_mod", model)
+            state_dict = unwrapped_model.state_dict()
 
             torch.save(state_dict, checkpoint_path)
             print(f"Model saved cleanly to: {checkpoint_path}")

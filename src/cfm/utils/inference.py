@@ -14,6 +14,8 @@ import os
 import torch
 from omegaconf import DictConfig
 
+from cfm.core.registry import MODELS
+
 # Models that train but cannot yet drive an ODE solver, mapped to why.
 SAMPLING_UNSUPPORTED_MODELS = {
     "c_unet_cross_slice": (
@@ -53,8 +55,7 @@ def build_model(
 ) -> torch.nn.Module:
     """Instantiate the architecture named by ``cfg.model.name``, on ``device``.
 
-    Register new architectures here: this is the single place every entry point
-    resolves a model name through.
+    Uses the MODELS registry to resolve and instantiate architectures.
 
     Args:
         cfg: Full Hydra config. Reads ``model.name``, ``model.base_channels`` and,
@@ -74,21 +75,25 @@ def build_model(
         (:func:`load_weights` switches it to eval).
 
     Raises:
-        ValueError: If ``cfg.model.name`` is not a known architecture.
+        ValueError: If ``cfg.model.name`` is not a known architecture in MODELS.
     """
+
     model_name = cfg.get("model", {}).get("name", "c_unet")
     base_channels = cfg.get("model", {}).get("base_channels", 64)
 
-    match model_name:
-        case "c_unet_attention":
-            # Imported lazily so the attention model is only pulled in when asked for.
-            from cfm.models.cylindrical_unet_attention import CylindricalUNetAttention
+    if not MODELS.contains(model_name):
+        raise ValueError(
+            f"Unknown config model_name: {model_name}. Available models: {MODELS.list()}"
+        )
 
+    match model_name:
+        case "c_unet_attention" | "cylindrical_unet_attention":
             channel_mults = cfg.get("model", {}).get("channel_mults", [1, 2, 4, 8, 8])
             use_attention = cfg.get("model", {}).get("use_attention", True)
             attn_heads = cfg.get("model", {}).get("attn_heads", 4)
 
-            model: torch.nn.Module = CylindricalUNetAttention(
+            model: torch.nn.Module = MODELS.build(
+                model_name,
                 base_channels=base_channels,
                 channel_mults=list(channel_mults),
                 use_attention=use_attention,
@@ -98,13 +103,12 @@ def build_model(
             ).to(device)
             print(f"Instantiated CylindricalUNetAttention with base_channels={base_channels}")
 
-        case "c_unet_cross_slice":
-            from cfm.models.cylindrical_unet_cross_slice import CylindricalUNetCrossSlice
-
+        case "c_unet_cross_slice" | "cylindrical_unet_cross_slice":
             channel_mults = cfg.get("model", {}).get("channel_mults", [1, 2, 4, 8, 8])
             attn_heads = cfg.get("model", {}).get("attn_heads", 4)
 
-            model = CylindricalUNetCrossSlice(
+            model = MODELS.build(
+                model_name,
                 base_channels=base_channels,
                 channel_mults=list(channel_mults),
                 attn_heads=attn_heads,
@@ -112,10 +116,9 @@ def build_model(
             ).to(device)
             print(f"Instantiated CylindricalUNetCrossSlice with base_channels={base_channels}")
 
-        case "c_unet":
-            from cfm.models.cylindrical_unet import CylindricalUNet
-
-            model = CylindricalUNet(
+        case "c_unet" | "cylindrical_unet":
+            model = MODELS.build(
+                model_name,
                 base_channels=base_channels,
                 in_channels=in_channels,
                 out_channels=out_channels,
@@ -123,7 +126,14 @@ def build_model(
             print(f"Instantiated standard CylindricalUNet with base_channels={base_channels}")
 
         case _:
-            raise ValueError(f"Unknown config model_name: {model_name}")
+            model_kwargs = {k: v for k, v in cfg.get("model", {}).items() if k != "name"}
+            model = MODELS.build(
+                model_name,
+                in_channels=in_channels,
+                out_channels=out_channels,
+                **model_kwargs,
+            ).to(device)
+            print(f"Instantiated registered model {model_name}")
 
     print(f"  state channels in: {in_channels}   velocity channels out: {out_channels}")
     return model
