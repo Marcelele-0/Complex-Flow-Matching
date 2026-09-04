@@ -31,6 +31,7 @@ class BaseReconstructor(ABC, nn.Module):
         mask: torch.Tensor,
         sensitivity_maps: torch.Tensor | None = None,
         num_steps: int | None = None,
+        **kwargs: Any,
     ) -> torch.Tensor:
         """Reconstruct clean complex MRI image from undersampled k-space data.
 
