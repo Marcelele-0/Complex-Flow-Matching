@@ -24,6 +24,10 @@ mask_threshold: 0.05
 # long as this differs from dataset.split (default 'train') the scored volumes are
 # genuinely held out and the numbers are a generalization result. Setting either
 # to null removes the gate, and no held-out claim can then be made.
+#
+# Ignored when the dataset group declares split: null, which is how a cohort says
+# it ships no manifests at all (fastMRI has no annotations/ directory). Asking for
+# 'test' there could only raise.
 split: test
 
 # Falls back to dataset.data_dir when null.
@@ -46,20 +50,27 @@ run_name: ~
 # Undersampling mask for the data consistency (DC) error, which scores k-space
 # agreement on the sampled trajectories only.
 #
-# The mask is SIMULATED, not read from the scan: SKM-TEA ships fully sampled data
-# and the pipeline loads the reconstructed image, so no acquisition mask exists to
-# load. One mask is drawn per run from evaluate.seed and reused for every slice,
-# so runs are comparable.
+# Empty by default so the whole block is inherited from dataset.mask, and the model
+# is scored under the trajectory it was trained on. Keys set here override the
+# dataset's one at a time, so `evaluate.mask.acceleration=8` moves the operating
+# point while keeping the trained trajectory family. Setting the block to a
+# non-empty literal used to discard dataset.mask wholesale, which silently scored
+# a Poisson-disc model under the Cartesian default.
 #
-# Note the reference k-space is F(ground truth image), not raw scanner k-space:
-# the pipeline normalises amplitude per slice and crops in image space, both of
-# which break correspondence with the acquisition. DC error therefore measures
-# agreement with the reference image on the sampled lines, not fidelity to
-# physical measurements.
-mask:
-  # Target acceleration R; the kept line budget is width // acceleration.
-  # When center_fraction is configured, center lines are truncated to preserve target R.
-  acceleration: 4
+#   acceleration    target R; the kept line budget is width // acceleration
+#   type            trajectory family, e.g. cartesian or poisson_disc
+#   center_fraction fraction of lines always kept at the k-space center; when set,
+#                   center lines are truncated to preserve the target R
+#
+# The mask is SIMULATED for single-coil cohorts: SKM-TEA ships fully sampled data
+# and the pipeline loads the reconstructed image, so no acquisition mask exists to
+# load, and the reference k-space is F(ground truth image) rather than raw scanner
+# k-space. DC error there measures agreement with the reference image on the
+# sampled lines, not fidelity to physical measurements. Multi-coil cohorts return
+# their own masked_kspace and sensitivity maps, and DC enforces those directly.
+#
+# One mask is drawn per slice from a deterministic seed, so runs are comparable.
+mask: {}
 
 # Enable DC projection during ODE integration for posterior sampling.
 # When true, measured k-space lines are enforced after each solver step.

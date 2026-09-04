@@ -17,6 +17,7 @@ from cfm.core.dataset import BaseComplexDataset
 from cfm.core.registry import DATASETS, MASKS
 from cfm.data.hdf5_manager import WorkerHDF5Manager
 from cfm.data.masks import BaseMaskGenerator
+from cfm.utils.fft import fft2c, ifft2c
 
 
 def _process_slice_array(
@@ -312,9 +313,9 @@ class SKMTEADataset(BaseComplexDataset):
             _, h, w = img_complex.shape
             mask = self._undersampling_mask(f_path, slice_idx, h, w)
 
-            y = torch.fft.fftshift(torch.fft.fft2(img_complex, norm="ortho"), dim=(-2, -1))
+            y = fft2c(img_complex)
             y_under = y * mask
-            x_alias = torch.fft.ifft2(torch.fft.ifftshift(y_under, dim=(-2, -1)), norm="ortho")
+            x_alias = ifft2c(y_under)
 
             # Shared scalar so input/target stay on the same amplitude scale
             scale = img_complex.abs().max().clamp(min=1e-8)

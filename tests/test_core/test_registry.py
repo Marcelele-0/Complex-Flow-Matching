@@ -112,6 +112,7 @@ def test_registry_missing_key_error() -> None:
 def test_core_registries_populated() -> None:
     """Verify built-in CFM components are registered in their respective registries."""
     import cfm.data.dataset  # noqa: F401
+    import cfm.data.fastmri  # noqa: F401
     import cfm.data.masks  # noqa: F401
     import cfm.flow.euclidean_solver  # noqa: F401
     import cfm.flow.solver  # noqa: F401
@@ -145,6 +146,8 @@ def test_core_registries_populated() -> None:
     # DATASETS
     assert "skm_tea" in DATASETS
     assert issubclass(cast(type, DATASETS.get("skm_tea")), BaseComplexDataset)
+    assert "fastmri" in DATASETS
+    assert issubclass(cast(type, DATASETS.get("fastmri")), BaseComplexDataset)
 
     # RECONSTRUCTORS
     assert "zero_filled" in RECONSTRUCTORS

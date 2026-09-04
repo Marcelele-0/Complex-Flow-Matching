@@ -10,6 +10,7 @@ import torch.nn as nn
 from cfm.core.manifold import BaseManifold
 from cfm.core.registry import RECONSTRUCTORS
 from cfm.core.solver import BaseODESolver
+from cfm.utils.fft import fft2c, ifft2c
 
 
 class BaseReconstructor(ABC, nn.Module):
@@ -55,12 +56,7 @@ class ZeroFilledReconstructor(BaseReconstructor):
         num_steps: int | None = None,
     ) -> torch.Tensor:
         del mask, num_steps
-        # IFFT from k-space to image space
-        # Assuming centered k-space (fftshifted)
-        x = torch.fft.ifft2(
-            torch.fft.ifftshift(masked_kspace, dim=(-2, -1)),
-            norm="ortho",
-        )
+        x = ifft2c(masked_kspace)
         if sensitivity_maps is not None:
             # Coil combination: sum(S^* * x)
             x = (sensitivity_maps.conj() * x).sum(dim=1, keepdim=True)
@@ -98,8 +94,9 @@ class FlowMatchingReconstructor(BaseReconstructor):
         sensitivity_maps: torch.Tensor | None = None,
         num_steps: int | None = None,
     ) -> torch.Tensor:
-        del sensitivity_maps
-        b, _, h, w = masked_kspace.shape
+        b = masked_kspace.shape[0]
+        h = masked_kspace.shape[-2]
+        w = masked_kspace.shape[-1]
         device = masked_kspace.device
 
         steps = num_steps if num_steps is not None else 50
@@ -120,9 +117,16 @@ class FlowMatchingReconstructor(BaseReconstructor):
         x_complex = self.manifold.to_complex(x_pred_state)
 
         if self.data_consistency:
-            # Apply exact k-space data consistency projection
-            k_pred = torch.fft.fftshift(torch.fft.fft2(x_complex, norm="ortho"), dim=(-2, -1))
-            k_dc = mask * masked_kspace + (1.0 - mask) * k_pred
-            x_complex = torch.fft.ifft2(torch.fft.ifftshift(k_dc, dim=(-2, -1)), norm="ortho")
+            if sensitivity_maps is not None:
+                # Multi-coil DC: project 1-channel image to coils via sensitivity maps
+                k_pred = fft2c(sensitivity_maps * x_complex)
+                k_dc = mask * masked_kspace + (1.0 - mask) * k_pred
+                # SENSE combine back to 1 channel: sum(S^* * x)
+                x_complex = (sensitivity_maps.conj() * ifft2c(k_dc)).sum(dim=1, keepdim=True)
+            else:
+                # Single-coil DC projection
+                k_pred = fft2c(x_complex)
+                k_dc = mask * masked_kspace + (1.0 - mask) * k_pred
+                x_complex = ifft2c(k_dc)
 
         return x_complex

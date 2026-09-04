@@ -2,10 +2,10 @@ import math
 
 import pytest
 import torch
-from torch.fft import fft2, fftshift
 
 from cfm.evaluate import dc_project, integrate_from_t
 from cfm.manifolds import CylindricalManifold, EuclideanManifold
+from cfm.utils.fft import fft2c
 
 MANIFOLDS = [CylindricalManifold, EuclideanManifold]
 
@@ -31,14 +31,42 @@ def test_dc_project(manifold_cls: type) -> None:
     z_dc = manifold.to_complex(x_dc)
 
     # Verify k-space
-    Z_dc = fftshift(fft2(z_dc, norm="ortho"), dim=(-2, -1))
+    Z_dc = fft2c(z_dc)
 
     # Where mask == 1, it should match y_measured
     torch.testing.assert_close(Z_dc * mask, y_measured * mask, atol=1e-5, rtol=1e-5)
 
     # Where mask == 0, it should match the original state's k-space
-    Z_state = fftshift(fft2(z_state, norm="ortho"), dim=(-2, -1))
+    Z_state = fft2c(z_state)
     torch.testing.assert_close(Z_dc * (1 - mask), Z_state * (1 - mask), atol=1e-5, rtol=1e-5)
+
+
+@pytest.mark.parametrize("manifold_cls", MANIFOLDS)
+def test_dc_project_multicoil(manifold_cls: type) -> None:
+    """With sensitivity maps, DC enforces the measured multi-coil k-space itself."""
+    manifold = manifold_cls()
+    b, coils, h, w = 2, 4, 16, 16
+
+    sens_maps = torch.complex(torch.randn(b, coils, h, w), torch.randn(b, coils, h, w))
+    sens_maps = sens_maps / torch.sqrt((sens_maps.abs() ** 2).sum(dim=1, keepdim=True) + 1e-8)
+
+    z_state = torch.complex(torch.randn(b, 1, h, w), torch.randn(b, 1, h, w))
+    x_state = manifold.from_complex(z_state)
+
+    y_measured = torch.randn(b, coils, h, w, dtype=torch.complex64)
+    mask = torch.zeros(b, 1, h, w)
+    mask[:, :, :, 4:8] = 1.0
+
+    x_dc = dc_project(x_state, manifold, y_measured, mask, sensitivity_maps=sens_maps)
+    z_dc = manifold.to_complex(x_dc)
+    assert z_dc.shape == (b, 1, h, w)
+
+    # The projected image, pushed back through the coils, reproduces the measurement
+    # on the sampled lines. Only approximately: the single-channel image cannot
+    # represent coil content outside the span of the maps.
+    residual = (fft2c(sens_maps * z_dc) - y_measured) * mask
+    baseline = (fft2c(sens_maps * manifold.to_complex(x_state)) - y_measured) * mask
+    assert torch.linalg.norm(residual) < torch.linalg.norm(baseline)
 
 
 @pytest.mark.parametrize("manifold_cls", MANIFOLDS)

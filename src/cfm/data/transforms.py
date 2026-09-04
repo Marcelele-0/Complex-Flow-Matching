@@ -188,6 +188,66 @@ class CenterCropModulo:
         return x[..., top : top + new_h, left : left + new_w]
 
 
+class CenterCropOrPad:
+    """Resizes the trailing spatial dimensions to a fixed shape by cropping or zero-padding.
+
+    :class:`CenterCropModulo` rounds each image down to a multiple of ``base``, which
+    is enough for a U-Net but does *not* give every sample the same shape. fastMRI is
+    not a uniform cohort - knee volumes are 640x368 and 640x372, brain volumes include
+    640x320 and 768x396 - so a batch drawn across volumes cannot be collated without a
+    fixed target size. Cropping also removes the 2x readout oversampling that fastMRI
+    k-space carries, which is why the reference pipeline centre-crops to 320x320.
+
+    Padding is supported so a volume smaller than the target in some dimension still
+    produces the agreed shape instead of aborting the epoch.
+
+    Args:
+        size: Target ``(H, W)``, or a single int for a square output.
+    """
+
+    def __init__(self, size: int | tuple[int, int] | list[int]) -> None:
+        if isinstance(size, int):
+            height, width = size, size
+        else:
+            height, width = int(size[0]), int(size[1])
+        if height < 1 or width < 1:
+            raise ValueError(f"crop size must be positive, got {(height, width)}")
+        self.height = height
+        self.width = width
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        """Center crop or zero-pad the trailing spatial dimensions.
+
+        Args:
+            x: Tensor [..., H, W].
+
+        Returns:
+            Tensor [..., self.height, self.width].
+        """
+        h, w = x.shape[-2], x.shape[-1]
+
+        crop_h = min(h, self.height)
+        crop_w = min(w, self.width)
+        top = (h - crop_h) // 2
+        left = (w - crop_w) // 2
+        x = x[..., top : top + crop_h, left : left + crop_w]
+
+        if crop_h == self.height and crop_w == self.width:
+            return x
+
+        pad_top = (self.height - crop_h) // 2
+        pad_bottom = self.height - crop_h - pad_top
+        pad_left = (self.width - crop_w) // 2
+        pad_right = self.width - crop_w - pad_left
+        # F.pad does not accept complex tensors, so pad the parts separately.
+        if x.is_complex():
+            pads = (pad_left, pad_right, pad_top, pad_bottom)
+            real = torch.nn.functional.pad(x.real, pads)
+            imag = torch.nn.functional.pad(x.imag, pads)
+            return torch.complex(real, imag)
+        return torch.nn.functional.pad(x, (pad_left, pad_right, pad_top, pad_bottom))
+
+
 class Compose:
     """Sequentially chains a list of data transforms.
 

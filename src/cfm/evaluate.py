@@ -38,21 +38,22 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any, cast
 
 import hydra
 import torch
 from omegaconf import DictConfig, OmegaConf
-from torch.fft import fft2, fftshift, ifft2, ifftshift
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
 from cfm.core.solver import BaseODESolver
-from cfm.data.dataset import SKMTEADataset
+from cfm.data import build_dataset, build_geometry_transform
 from cfm.data.splits import load_split_file_names, select_indices
 from cfm.manifolds import Manifold, build_manifold
+from cfm.utils.config import as_plain_dict as _as_plain_dict
+from cfm.utils.fft import fft2c, ifft2c
 from cfm.utils.inference import (
     build_model,
     load_weights,
@@ -78,13 +79,37 @@ except ImportError:
 # Integration
 # --------------------------------------------------------------------------- #
 def dc_project(
-    x_state: torch.Tensor, manifold: Manifold, y_measured_kspace: torch.Tensor, mask: torch.Tensor
+    x_state: torch.Tensor,
+    manifold: Manifold,
+    y_measured_kspace: torch.Tensor,
+    mask: torch.Tensor,
+    sensitivity_maps: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """Replace measured k-space lines in the current state."""
+    """Replace measured k-space lines in the current state.
+
+    Args:
+        x_state: Current state in the manifold's representation, ``[B, C, H, W]``.
+        manifold: Supplies ``to_complex``/``from_complex`` for the geometry.
+        y_measured_kspace: Measured k-space, centered. ``[B, 1, H, W]`` single-coil,
+            or ``[B, num_coils, H, W]`` when ``sensitivity_maps`` is given.
+        mask: Binary sampling mask, centered, broadcastable to the k-space shape.
+        sensitivity_maps: Optional coil sensitivities ``[B, num_coils, H, W]``. When
+            given, the state is projected onto the coils before the k-space
+            replacement and SENSE-combined back, so the measured multi-coil data is
+            enforced rather than a single-coil stand-in derived from the target.
+
+    Returns:
+        The projected state in the manifold's representation.
+    """
     z = manifold.to_complex(x_state)
-    Z = fftshift(fft2(z, norm="ortho"), dim=(-2, -1))
-    Z_dc = Z * (1 - mask) + y_measured_kspace * mask
-    z_dc = ifft2(ifftshift(Z_dc, dim=(-2, -1)), norm="ortho")
+    if sensitivity_maps is not None:
+        z_coils = fft2c(sensitivity_maps * z)
+        z_dc_coils = z_coils * (1 - mask) + y_measured_kspace * mask
+        z_dc = (sensitivity_maps.conj() * ifft2c(z_dc_coils)).sum(dim=1, keepdim=True)
+    else:
+        z_k = fft2c(z)
+        z_dc_k = z_k * (1 - mask) + y_measured_kspace * mask
+        z_dc = ifft2c(z_dc_k)
     return manifold.from_complex(z_dc)
 
 
@@ -98,6 +123,7 @@ def integrate_from_t(
     y_measured_kspace: torch.Tensor | None = None,
     sampling_mask: torch.Tensor | None = None,
     use_dc_projection: bool = False,
+    sensitivity_maps: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Integrate the flow from ``t_start`` to ``t=1``, in whatever geometry ``solver`` carries.
 
@@ -118,6 +144,7 @@ def integrate_from_t(
         y_measured_kspace: Optional measured k-space for data consistency.
         sampling_mask: Optional binary sampling mask.
         use_dc_projection: Whether to apply data consistency projections.
+        sensitivity_maps: Optional coil sensitivities, enabling multi-coil DC.
 
     Returns:
         The state at ``t=1``, shape ``[B, C, H, W]``.
@@ -157,7 +184,7 @@ def integrate_from_t(
                 and y_measured_kspace is not None
                 and sampling_mask is not None
             ):
-                x_t = dc_project(x_t, manifold, y_measured_kspace, sampling_mask)
+                x_t = dc_project(x_t, manifold, y_measured_kspace, sampling_mask, sensitivity_maps)
             return x_t
 
         # Euler probe, field at the probe, averaged velocity.
@@ -174,7 +201,7 @@ def integrate_from_t(
             and y_measured_kspace is not None
             and sampling_mask is not None
         ):
-            x_t = dc_project(x_t, manifold, y_measured_kspace, sampling_mask)
+            x_t = dc_project(x_t, manifold, y_measured_kspace, sampling_mask, sensitivity_maps)
 
     return x_t
 
@@ -190,6 +217,7 @@ def reconstruct_batch(
     sampling_mask: torch.Tensor | None = None,
     y_measured_kspace: torch.Tensor | None = None,
     use_dc_projection: bool = False,
+    sensitivity_maps: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Noise the target to ``t_start`` via the bridge, then integrate back to ``t=1``.
 
@@ -229,6 +257,7 @@ def reconstruct_batch(
         y_measured_kspace=y_measured_kspace if use_dc_projection else None,
         sampling_mask=sampling_mask if use_dc_projection else None,
         use_dc_projection=use_dc_projection,
+        sensitivity_maps=sensitivity_maps if use_dc_projection else None,
     )
 
 
@@ -290,6 +319,65 @@ def compute_batch_metrics(
             pred, target, mask=sampling_mask, reduction="none"
         )
     return metrics
+
+
+# --------------------------------------------------------------------------- #
+# Config resolution
+# --------------------------------------------------------------------------- #
+def resolve_dc_mask(
+    dataset_cfg: Mapping[str, Any] | Any,
+    eval_cfg: Mapping[str, Any] | Any,
+) -> dict[str, Any]:
+    """Merge ``evaluate.mask`` over ``dataset.mask``, key by key.
+
+    ``dataset.mask`` describes the trajectory the model was trained under, and
+    evaluation should score it under the same one unless explicitly told otherwise.
+    Merging per key rather than picking whichever block is non-empty is the whole
+    point: choosing one wholesale meant a non-empty ``evaluate.mask`` discarded
+    ``dataset.mask.type``, so a Poisson-disc model was silently scored under the
+    Cartesian default that the resolver falls back to when no type is given.
+
+    Args:
+        dataset_cfg: The ``dataset`` config group.
+        eval_cfg: The ``evaluate`` config group.
+
+    Returns:
+        A mask specification with ``acceleration`` always populated, defaulting to
+        ``dataset.acceleration`` when neither mask block sets one.
+    """
+    dataset_plain = _as_plain_dict(dataset_cfg)
+    merged: dict[str, Any] = {
+        **_as_plain_dict(dataset_plain.get("mask")),
+        **_as_plain_dict(_as_plain_dict(eval_cfg).get("mask")),
+    }
+    merged["acceleration"] = int(merged.get("acceleration", dataset_plain.get("acceleration", 4)))
+    return merged
+
+
+def resolve_split(
+    dataset_cfg: Mapping[str, Any] | Any,
+    eval_cfg: Mapping[str, Any] | Any,
+) -> str | None:
+    """Decide which split manifest to score against.
+
+    A dataset group that sets ``split: null`` is declaring that it ships no
+    manifests at all - fastMRI has no ``annotations/`` directory - so there is
+    nothing for ``evaluate.split`` to select and asking for ``'test'`` could only
+    raise. Any other value and ``evaluate.split`` governs, keeping the held-out
+    gate under its own key.
+
+    Args:
+        dataset_cfg: The ``dataset`` config group.
+        eval_cfg: The ``evaluate`` config group.
+
+    Returns:
+        The split name, or ``None`` to score every file in ``data_dir``.
+    """
+    dataset_plain = _as_plain_dict(dataset_cfg)
+    if "split" in dataset_plain and dataset_plain["split"] is None:
+        return None
+    split = _as_plain_dict(eval_cfg).get("split", "test")
+    return None if split is None else str(split)
 
 
 # --------------------------------------------------------------------------- #
@@ -477,18 +565,11 @@ def main(cfg: DictConfig) -> None:
     max_samples = eval_cfg.get("max_samples")
     num_workers = int(eval_cfg.get("num_workers", 4))
     seed = int(eval_cfg.get("seed", 0))
-    split = eval_cfg.get("split", "test")
+    dataset_cfg = cfg.get("dataset", {})
 
-    dc_cfg = eval_cfg.get("mask") or cfg.get("dataset", {}).get("mask") or {}
-    if isinstance(dc_cfg, DictConfig):
-        container = OmegaConf.to_container(dc_cfg, resolve=True)
-        dc_mask_dict: dict[str, Any] = dict(cast(dict[str, Any], container))
-    elif isinstance(dc_cfg, dict):
-        dc_mask_dict = dict(dc_cfg)
-    else:
-        dc_mask_dict = {}
-
-    dc_acceleration = int(dc_mask_dict.get("acceleration", 4))
+    split = resolve_split(dataset_cfg, eval_cfg)
+    dc_mask_dict = resolve_dc_mask(dataset_cfg, eval_cfg)
+    dc_acceleration = int(dc_mask_dict["acceleration"])
     dc_center_fraction = dc_mask_dict.get("center_fraction")
     use_dc_projection = eval_cfg.get("use_dc_projection", False)
 
@@ -546,25 +627,29 @@ def main(cfg: DictConfig) -> None:
     checkpoint_path = resolve_checkpoint(cfg, "evaluate", orig_cwd)
     load_weights(model, checkpoint_path, device)
 
-    # 4. Data. Same pipeline train.py uses for this geometry; a mismatch
-    # invalidates data_range=1.0.
-    pipeline = manifold.build_transform(crop_base=16)
-    data_dir = eval_cfg.get("data_dir") or cfg.get("dataset", {}).get(
+    # 4. Data. Reconstruction mode normalises the target to a peak modulus of 1
+    # itself, which is what keeps data_range=1.0 valid; the pipeline handed to the
+    # dataset is therefore shape-only, and doubles as the crop the sensitivity maps
+    # are matched to for multi-coil cohorts.
+    data_dir = eval_cfg.get("data_dir") or dataset_cfg.get(
         "data_dir", "data/skm-tea-mini/v1-release"
     )
     if not os.path.isabs(data_dir):
         data_dir = os.path.join(orig_cwd, data_dir)
 
-    # SKMTEADataset opens every .h5 under data_dir to count slices before split
+    geometry = build_geometry_transform(dataset_cfg.get("crop_size"), crop_base=16)
+
+    # The dataset opens every .h5 under data_dir to count slices before split
     # filtering is possible, so a corrupt file aborts the run even when it is not
     # in the chosen split. Intentional: swallowing a corrupt-data error here is how
     # you end up reporting metrics on half a dataset.
-    dataset = SKMTEADataset(
+    dataset = build_dataset(
+        dataset_cfg,
         data_dir=data_dir,
-        transform=pipeline,
         mode="reconstruction",
         acceleration=dc_acceleration,
         mask=dc_mask_dict,
+        pre_transform=geometry,
     )
     file_names = load_split_file_names(data_dir, split)
     indices = select_indices(dataset.slice_map, file_names, max_samples)
@@ -629,9 +714,18 @@ def main(cfg: DictConfig) -> None:
 
             if use_dc_projection and t_start < 1.0:
                 x_alias = batch["input"].to(device)
-                y_kspace = (
-                    fftshift(fft2(target_complex, norm="ortho"), dim=(-2, -1)) * sampling_mask
-                )
+
+                # Multi-coil cohorts carry the actual undersampled measurement and
+                # the maps that relate it to the image, so DC enforces the real
+                # k-space. Single-coil cohorts have no acquisition mask to load, so
+                # the measurement is simulated from the target, as documented in
+                # conf/evaluate/default.yaml.
+                if "masked_kspace" in batch and "sensitivity_maps" in batch:
+                    y_kspace = batch["masked_kspace"].to(device)
+                    sens_maps = batch["sensitivity_maps"].to(device)
+                else:
+                    y_kspace = fft2c(target_complex) * sampling_mask
+                    sens_maps = None
 
                 # The aliased input needs to be in the manifold representation
                 x_alias_manifold = manifold.from_complex(x_alias)
@@ -647,6 +741,7 @@ def main(cfg: DictConfig) -> None:
                     sampling_mask=sampling_mask,
                     y_measured_kspace=y_kspace,
                     use_dc_projection=True,
+                    sensitivity_maps=sens_maps,
                 )
             else:
                 pred = reconstruct_batch(model, manifold, solver, x_1, t_start, generator)
