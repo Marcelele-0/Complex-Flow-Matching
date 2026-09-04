@@ -5,7 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 import torch
-from fastmri.models import VarNet
+
+try:
+    from fastmri.models import VarNet
+
+    _FASTMRI_AVAILABLE = True
+except ImportError:
+    VarNet = None  # type: ignore
+    _FASTMRI_AVAILABLE = False
 
 from cfm.core.reconstructor import BaseReconstructor
 from cfm.core.registry import MODELS, RECONSTRUCTORS
@@ -41,6 +48,11 @@ class VarNetReconstructor(BaseReconstructor):
         **kwargs: Any,
     ) -> None:
         super().__init__()
+        if not _FASTMRI_AVAILABLE:
+            raise ImportError(
+                "fastmri package is required to use VarNetReconstructor. "
+                "Install it via `pip install torch-cfmri[fastmri]` or `uv add fastmri`."
+            )
         self.num_cascades = num_cascades
         self.sens_chans = sens_chans
         self.sens_pools = sens_pools
