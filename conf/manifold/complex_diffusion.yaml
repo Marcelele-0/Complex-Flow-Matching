@@ -1,0 +1,16 @@
+# Variance-Exploding SDE (VE-SDE) for Complex Diffusion MRI.
+#
+# State   : [Re(z), Im(z)]            2 channels
+# Process : x(t) = x(0) + sigma(t) * z,  z ~ N(0, I)
+# Sigma   : sigma(t) = sigma_min * (sigma_max / sigma_min)^t
+# Loss    : Denoising Score Matching with likelihood weighting
+# Solver  : Predictor-Corrector (Euler-Maruyama + Langevin Dynamics)
+name: complex_diffusion
+
+sigma_min: 0.01
+sigma_max: 378.0
+eps: 1e-5
+likelihood_weighting: true
+snr: 0.16
+corrector_steps: 1
+num_steps: 50
