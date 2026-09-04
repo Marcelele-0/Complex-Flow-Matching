@@ -721,7 +721,10 @@ def main(cfg: DictConfig) -> None:
                 sens_maps = None
 
             if isinstance(model, BaseReconstructor):
-                pred_complex = model.reconstruct(y_kspace, sampling_mask, sens_maps)
+                kwargs = {}
+                if "num_low_frequencies" in batch:
+                    kwargs["num_low_frequencies"] = batch["num_low_frequencies"]
+                pred_complex = model.reconstruct(y_kspace, sampling_mask, sens_maps, **kwargs)
                 pred = manifold.from_complex(pred_complex)
             elif use_dc_projection and t_start < 1.0:
                 x_alias = batch["input"].to(device)

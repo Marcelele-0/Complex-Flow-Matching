@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -30,6 +31,7 @@ class BaseReconstructor(ABC, nn.Module):
         mask: torch.Tensor,
         sensitivity_maps: torch.Tensor | None = None,
         num_steps: int | None = None,
+        **kwargs: Any,
     ) -> torch.Tensor:
         """Reconstruct clean complex MRI image from undersampled k-space data.
 

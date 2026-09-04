@@ -117,28 +117,13 @@ class VarNetReconstructor(BaseReconstructor):
             raise ValueError(f"Unexpected mask shape {mask.shape}")
 
         mask_varnet = mask_varnet.to(dtype=torch.bool)
-        if mask_varnet.shape[0] != batch_size:
-            mask_varnet = mask_varnet.expand(batch_size, -1, -1, -1, -1)
+        if mask_varnet.shape[0] != batch_size and mask_varnet.shape[0] != 1:
+            raise ValueError(
+                f"Mask batch size {mask_varnet.shape[0]} must be 1 or match data {batch_size}"
+            )
 
-        if num_low_frequencies is None:
-            # Robustly calculate num_low_frequencies for 1D and 2D masks
-            # Project along H (dim=2) to get 1D mask along W
-            proj = mask_varnet[0, 0, :, :, 0].any(dim=0).to(torch.int8)
-            cent = proj.shape[0] // 2
-
-            left_half = proj[:cent].flip(0)
-            left_zero = int(torch.argmin(left_half).item())
-            if left_half[left_zero] != 0:
-                left_zero = cent
-
-            right_half = proj[cent:]
-            right_zero = int(torch.argmin(right_half).item())
-            if right_half[right_zero] != 0:
-                right_zero = proj.shape[0] - cent
-
-            num_low_frequencies = int(max(2 * min(left_zero, right_zero), 1))
-
-        # Execute VarNet forward pass
+        # VarNet will internally compute num_low_frequencies per-sample for 1D masks if None.
+        # For 2D masks, num_low_frequencies must be explicitly provided in the batch dict.
         out = self.varnet(
             masked_kspace=kspace_varnet,
             mask=mask_varnet,
