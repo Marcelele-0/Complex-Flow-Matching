@@ -228,102 +228,94 @@ W&B when run with `logging=w_and_b`.
 > the numbers are then reconstruction fidelity on seen data, and must be reported
 > as such.
 
-### Side-by-side comparison (cylindrical vs Euclidean)
+### Core Modular Architecture
 
-Both geometries share one pipeline, selected by the `manifold` config group.
-Everything except the six geometric hooks is the same code.
+The repository is built around a highly modular, registry-based architecture. This allows for plug-and-play swapping of Geometries, Neural Architectures, and Reconstructors using Hydra configurations.
 
-**One command, both arms:**
-```bash
-./schedule_comparison.sh                      # trains, then evaluates, both
-TAG=ablation_mse EXTRA="training.loss.vel_loss_type=mse" ./schedule_comparison.sh
+```mermaid
+graph TD
+    %% Define styles
+    classDef registry fill:#1f2937,stroke:#3b82f6,stroke-width:2px,color:#fff
+    classDef interface fill:#374151,stroke:#10b981,stroke-width:2px,color:#fff
+    classDef impl fill:#4b5563,stroke:#6b7280,stroke-width:1px,color:#e5e7eb
+
+    %% Registries
+    R_MODELS[MODELS Registry]:::registry
+    R_MANIFOLDS[MANIFOLDS Registry]:::registry
+    R_SOLVERS[SOLVERS Registry]:::registry
+    R_RECONSTRUCTORS[RECONSTRUCTORS Registry]:::registry
+    R_DATASETS[DATASETS Registry]:::registry
+    R_MASKS[MASKS Registry]:::registry
+
+    %% Interfaces
+    I_RECON[BaseReconstructor]:::interface
+    I_MANI[BaseManifold]:::interface
+    I_SOLV[BaseODESolver / BaseSDESolver]:::interface
+
+    %% Connections from Registries to Interfaces
+    R_RECONSTRUCTORS --> I_RECON
+    R_MANIFOLDS --> I_MANI
+    R_SOLVERS --> I_SOLV
+
+    %% Implementations - Reconstructors
+    I_RECON --- Rec_FM[FlowMatchingReconstructor]:::impl
+    I_RECON --- Rec_Var[VarNetReconstructor Ceiling]:::impl
+    I_RECON --- Rec_Diff[DiffusionReconstructor]:::impl
+
+    %% Implementations - Manifolds
+    I_MANI --- Man_Cyl[CylindricalManifold Ours]:::impl
+    I_MANI --- Man_Euc[EuclideanManifold Baseline]:::impl
+    I_MANI --- Man_Diff[ComplexDiffusionManifold]:::impl
+
+    %% Implementations - Solvers
+    I_SOLV --- Solv_Euler[EulerSolver]:::impl
+    I_SOLV --- Solv_Heun[HeunSolver]:::impl
+    I_SOLV --- Solv_PC[PredictorCorrectorSolver]:::impl
+
+    %% Internal relationships
+    Rec_FM -.->|Uses| I_MANI
+    Rec_FM -.->|Uses| I_SOLV
+    Rec_FM -.->|Uses| R_MODELS
+
+    Rec_Diff -.->|Uses| Man_Diff
+    Rec_Diff -.->|Uses| Solv_PC
+    Rec_Diff -.->|Uses| R_MODELS
+
+    %% Pipeline flow
+    Data[(K-Space Data)] --> R_DATASETS
+    R_DATASETS --> R_MASKS
+    R_MASKS -->|Undersampled| I_RECON
+    I_RECON -->|Reconstructed| Output[(Complex Image)]
 ```
 
-**Or by hand:**
-```bash
-uv run src/cfm/train.py    manifold=cylindrical logging.experiment_name=table1_cylindrical
-uv run src/cfm/train.py    manifold=euclidean   logging.experiment_name=table1_euclidean
+#### Running Experiments
 
-uv run src/cfm/evaluate.py manifold=cylindrical evaluate.run_name=table1_cylindrical
-uv run src/cfm/evaluate.py manifold=euclidean   evaluate.run_name=table1_euclidean
+Thanks to the modular registry and Hydra, comparing methods is as simple as overriding the `manifold`, `model`, or `reconstructor` in the CLI:
+
+**1. Cylindrical Flow Matching (Ours):**
+```bash
+uv run src/cfm/train.py manifold=cylindrical model=c_unet
 ```
 
-**Or as a Hydra sweep** (the experiment name interpolates the manifold, so the two
-runs cannot collide):
+**2. Euclidean Flow Matching (Baseline):**
 ```bash
-uv run src/cfm/train.py -m manifold=cylindrical,euclidean \
-  'logging.experiment_name=table1_${manifold.name}'
+uv run src/cfm/train.py manifold=euclidean model=c_unet
 ```
 
-| | `manifold=cylindrical` | `manifold=euclidean` |
-|---|---|---|
-| State | `[m, cos φ, sin φ]` (3 ch) | `[Re z, Im z]` (2 ch) |
-| Prior | `m ~ U[0,1]`, `φ ~ U[0,2π)` | same law, drawn without trig — see below |
-| Bridge | linear amplitude + geodesic phase | `x_t = (1-t)x₀ + t·x₁`, `u = x₁ - x₀` |
-| Loss | `L_amp + λ_φ·L_φ·mask` | one unweighted loss over both channels |
-| Solver step | clamp `m ≥ 0`, re-project phase to `R=1` | `x ← x + v·dt`, no constraint at all |
-| U-Net | identical trunk — 126 of 128 parameter tensors are element-wise equal under one seed; only `init_conv`'s weight and bias differ | ← |
-| Config key | — | `manifold.noise_prior`, `training.loss.vel_loss_type` |
-
-Both write `metrics.json` with a `"manifold"` field, so a results file that has left
-its output directory still says which arm produced it.
-
-**Before you publish a number from this table**, two checks:
-
-1. **Run more than one seed per arm.** `training.seed` (default `0`) makes each run
-   reproducible *and* puts both arms on element-wise identical weights everywhere
-   except `init_conv` — the one module whose shape follows the geometry, built last
-   so it cannot shift the RNG for anything else (864 of 73.8M parameters differ).
-   Initialisation is therefore not a confound, but data order, the noise draw and
-   the time sample still vary, so one run per arm still cannot show a gap exceeds
-   that.
-   ```bash
-   for S in 0 1 2; do
-     uv run src/cfm/train.py -m manifold=cylindrical,euclidean training.seed=$S \
-       'logging.experiment_name=table1_${manifold.name}_s'$S
-   done
-   ```
-2. **Check `grad_norm` for both arms.** `clip_grad_norm_` is not scale-invariant and
-   the two losses differ in magnitude by roughly 4x, so at `training.grad_clip=1.0`
-   the clip binds much more often for the cylindrical arm (~67% vs ~33% on synthetic
-   data). If it binds very differently on your data, re-run with
-   `training.grad_clip=null` and confirm the gap survives — if it does not, the gap
-   was about the clip, not the geometry.
-
-**Noise prior.** `manifold.noise_prior` defaults to `uniform`: modulus `~U[0,1]`
-with a uniform argument — the *same distribution* the cylindrical arm starts from —
-drawn as `a · g/‖g‖` with `a ~ U[0,1]` and `g ~ N(0, I₂)`. An isotropic 2D Gaussian
-is rotationally symmetric, so `g/‖g‖` is uniform on the circle without a `cos` or
-`sin` anywhere. Both arms therefore transport from one law while the Euclidean path
-stays free of trigonometry, and the geometry is the only variable in the table.
-
-Two alternatives are kept as ablations:
-
+**3. Complex Diffusion (Score-MRI Baseline):**
 ```bash
-# textbook N(0, I) — what "standard Euclidean flow matching" means in the literature
-uv run src/cfm/train.py manifold=euclidean manifold.noise_prior=gaussian
-
-# sample-paired: replays the cylindrical RNG stream so one seed gives both arms the
-# identical noise field (tighter still, but reaches it through cos/sin)
-uv run src/cfm/train.py manifold=euclidean manifold.noise_prior=matched
+uv run src/cfm/train.py manifold=complex_diffusion model=c_unet
 ```
 
-> **The checkpoint and the manifold must match.** `evaluate.py` builds the model at
-> the width the selected manifold declares, so pointing `manifold=euclidean` at a
-> cylindrical checkpoint raises a shape error on `init_conv` rather than producing
-> plausible-looking, wrong numbers.
+**4. End-to-End Supervised VarNet (Ceiling):**
+```bash
+uv run src/cfm/evaluate.py model=varnet dataset=fastmri_local
+```
 
-**Data consistency error** scores k-space agreement on the sampled trajectories only:
-`‖M ⊙ (F(x̂) − F(x))‖²₂ / (‖M ⊙ F(x)‖²₂ + ε)`. The denominator makes it dimensionless
-and comparable across slices, resolutions and mask densities — `0.1` means the residual
-carries a tenth of the reference's energy on the sampled lines.
-
-> The undersampling mask is **simulated**, not read from the scan — SKM-TEA ships fully
-> sampled data. And the reference is `F(x)`, the transform of the ground-truth *image*,
-> not raw scanner k-space: the pipeline normalizes amplitude per slice and crops in image
-> space, both of which break correspondence with the acquisition. So this measures
-> agreement with the reference image on the sampled lines, not fidelity to physical
-> measurements.
+You can sweep over these automatically using Hydra's multirun flag (`-m`):
+```bash
+uv run src/cfm/train.py -m manifold=cylindrical,euclidean,complex_diffusion 'logging.experiment_name=table1_${manifold.name}'
+```
 
 ### Configuration
 
