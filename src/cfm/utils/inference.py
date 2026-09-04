@@ -16,6 +16,12 @@ from omegaconf import DictConfig
 
 from cfm.core.registry import MODELS
 
+# Imported for its side effect: @MODELS.register runs at class definition time, so
+# the registry stays empty unless the modules defining the architectures have been
+# imported. build_model is the only consumer, so this is the place that has to
+# guarantee it rather than leaving each entry point to remember.
+import cfm.models  # noqa: F401,E402  isort:skip
+
 # Models that train but cannot yet drive an ODE solver, mapped to why.
 SAMPLING_UNSUPPORTED_MODELS = {
     "c_unet_cross_slice": (

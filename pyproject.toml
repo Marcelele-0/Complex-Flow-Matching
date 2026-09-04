@@ -24,8 +24,17 @@ dependencies = [
     "wandb>=0.25.1",
 ]
 
+[project.optional-dependencies]
+# Only scripts/prep_fastmri_espirit.py needs sigpy, and only when generating the
+# ESPIRiT maps. Nothing under src/ imports it, so training installs should not have
+# to pull in numba and llvmlite. Install with: uv sync --extra espirit
+espirit = [
+    "sigpy>=0.1.27",
+]
+
 [dependency-groups]
 dev = [
+    "sigpy>=0.1.27",
     "ipywidgets>=8.1.8",
     "jupyter>=1.1.1",
     "jupytext>=1.16.0",
@@ -47,6 +56,7 @@ exclude = [
     ".venv",
     "build",
     "dist",
+    "data",
 ]
 
 [tool.ruff.lint]
