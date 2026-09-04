@@ -1,0 +1,8 @@
+_target_: cfm.models.varnet.VarNetReconstructor
+name: "varnet"
+num_cascades: 12
+sens_chans: 8
+sens_pools: 4
+chans: 18
+pools: 4
+mask_center: true

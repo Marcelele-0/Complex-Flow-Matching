@@ -12,6 +12,7 @@ description = "Complex Flow Matching for MRI synthesis on cylindrical manifolds"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "fastmri>=0.3.0",
     "h5py>=3.16.0",
     "hydra-core>=1.3.2",
     "matplotlib>=3.10.8",
