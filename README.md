@@ -57,50 +57,53 @@ uv run src/cfm/train.py manifold=euclidean logging.experiment_name=my_baseline
 
 ## Project Structure
 
-```
+```text
 src/cfm/
-├── train.py              # Training entry point       ) geometry-agnostic:
-├── generate.py           # Generation/inference       ) written against the
-├── evaluate.py           # Reconstruction evaluation  ) Manifold interface only
+├── train.py              # Generative (ODE/SDE) training entry point
+├── generate.py           # Generation from pure noise
+├── evaluate.py           # Evaluation pipeline (PSNR/SSIM)
+├── core/
+│   ├── registry.py       # Base Registry system (MODELS, MANIFOLDS, etc.)
+│   ├── manifold.py       # BaseManifold interface
+│   ├── reconstructor.py  # BaseReconstructor interface & FlowMatchingReconstructor
+│   ├── solver.py         # BaseODESolver and BaseSDESolver interfaces
+│   └── dataset.py        # BaseComplexDataset interface
 ├── manifolds/
-│   ├── base.py           # The Manifold interface (the six geometric hooks)
-│   ├── cylindrical.py    # R^+ x S^1 - adapter over the flow/ classes below
-│   └── euclidean.py      # Flat R^2 - the standard flow-matching baseline
+│   ├── cylindrical.py    # R^+ x S^1 - Cylindrical Flow Matching (Ours)
+│   ├── euclidean.py      # Flat R^2 - Standard Flow Matching Baseline
+│   └── complex_diffusion.py # Variance-Exploding SDE Baseline
 ├── models/
-│   ├── cylindrical_unet.py              # shared trunk; in_channels follows the
-│   ├── cylindrical_unet_attention.py    # manifold (3 cylindrical, 2 euclidean)
-│   └── cylindrical_unet_cross_slice.py  # 2.5D, cross-slice attention
+│   ├── cylindrical_unet.py              # Main U-Net trunk
+│   ├── cylindrical_unet_attention.py    # Self-attention variant
+│   ├── cylindrical_unet_cross_slice.py  # 2.5D cross-slice attention
+│   └── varnet.py                        # fastMRI VarNet Reconstructor (Ceiling)
+├── solvers/
+│   └── diffusion_solver.py  # Predictor-Corrector (Euler-Maruyama + Langevin)
 ├── flow/
-│   ├── bridge.py            # Geodesic Flow Bridge
-│   ├── solver.py            # HeunODESolver base + CylindricalODESolver
-│   ├── torus_math.py        # Cylindrical loss functions
-│   ├── euclidean_bridge.py  # Straight-line bridge
-│   ├── euclidean_solver.py  # Plain Euler step, no projection
-│   ├── euclidean_math.py    # Flat velocity loss
-│   └── spectral.py          # HF k-space penalty, shared by both losses
+│   ├── solver.py            # Heun / Euler ODE Solvers
+│   └── torus_math.py        # Geodesic metrics and mappings
 ├── data/
 │   ├── dataset.py        # SKM-TEA dataset loader
-│   └── transforms.py     # Data pipelines, one per representation
+│   ├── fastmri.py        # fastMRI dataset loader (multi-coil)
+│   ├── masks.py          # Cartesian 1D & Poisson-Disc 2D mask generators
+│   ├── transforms.py     # CenterCropOrPad, Modulus normalization
+│   └── hdf5_manager.py   # Safe multi-worker file handle manager
 └── utils/
-    ├── complex_ops.py    # Complex <-> cylindrical / euclidean
-    ├── inference.py      # Shared model building + checkpoint loading
-    └── metrics.py        # PSNR, SSIM, circular phase error
+    ├── inference.py      # Registry-driven model/manifold building
+    └── metrics.py        # PSNR, SSIM, Circular Phase Error
 
-conf/                    # Hydra configuration
+conf/                     # Hydra configurations
 ├── config.yaml           # Main config
-├── hydra/default.yaml    # Output directory setup
-├── logging/              # default.yaml (local) vs w_and_b.yaml  <- the toggle
-├── manifold/             # cylindrical.yaml vs euclidean.yaml  <- the toggle
-├── model/                # Model configs
-├── training/             # Training hyperparameters (+ the loss block)
-├── dataset/              # Dataset paths
-├── generate/             # Generation settings
-└── evaluate/             # Evaluation settings
+├── manifold/             # cylindrical, euclidean, complex_diffusion
+├── model/                # c_unet, varnet, etc.
+├── dataset/              # skm_tea, fastmri_local
+├── reconstructor/        # varnet
+└── evaluate/             # Evaluation integration settings
 
 outputs/
 ├── train/{experiment_name}/{date}_{time}/
-│   ├── checkpoints/     # Model weights (.pt)
-│   └── wandb/           # W&B logs
+│   ├── checkpoints/      # Model weights (.pt)
+│   └── wandb/            # W&B logs
 ├── generate/{experiment_name}/{date}_{time}/
 │   └── *.png             # Generated images
 └── evaluate/{experiment_name}/{date}_{time}/
