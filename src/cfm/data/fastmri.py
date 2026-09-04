@@ -18,6 +18,9 @@ from cfm.core.dataset import BaseComplexDataset
 from cfm.core.registry import DATASETS, MASKS
 from cfm.data.hdf5_manager import WorkerHDF5Manager
 from cfm.data.masks import BaseMaskGenerator
+from cfm.utils.fft import fft2c, ifft2c
+
+DEFAULT_SENS_KEY = "sensitivity_maps"
 
 
 def _to_complex_tensor(raw: np.ndarray) -> torch.Tensor:
@@ -54,6 +57,22 @@ def _compute_index_hash(files: list[str]) -> str:
     return hasher.hexdigest()[:16]
 
 
+def _center_crop_to(x: torch.Tensor, height: int, width: int) -> torch.Tensor:
+    """Center crop the trailing two dimensions of ``x`` to ``height`` x ``width``."""
+    h, w = x.shape[-2], x.shape[-1]
+    if (h, w) == (height, width):
+        return x
+    if h < height or w < width:
+        raise ValueError(
+            f"Cannot center crop a {h}x{w} tensor up to {height}x{width}. "
+            "pre_transform may crop the image but must not enlarge it, because the "
+            "sensitivity maps are cropped to match and cannot be extrapolated."
+        )
+    top = (h - height) // 2
+    left = (w - width) // 2
+    return x[..., top : top + height, left : left + width]
+
+
 @DATASETS.register("fastmri")
 @DATASETS.register("fast_mri")
 class FastMRIDataset(BaseComplexDataset):
@@ -62,6 +81,11 @@ class FastMRIDataset(BaseComplexDataset):
     Loads multi-coil k-space and precomputed sensitivity maps from HDF5 files,
     performs SENSE coil combination, and provides data for generation and
     reconstruction workflows.
+
+    Both k-space and the sensitivity maps are handled on the *centered* grid via
+    :func:`~cfm.utils.fft.fft2c` / :func:`~cfm.utils.fft.ifft2c`, which is the
+    convention ``sigpy``'s ESPIRiT calibration emits its maps in. See that module
+    for why the trailing shift is not optional here.
 
     Args:
         data_dir: Path to directory containing HDF5 files.
@@ -72,11 +96,19 @@ class FastMRIDataset(BaseComplexDataset):
         acceleration: Undersampling acceleration factor (e.g. 4 or 8).
         mask: Mask generator instance, config dictionary, or registry key.
         mask_seed: Optional fixed seed for mask generation reproducibility.
-        pre_transform: Optional transform before undersampling.
-        post_transform: Optional transform after undersampling.
+        pre_transform: Optional geometric transform applied before undersampling.
+            May crop the image; the sensitivity maps are center-cropped to match.
+        post_transform: Optional intensity transform applied after undersampling.
+            Must not change the spatial shape.
         use_cache: Whether to use persistent disk index caching.
         cache_dir: Directory to store index cache files.
         files_pattern: Optional glob pattern relative to data_dir.
+        max_volumes: Optional cap on the number of volumes, applied by striding the
+            sorted file list so the subset spans the cohort rather than its first N.
+        sens_dir: Optional directory of sidecar HDF5 files holding the sensitivity
+            maps, keyed by the same basename as the k-space file. When omitted the
+            maps are read from the k-space file itself.
+        sens_key: Dataset name the sensitivity maps are stored under.
     """
 
     def __init__(
@@ -94,6 +126,9 @@ class FastMRIDataset(BaseComplexDataset):
         use_cache: bool = True,
         cache_dir: str | Path = ".cache",
         files_pattern: str | None = None,
+        max_volumes: int | None = None,
+        sens_dir: str | Path | None = None,
+        sens_key: str = DEFAULT_SENS_KEY,
     ) -> None:
         if num_slices <= 0 or num_slices % 2 == 0:
             raise ValueError(f"num_slices must be a positive odd integer, got {num_slices}")
@@ -109,6 +144,9 @@ class FastMRIDataset(BaseComplexDataset):
         if acceleration < 1:
             raise ValueError(f"acceleration must be >= 1, got {acceleration}")
 
+        if max_volumes is not None and max_volumes < 1:
+            raise ValueError(f"max_volumes must be >= 1, got {max_volumes}")
+
         self.data_dir = str(data_dir)
         self.transform = transform
         self.window_transform = window_transform
@@ -119,6 +157,8 @@ class FastMRIDataset(BaseComplexDataset):
         self.post_transform = post_transform
         self.use_cache = use_cache
         self.cache_dir = str(cache_dir)
+        self.sens_dir = str(sens_dir) if sens_dir is not None else None
+        self.sens_key = sens_key
 
         # Resolve mask generator from MASKS registry
         if isinstance(mask, BaseMaskGenerator):
@@ -156,10 +196,23 @@ class FastMRIDataset(BaseComplexDataset):
         if not self.files:
             raise FileNotFoundError(f"No .h5 files found in: {self.data_dir}")
 
+        # Stride rather than truncate: fastMRI is ordered by acquisition, so the
+        # first N files are one scanner/anatomy and would misrepresent the cohort
+        # a local debug subset is meant to stand in for.
+        if max_volumes is not None and max_volumes < len(self.files):
+            stride = len(self.files) // max_volumes
+            self.files = self.files[::stride][:max_volumes]
+
         self.slice_map: list[tuple[str, int]] = []
         self._volume_depths: dict[str, int] = {}
 
         self._load_or_build_index()
+
+    def _sens_path(self, f_path: str) -> str:
+        """Resolve the file holding the sensitivity maps for a k-space file."""
+        if self.sens_dir is None:
+            return f_path
+        return os.path.join(self.sens_dir, os.path.basename(f_path))
 
     def _load_or_build_index(self) -> None:
         """Load scan index from persistent cache or build from HDF5 headers."""
@@ -184,11 +237,14 @@ class FastMRIDataset(BaseComplexDataset):
         if not loaded:
             self.slice_map = []
             self._volume_depths = {}
-            manager = WorkerHDF5Manager.get_instance()
+            # Opened and closed one at a time rather than through WorkerHDF5Manager:
+            # the manager caches handles for the lifetime of the process with no
+            # eviction, and the full fastMRI cohort is thousands of volumes, which
+            # would exhaust the file descriptor limit before the index is built.
             for f_path in self.files:
-                handle = manager.get_handle(f_path)
-                kspace_shape = handle["kspace"].shape
-                depth = int(kspace_shape[0]) if len(kspace_shape) == 4 else 1
+                with h5py.File(f_path, "r") as handle:
+                    kspace_shape = handle["kspace"].shape
+                depth = self._volume_depth(kspace_shape, f_path)
                 self._volume_depths[f_path] = depth
                 for i in range(depth):
                     self.slice_map.append((f_path, i))
@@ -207,6 +263,23 @@ class FastMRIDataset(BaseComplexDataset):
                     os.replace(tmp_cache, cache_file)
                 except Exception:
                     pass
+
+    @staticmethod
+    def _volume_depth(kspace_shape: tuple[int, ...], f_path: str) -> int:
+        """Number of slices in a volume, rejecting layouts this loader cannot read.
+
+        Raises:
+            ValueError: If the k-space is not 4D ``[slices, coils, H, W]``.
+        """
+        if len(kspace_shape) != 4:
+            raise ValueError(
+                f"File '{f_path}' has kspace of shape {tuple(kspace_shape)}; "
+                "FastMRIDataset requires multi-coil 4D [slices, coils, H, W] data. "
+                "A 3D array is ambiguous (fastMRI singlecoil stores [slices, H, W] "
+                "while a single-slice multi-coil scan stores [coils, H, W]), so it is "
+                "rejected rather than guessed at."
+            )
+        return int(kspace_shape[0])
 
     def __len__(self) -> int:
         """Total number of slices across all volumes in dataset."""
@@ -238,14 +311,13 @@ class FastMRIDataset(BaseComplexDataset):
         """Perform adjoint SENSE coil combination from k-space and sensitivity maps.
 
         Args:
-            kspace: Multi-coil complex tensor [num_coils, H, W].
-            sensitivity_maps: Multi-coil complex tensor [num_coils, H, W].
+            kspace: Multi-coil complex tensor [num_coils, H, W], centered.
+            sensitivity_maps: Multi-coil complex tensor [num_coils, H, W], centered.
 
         Returns:
             Single-channel complex image tensor [1, H, W].
         """
-        # IFFT centered k-space to image space
-        x_coils = torch.fft.ifft2(torch.fft.ifftshift(kspace, dim=(-2, -1)), norm="ortho")
+        x_coils = ifft2c(kspace)
         # SENSE combine: sum_c (S_c^* * x_c)
         return (sensitivity_maps.conj() * x_coils).sum(dim=0, keepdim=True)
 
@@ -258,34 +330,109 @@ class FastMRIDataset(BaseComplexDataset):
         """Extract multi-coil k-space and sensitivity maps for a slice.
 
         Args:
-            handle: Open HDF5 file handle.
+            handle: Open HDF5 file handle for the k-space file.
             slice_idx: Slice index within the volume.
             f_path: File path for diagnostic error messages.
 
         Returns:
             Tuple (kspace [C, H, W], sensitivity_maps [C, H, W]) as complex64 tensors.
         """
-        if "sensitivity_maps" not in handle:
+        ksp_ds = handle["kspace"]
+        self._volume_depth(ksp_ds.shape, f_path)
+
+        sens_path = self._sens_path(f_path)
+        if sens_path == f_path:
+            sens_handle = handle
+        else:
+            if not os.path.isfile(sens_path):
+                raise FileNotFoundError(
+                    f"No sidecar sensitivity map file for '{os.path.basename(f_path)}' at "
+                    f"{sens_path}. Run scripts/prep_fastmri_espirit.py with "
+                    f"--output_dir {self.sens_dir}."
+                )
+            sens_handle = WorkerHDF5Manager.get_instance().get_handle(sens_path)
+
+        if self.sens_key not in sens_handle:
             raise KeyError(
-                f"File '{f_path}' is missing 'sensitivity_maps'. "
+                f"File '{sens_path}' is missing '{self.sens_key}'. "
                 "Run scripts/prep_fastmri_espirit.py to precompute sensitivity maps."
             )
 
-        ksp_ds = handle["kspace"]
-        sens_ds = handle["sensitivity_maps"]
+        sens_ds = sens_handle[self.sens_key]
 
-        if ksp_ds.ndim == 4:
-            ksp = ksp_ds[slice_idx]
-            sens = sens_ds[slice_idx]
-        elif ksp_ds.ndim == 3:
-            ksp = ksp_ds[:]
-            sens = sens_ds[:] if sens_ds.ndim == 3 else sens_ds[slice_idx]
-        else:
-            raise ValueError(f"Unexpected kspace ndim: {ksp_ds.ndim} in {f_path}")
+        ksp = ksp_ds[slice_idx]
+        sens = sens_ds[slice_idx]
 
         ksp_tensor = _to_complex_tensor(ksp)
         sens_tensor = _to_complex_tensor(sens)
+
+        if ksp_tensor.shape != sens_tensor.shape:
+            raise ValueError(
+                f"Shape mismatch in '{os.path.basename(f_path)}' slice {slice_idx}: "
+                f"kspace {tuple(ksp_tensor.shape)} vs {self.sens_key} "
+                f"{tuple(sens_tensor.shape)}. The maps must be computed from this "
+                "k-space at full resolution."
+            )
+
         return ksp_tensor, sens_tensor
+
+    def _reconstruction_item(
+        self,
+        handle: h5py.File,
+        slice_idx: int,
+        f_path: str,
+    ) -> dict[str, torch.Tensor]:
+        """Build the reconstruction-mode sample for one slice."""
+        ksp_slice, sens_slice = self._read_slice_data(handle, slice_idx, f_path)
+        img_complex = self.sense_combine(ksp_slice, sens_slice)
+
+        if self.pre_transform is not None:
+            img_complex = self.pre_transform(img_complex)
+            # Geometry only. Running the image pipeline over the maps would
+            # renormalise them and break sum_c |S_c|^2 = 1, which is what makes the
+            # adjoint combination above a coil combination in the first place.
+            sens_slice = _center_crop_to(sens_slice, img_complex.shape[-2], img_complex.shape[-1])
+
+        _, h, w = img_complex.shape
+        mask = self._undersampling_mask(f_path, slice_idx, h, w)
+
+        if self.pre_transform is None:
+            # Nothing has touched the image, so the measured k-space still describes
+            # it exactly and is preferable to a re-synthesised copy: it carries the
+            # true acquisition noise and any signal outside the span of the maps.
+            y_full = ksp_slice
+        else:
+            y_full = fft2c(sens_slice * img_complex)
+
+        y_under = y_full * mask
+
+        x_alias = (sens_slice.conj() * ifft2c(y_under)).sum(dim=0, keepdim=True)
+
+        scale = img_complex.abs().max().clamp(min=1e-8)
+        x_gt = img_complex / scale
+        x_alias = x_alias / scale
+        masked_kspace = y_under / scale
+
+        if self.post_transform is not None:
+            before = x_gt.shape
+            x_gt = self.post_transform(x_gt)
+            x_alias = self.post_transform(x_alias)
+            if x_gt.shape[-2:] != before[-2:]:
+                raise ValueError(
+                    "post_transform changed the spatial shape from "
+                    f"{tuple(before[-2:])} to {tuple(x_gt.shape[-2:])}. It runs after "
+                    "the mask, k-space and sensitivity maps are fixed, so a resize "
+                    "here would silently desynchronise them. Use pre_transform for "
+                    "anything geometric."
+                )
+
+        return {
+            "input": x_alias,
+            "mask": mask,
+            "target": x_gt,
+            "masked_kspace": masked_kspace,
+            "sensitivity_maps": sens_slice,
+        }
 
     def __getitem__(self, idx: int) -> torch.Tensor | dict[str, torch.Tensor]:
         """Retrieve slice or multi-slice window by index.
@@ -303,48 +450,7 @@ class FastMRIDataset(BaseComplexDataset):
         handle = manager.get_handle(f_path)
 
         if self.mode == "reconstruction":
-            ksp_slice, sens_slice = self._read_slice_data(handle, slice_idx, f_path)
-            img_complex = self.sense_combine(ksp_slice, sens_slice)
-
-            if self.pre_transform is not None:
-                img_complex = self.pre_transform(img_complex)
-                if img_complex.shape[-2:] != sens_slice.shape[-2:]:
-                    sens_slice = self.pre_transform(sens_slice)
-
-            _, h, w = img_complex.shape
-            mask = self._undersampling_mask(f_path, slice_idx, h, w)
-
-            # Check if spatial dimension matches raw k-space
-            if ksp_slice.shape[-2:] == (h, w):
-                y_under = ksp_slice * mask
-            else:
-                # Re-synthesize k-space after pre-transform
-                y = torch.fft.fftshift(
-                    torch.fft.fft2(sens_slice * img_complex, norm="ortho"), dim=(-2, -1)
-                )
-                y_under = y * mask
-
-            x_alias_coils = torch.fft.ifft2(
-                torch.fft.ifftshift(y_under, dim=(-2, -1)), norm="ortho"
-            )
-            x_alias = (sens_slice.conj() * x_alias_coils).sum(dim=0, keepdim=True)
-
-            scale = img_complex.abs().max().clamp(min=1e-8)
-            x_gt = img_complex / scale
-            x_alias = x_alias / scale
-            masked_kspace = y_under / scale
-
-            if self.post_transform is not None:
-                x_gt = self.post_transform(x_gt)
-                x_alias = self.post_transform(x_alias)
-
-            return {
-                "input": x_alias,
-                "mask": mask,
-                "target": x_gt,
-                "masked_kspace": masked_kspace,
-                "sensitivity_maps": sens_slice,
-            }
+            return self._reconstruction_item(handle, slice_idx, f_path)
 
         if self.num_slices == 1:
             ksp_slice, sens_slice = self._read_slice_data(handle, slice_idx, f_path)

@@ -4,6 +4,7 @@ import torch
 from cfm.data.transforms import (
     AmplitudeNormalize,
     CenterCropModulo,
+    CenterCropOrPad,
     ComplexToCylinderTransform,
     ComplexToEuclideanTransform,
     Compose,
@@ -11,6 +12,50 @@ from cfm.data.transforms import (
     WindowAmplitudeNormalize,
     WindowEuclideanNormalize,
 )
+
+
+def test_center_crop_or_pad_crops_to_fixed_shape() -> None:
+    """Larger inputs are centre-cropped to exactly the requested shape."""
+    transform = CenterCropOrPad((16, 16))
+    assert transform(torch.randn(1, 40, 32)).shape == (1, 16, 16)
+    assert transform(torch.randn(4, 3, 17, 33)).shape == (4, 3, 16, 16)
+
+
+def test_center_crop_or_pad_pads_smaller_inputs() -> None:
+    """Smaller inputs are zero-padded rather than aborting the epoch."""
+    transform = CenterCropOrPad(8)
+    out = transform(torch.ones(1, 4, 4))
+
+    assert out.shape == (1, 8, 8)
+    assert out[0, 2:6, 2:6].eq(1.0).all()
+    assert out[0, 0, 0].item() == 0.0
+
+
+def test_center_crop_or_pad_preserves_complex_dtype() -> None:
+    """Complex tensors survive both the crop and the pad path."""
+    transform = CenterCropOrPad((8, 8))
+
+    cropped = transform(torch.randn(1, 16, 16, dtype=torch.complex64))
+    assert cropped.shape == (1, 8, 8)
+    assert cropped.dtype == torch.complex64
+
+    padded = transform(torch.randn(1, 4, 4, dtype=torch.complex64))
+    assert padded.shape == (1, 8, 8)
+    assert padded.dtype == torch.complex64
+
+
+def test_center_crop_or_pad_is_centered() -> None:
+    """The retained window is the middle of the input, not a corner."""
+    x = torch.arange(36, dtype=torch.float32).reshape(1, 6, 6)
+    out = CenterCropOrPad((2, 2))(x)
+
+    torch.testing.assert_close(out, torch.tensor([[[14.0, 15.0], [20.0, 21.0]]]))
+
+
+def test_center_crop_or_pad_rejects_nonpositive_size() -> None:
+    """A zero or negative target is a config error."""
+    with pytest.raises(ValueError, match="crop size must be positive"):
+        CenterCropOrPad((0, 16))
 
 
 def test_complex_to_cylinder_transform() -> None:

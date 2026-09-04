@@ -20,9 +20,9 @@ from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
 from cfm.core.dataset import BaseComplexDataset
-from cfm.data.dataset import SKMTEADataset
-from cfm.data.fastmri import FastMRIDataset
+from cfm.data import build_dataset, build_geometry_transform
 from cfm.data.splits import load_split_file_names, select_indices
+from cfm.data.transforms import Compose
 from cfm.manifolds import build_manifold
 from cfm.utils.inference import build_model
 
@@ -112,53 +112,29 @@ def main(cfg: DictConfig) -> None:
     # shape-agnostic. 2.5D splits the pipeline in two: normalisation needs the whole
     # stacked window at once (one peak for the window, not one per slice), so it
     # moves post-stack, still ahead of the crop.
+    #
+    # dataset.crop_size runs first, on the complex slice: cohorts whose volumes do
+    # not share a matrix size cannot be collated without it, and cropping before
+    # normalisation is what keeps the peak modulus a property of the field of view
+    # actually trained on rather than of the oversampled readout around it.
+    dataset_cfg = cfg.get("dataset", {})
+    geometry = build_geometry_transform(dataset_cfg.get("crop_size"), crop_base=16)
+
     slice_pipeline: Callable[[torch.Tensor], torch.Tensor]
     if num_slices > 1:
         slice_pipeline, window_pipeline = manifold.build_window_transforms(crop_base=16)
     else:
         slice_pipeline = manifold.build_transform(crop_base=16)
         window_pipeline = None
+    slice_pipeline = Compose([geometry, slice_pipeline])
 
-    dataset_cfg = cfg.get("dataset", {})
-    echo_idx = dataset_cfg.get("echo_idx", 0)
-    coil_idx = dataset_cfg.get("coil_idx", 0)
-    use_cache = dataset_cfg.get("use_cache", True)
-    cache_dir = dataset_cfg.get("cache_dir", ".cache")
-    acceleration = dataset_cfg.get("acceleration", 4)
-    mask_cfg = dataset_cfg.get("mask")
-    if mask_cfg is not None:
-        if isinstance(mask_cfg, DictConfig):
-            container = OmegaConf.to_container(mask_cfg, resolve=True)
-            mask_cfg = dict(cast(dict[str, Any], container))
-        elif isinstance(mask_cfg, dict):
-            mask_cfg = dict(mask_cfg)
-
-    dataset_name = dataset_cfg.get("name", "skm_tea")
-    dataset: BaseComplexDataset
-    if dataset_name in ("fastmri", "fast_mri"):
-        dataset = FastMRIDataset(
-            data_dir=data_dir,
-            transform=slice_pipeline,
-            window_transform=window_pipeline,
-            num_slices=num_slices,
-            acceleration=acceleration,
-            mask=mask_cfg,
-            use_cache=use_cache,
-            cache_dir=cache_dir,
-        )
-    else:
-        dataset = SKMTEADataset(
-            data_dir=data_dir,
-            transform=slice_pipeline,
-            window_transform=window_pipeline,
-            num_slices=num_slices,
-            acceleration=acceleration,
-            mask=mask_cfg,
-            echo_idx=echo_idx,
-            coil_idx=coil_idx,
-            use_cache=use_cache,
-            cache_dir=cache_dir,
-        )
+    dataset: BaseComplexDataset = build_dataset(
+        dataset_cfg,
+        data_dir=data_dir,
+        transform=slice_pipeline,
+        window_transform=window_pipeline,
+        num_slices=num_slices,
+    )
 
     # Train only on the volumes the split manifest lists, through the same two
     # functions evaluate.py uses. Without this the loader globs every .h5 and

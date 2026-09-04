@@ -6,6 +6,11 @@ mask:
   acceleration: 4
 echo_idx: 0
 coil_idx: 0
+
+# Fixed [H, W] output. SKM-TEA volumes already share a matrix size, so null is
+# enough here and slices are only cropped to a multiple of 16 for the U-Net.
+crop_size: ~
+
 use_cache: true
 cache_dir: ".cache"
 

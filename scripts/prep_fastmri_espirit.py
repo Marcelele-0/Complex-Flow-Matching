@@ -2,6 +2,16 @@
 
 Iterates over .h5 files, extracts multi-coil k-space data, computes sensitivity
 maps via sigpy.mri.app.EspiritCalib, and saves them under 'sensitivity_maps'.
+
+The maps are the same dtype and shape as the k-space, so writing them back into
+the source archive roughly doubles its footprint and leaves half-modified files
+behind if the run is interrupted. Pass ``--output_dir`` to write sidecar files
+instead, and point ``dataset.sens_dir`` at that directory; in-place writing is
+kept as the default only so existing local datasets keep working.
+
+The maps land on sigpy's centered image grid, which is the convention
+:mod:`cfm.utils.fft` implements and :class:`~cfm.data.fastmri.FastMRIDataset`
+consumes. Do not introduce a transform here without changing both.
 """
 
 from __future__ import annotations
@@ -10,6 +20,7 @@ import argparse
 import glob
 import logging
 import os
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import h5py
@@ -19,6 +30,8 @@ import sigpy.mri.app as app
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
+
+SENS_KEY = "sensitivity_maps"
 
 
 def _extract_complex_kspace(raw_kspace: np.ndarray) -> np.ndarray:
@@ -68,46 +81,48 @@ def compute_espirit_maps(
         Sensitivity maps array with same shape as kspace and dtype np.complex64.
     """
     ksp = _extract_complex_kspace(kspace)
-    sp_dev = sp.Device(device)
 
     if ksp.ndim == 3:
-        # Single slice: [num_coils, H, W]
-        eff_calib = min(calib_width, ksp.shape[-2], ksp.shape[-1])
-        eff_kernel = min(kernel_width, ksp.shape[-2], ksp.shape[-1])
-        calib_app = app.EspiritCalib(
-            ksp,
-            calib_width=eff_calib,
-            thresh=thresh,
-            kernel_width=eff_kernel,
-            crop=crop,
-            max_iter=max_iter,
-            device=sp_dev,
-            show_pbar=show_pbar,
+        return _calibrate_slice(
+            ksp, calib_width, thresh, kernel_width, crop, max_iter, device, show_pbar
         )
-        return calib_app.run().astype(np.complex64)
 
     if ksp.ndim == 4:
-        # Multi-slice volume: [num_slices, num_coils, H, W]
-        num_slices = ksp.shape[0]
-        eff_calib = min(calib_width, ksp.shape[-2], ksp.shape[-1])
-        eff_kernel = min(kernel_width, ksp.shape[-2], ksp.shape[-1])
-
-        maps_slices = []
-        for s in range(num_slices):
-            calib_app = app.EspiritCalib(
-                ksp[s],
-                calib_width=eff_calib,
-                thresh=thresh,
-                kernel_width=eff_kernel,
-                crop=crop,
-                max_iter=max_iter,
-                device=sp_dev,
-                show_pbar=show_pbar,
+        maps_slices = [
+            _calibrate_slice(
+                ksp[s], calib_width, thresh, kernel_width, crop, max_iter, device, show_pbar
             )
-            maps_slices.append(calib_app.run().astype(np.complex64))
+            for s in range(ksp.shape[0])
+        ]
         return np.stack(maps_slices, axis=0)
 
     raise ValueError(f"Expected kspace ndim 3 or 4, got shape {ksp.shape}")
+
+
+def _calibrate_slice(
+    ksp: np.ndarray,
+    calib_width: int,
+    thresh: float,
+    kernel_width: int,
+    crop: float,
+    max_iter: int,
+    device: int,
+    show_pbar: bool,
+) -> np.ndarray:
+    """Run ESPIRiT calibration on one [num_coils, H, W] slice."""
+    eff_calib = min(calib_width, ksp.shape[-2], ksp.shape[-1])
+    eff_kernel = min(kernel_width, ksp.shape[-2], ksp.shape[-1])
+    calib_app = app.EspiritCalib(
+        np.ascontiguousarray(ksp),
+        calib_width=eff_calib,
+        thresh=thresh,
+        kernel_width=eff_kernel,
+        crop=crop,
+        max_iter=max_iter,
+        device=sp.Device(device),
+        show_pbar=show_pbar,
+    )
+    return np.asarray(calib_app.run()).astype(np.complex64)
 
 
 def process_h5_file(
@@ -120,19 +135,24 @@ def process_h5_file(
     overwrite: bool = False,
     device: int = -1,
     show_pbar: bool = False,
+    output_dir: str | Path | None = None,
 ) -> bool:
-    """Compute and write sensitivity maps into an HDF5 file.
+    """Compute and write sensitivity maps for one HDF5 file.
+
+    Slices are calibrated and written one at a time, so peak memory is one slice
+    of maps rather than a whole volume.
 
     Args:
-        file_path: Path to the target .h5 file.
+        file_path: Path to the source .h5 file holding 'kspace'.
         calib_width: Calibration box size.
         thresh: Eigenvalue threshold.
         kernel_width: Kernel width.
         crop: Cropping factor.
         max_iter: Maximum iterations.
-        overwrite: Overwrite existing 'sensitivity_maps' if present.
+        overwrite: Overwrite existing maps if present.
         device: Device index (-1 for CPU, >= 0 for CUDA).
         show_pbar: Whether to show progress bar.
+        output_dir: Write a sidecar file here instead of modifying the source.
 
     Returns:
         True if processed and written, False if skipped.
@@ -141,32 +161,86 @@ def process_h5_file(
     if not file_path.is_file():
         raise FileNotFoundError(f"File not found: {file_path}")
 
-    with h5py.File(file_path, "r+") as hf:
-        if "sensitivity_maps" in hf:
-            if not overwrite:
-                logger.info("Skipping %s: 'sensitivity_maps' already exists.", file_path.name)
-                return False
-            del hf["sensitivity_maps"]
+    in_place = output_dir is None
+    if in_place:
+        dest_path = file_path
+    else:
+        dest_dir = Path(output_dir)
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_path = dest_dir / file_path.name
 
-        if "kspace" not in hf:
+        if dest_path.is_file() and not overwrite:
+            with h5py.File(dest_path, "r") as existing:
+                if SENS_KEY in existing:
+                    logger.info("Skipping %s: sidecar already exists.", file_path.name)
+                    return False
+
+    params = (calib_width, thresh, kernel_width, crop, max_iter, device, show_pbar)
+
+    # Opened read-write when writing back into the archive: HDF5 will not hand out a
+    # second handle to a file this process already holds open read-only.
+    with h5py.File(file_path, "r+" if in_place else "r") as src:
+        if "kspace" not in src:
             logger.warning("Skipping %s: no 'kspace' dataset found.", file_path.name)
             return False
 
-        kspace = hf["kspace"][:]
-        sens_maps = compute_espirit_maps(
-            kspace=kspace,
-            calib_width=calib_width,
-            thresh=thresh,
-            kernel_width=kernel_width,
-            crop=crop,
-            max_iter=max_iter,
-            device=device,
-            show_pbar=show_pbar,
-        )
+        ksp_ds = src["kspace"]
+        if ksp_ds.ndim not in (3, 4):
+            raise ValueError(
+                f"Expected kspace ndim 3 or 4 in {file_path.name}, got shape {ksp_ds.shape}"
+            )
+        shape = tuple(ksp_ds.shape)
 
-        hf.create_dataset("sensitivity_maps", data=sens_maps, dtype=np.complex64, chunks=True)
-        logger.info("Wrote sensitivity_maps shape %s to %s", sens_maps.shape, file_path.name)
-        return True
+        if in_place:
+            if SENS_KEY in src:
+                if not overwrite:
+                    logger.info("Skipping %s: '%s' already exists.", file_path.name, SENS_KEY)
+                    return False
+                del src[SENS_KEY]
+            _write_maps(src, ksp_ds, params)
+        else:
+            # Staged through a temporary file and renamed, so an interrupted run never
+            # leaves a partially populated sidecar that a later pass reads as complete.
+            tmp_path = dest_path.with_suffix(f".tmp{os.getpid()}.h5")
+            try:
+                with h5py.File(tmp_path, "w") as dest:
+                    _write_maps(dest, ksp_ds, params)
+                os.replace(tmp_path, dest_path)
+            except BaseException:
+                tmp_path.unlink(missing_ok=True)
+                raise
+
+    logger.info("Wrote %s shape %s to %s", SENS_KEY, shape, dest_path.name)
+    return True
+
+
+def _write_maps(
+    dest: h5py.File,
+    ksp_ds: h5py.Dataset,
+    params: tuple[int, float, int, float, int, int, bool],
+) -> None:
+    """Calibrate and write the maps one slice at a time.
+
+    Streaming keeps peak memory at one slice of maps rather than a whole volume,
+    which matters because the maps are as large as the k-space they come from.
+    """
+    sens_ds = dest.create_dataset(SENS_KEY, shape=ksp_ds.shape, dtype=np.complex64, chunks=True)
+
+    if ksp_ds.ndim == 3:
+        sens_ds[:] = _calibrate_slice(_extract_complex_kspace(ksp_ds[:]), *params)
+        return
+
+    for s in range(ksp_ds.shape[0]):
+        sens_ds[s] = _calibrate_slice(_extract_complex_kspace(ksp_ds[s]), *params)
+
+
+def _process_one(args: tuple[str, dict[str, object]]) -> tuple[str, bool, str | None]:
+    """Worker entry point: run :func:`process_h5_file` and capture any failure."""
+    file_path, kwargs = args
+    try:
+        return file_path, process_h5_file(file_path, **kwargs), None  # type: ignore[arg-type]
+    except Exception as exc:  # noqa: BLE001 - one bad volume must not kill the run
+        return file_path, False, f"{type(exc).__name__}: {exc}"
 
 
 def main() -> None:
@@ -181,6 +255,16 @@ def main() -> None:
         help="Path to directory containing .h5 files.",
     )
     parser.add_argument(
+        "--output_dir",
+        type=str,
+        default=None,
+        help=(
+            "Write sidecar map files here instead of modifying the source archive. "
+            "Point dataset.sens_dir at the same directory. Strongly recommended for "
+            "the full cohort: the maps are as large as the k-space."
+        ),
+    )
+    parser.add_argument(
         "--file_pattern",
         type=str,
         default="*.h5",
@@ -190,6 +274,15 @@ def main() -> None:
         "--recursive",
         action="store_true",
         help="Search for .h5 files recursively in data_dir.",
+    )
+    parser.add_argument(
+        "--num_workers",
+        type=int,
+        default=1,
+        help=(
+            "Volumes to calibrate in parallel (default: 1). ESPIRiT on CPU is the "
+            "bottleneck for the full cohort; keep this at 1 when --device selects a GPU."
+        ),
     )
     parser.add_argument(
         "--calib_width",
@@ -230,7 +323,7 @@ def main() -> None:
     parser.add_argument(
         "--overwrite",
         action="store_true",
-        help="Overwrite existing 'sensitivity_maps' dataset.",
+        help=f"Overwrite existing '{SENS_KEY}' dataset.",
     )
     parser.add_argument(
         "--show_pbar",
@@ -251,28 +344,56 @@ def main() -> None:
         logger.warning("No files found matching pattern: %s", pattern)
         return
 
+    if args.output_dir is None:
+        logger.warning(
+            "No --output_dir given: maps will be written into the source files, "
+            "roughly doubling the size of %s.",
+            args.data_dir,
+        )
+
+    kwargs: dict[str, object] = {
+        "calib_width": args.calib_width,
+        "thresh": args.thresh,
+        "kernel_width": args.kernel_width,
+        "crop": args.crop,
+        "max_iter": args.max_iter,
+        "overwrite": args.overwrite,
+        "device": args.device,
+        "show_pbar": args.show_pbar,
+        "output_dir": args.output_dir,
+    }
+
     logger.info("Found %d files to process in %s", len(files), args.data_dir)
     num_processed = 0
-    for f in files:
-        success = process_h5_file(
-            file_path=f,
-            calib_width=args.calib_width,
-            thresh=args.thresh,
-            kernel_width=args.kernel_width,
-            crop=args.crop,
-            max_iter=args.max_iter,
-            overwrite=args.overwrite,
-            device=args.device,
-            show_pbar=args.show_pbar,
-        )
-        if success:
-            num_processed += 1
+    failures: list[str] = []
+
+    if args.num_workers > 1:
+        with ProcessPoolExecutor(max_workers=args.num_workers) as pool:
+            futures = [pool.submit(_process_one, (f, kwargs)) for f in files]
+            for future in as_completed(futures):
+                f_path, success, error = future.result()
+                if error is not None:
+                    logger.error("Failed %s: %s", os.path.basename(f_path), error)
+                    failures.append(f_path)
+                elif success:
+                    num_processed += 1
+    else:
+        for f in files:
+            f_path, success, error = _process_one((f, kwargs))
+            if error is not None:
+                logger.error("Failed %s: %s", os.path.basename(f_path), error)
+                failures.append(f_path)
+            elif success:
+                num_processed += 1
 
     logger.info(
-        "ESPIRiT precomputation finished. Processed %d/%d files.",
+        "ESPIRiT precomputation finished. Processed %d/%d files, %d failed.",
         num_processed,
         len(files),
+        len(failures),
     )
+    if failures:
+        raise SystemExit(f"{len(failures)} file(s) failed; see the log above.")
 
 
 if __name__ == "__main__":

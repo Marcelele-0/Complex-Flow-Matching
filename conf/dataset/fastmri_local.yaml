@@ -1,3 +1,6 @@
+# Local debug subset of fastMRI multi-coil, for workstation development and
+# distribution tracking. Identical to fastmri_full except for the data location
+# and the volume cap; keep the two in step so a local run predicts a cluster run.
 name: "fastmri"
 data_dir: "data/fastmri_local"
 num_slices: 1
@@ -5,8 +8,28 @@ acceleration: 4
 mask:
   type: "poisson_disc"
   acceleration: 4
+
+# fastMRI is not a uniform cohort: knee volumes are 640x368 and 640x372, brain
+# volumes include 640x320 and 768x396. Without a fixed output size a batch drawn
+# across volumes cannot be collated at all. 320x320 is also what removes the 2x
+# readout oversampling that fastMRI k-space carries.
+crop_size: [320, 320]
+
+# Cap on the number of volumes, which is what keeps this subset to a workstation
+# budget. Volumes are strided across the sorted cohort rather than taken from the
+# front, so the subset spans scanners and anatomies instead of being one
+# contiguous acquisition run. At roughly 300 MB per knee volume, 150 volumes is
+# about 45 GB; re-tune this together with the contents of data_dir.
+max_volumes: 150
+
+# Directory of sidecar HDF5 files holding the ESPIRiT maps, keyed by the same
+# basename as the k-space file. null reads them from the k-space files themselves,
+# which is what scripts/prep_fastmri_espirit.py does when given no --output_dir.
+sens_dir: ~
+
 use_cache: true
 cache_dir: ".cache"
 
-# Manifest gating training: null trains on every .h5 in data_dir
+# fastMRI ships no annotations/ manifests, so there is no split to gate on. This
+# also tells evaluate.py not to look for one; hold data out by directory instead.
 split: null

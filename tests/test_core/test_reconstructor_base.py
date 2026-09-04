@@ -10,6 +10,7 @@ from cfm.core.reconstructor import (
 )
 from cfm.manifolds.cylindrical import CylindricalManifold
 from cfm.models.cylindrical_unet import CylindricalUNet
+from cfm.utils.fft import fft2c
 
 
 def test_cannot_instantiate_abstract_reconstructor() -> None:
@@ -26,7 +27,7 @@ def test_zero_filled_reconstructor_identity_on_fully_sampled() -> None:
     # Ground truth complex image
     x_gt = torch.complex(torch.randn(b, 1, h, w), torch.randn(b, 1, h, w))
     # Forward k-space
-    kspace = torch.fft.fftshift(torch.fft.fft2(x_gt, norm="ortho"), dim=(-2, -1))
+    kspace = fft2c(x_gt)
     mask = torch.ones(b, 1, h, w)
 
     x_rec = recon.reconstruct(masked_kspace=kspace, mask=mask)
@@ -49,7 +50,7 @@ def test_zero_filled_reconstructor_with_sensitivity_maps() -> None:
     x_gt = torch.complex(torch.randn(b, 1, h, w), torch.randn(b, 1, h, w))
     # Coil images
     x_coils = sens_maps * x_gt
-    kspace_coils = torch.fft.fftshift(torch.fft.fft2(x_coils, norm="ortho"), dim=(-2, -1))
+    kspace_coils = fft2c(x_coils)
     mask = torch.ones(b, 1, h, w)
 
     x_rec = recon.reconstruct(masked_kspace=kspace_coils, mask=mask, sensitivity_maps=sens_maps)
@@ -70,7 +71,7 @@ def test_flow_matching_reconstructor_end_to_end() -> None:
 
     b, h, w = 2, 16, 16
     x_gt = torch.complex(torch.randn(b, 1, h, w), torch.randn(b, 1, h, w))
-    kspace_full = torch.fft.fftshift(torch.fft.fft2(x_gt, norm="ortho"), dim=(-2, -1))
+    kspace_full = fft2c(x_gt)
 
     # Mask with central 8 lines
     mask = torch.zeros(b, 1, h, w)
@@ -83,7 +84,7 @@ def test_flow_matching_reconstructor_end_to_end() -> None:
     assert x_rec.is_complex()
 
     # Verify exact Data Consistency: k_rec on acquired lines matches masked_kspace
-    kspace_rec = torch.fft.fftshift(torch.fft.fft2(x_rec, norm="ortho"), dim=(-2, -1))
+    kspace_rec = fft2c(x_rec)
     dc_error = torch.linalg.norm((kspace_rec * mask) - masked_kspace).item()
     assert dc_error < 1e-5, f"Data consistency violated, error: {dc_error}"
 
@@ -107,7 +108,7 @@ def test_flow_matching_reconstructor_multicoil_dc() -> None:
 
     x_gt = torch.complex(torch.randn(b, 1, h, w), torch.randn(b, 1, h, w))
     x_coils = sens_maps * x_gt
-    kspace_full = torch.fft.fftshift(torch.fft.fft2(x_coils, norm="ortho"), dim=(-2, -1))
+    kspace_full = fft2c(x_coils)
 
     # Case 1: Fully sampled mask recovers ground truth exactly via multicoil DC
     mask_full = torch.ones(b, 1, h, w)

@@ -412,12 +412,16 @@ dependencies = [
     { name = "matplotlib" },
     { name = "nibabel" },
     { name = "numpy" },
-    { name = "sigpy" },
     { name = "torch" },
     { name = "torchdiffeq" },
     { name = "torchvision" },
     { name = "tqdm" },
     { name = "wandb" },
+]
+
+[package.optional-dependencies]
+espirit = [
+    { name = "sigpy" },
 ]
 
 [package.dev-dependencies]
@@ -431,6 +435,7 @@ dev = [
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "ruff" },
+    { name = "sigpy" },
     { name = "types-tqdm" },
     { name = "wandb" },
 ]
@@ -442,13 +447,14 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "nibabel", specifier = ">=5.4.2" },
     { name = "numpy", specifier = ">=2.4.4" },
-    { name = "sigpy", specifier = ">=0.1.27" },
+    { name = "sigpy", marker = "extra == 'espirit'", specifier = ">=0.1.27" },
     { name = "torch", specifier = ">=2.11.0" },
     { name = "torchdiffeq", specifier = ">=0.2.5" },
     { name = "torchvision", specifier = ">=0.26.0" },
     { name = "tqdm", specifier = ">=4.67.3" },
     { name = "wandb", specifier = ">=0.25.1" },
 ]
+provides-extras = ["espirit"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -461,6 +467,7 @@ dev = [
     { name = "pre-commit", specifier = ">=4.5.0" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "ruff", specifier = ">=0.16.5" },
+    { name = "sigpy", specifier = ">=0.1.27" },
     { name = "types-tqdm", specifier = ">=4.70.0.20260827" },
     { name = "wandb", specifier = ">=0.25.1" },
 ]
