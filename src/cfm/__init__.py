@@ -22,6 +22,9 @@ from cfm.core import (
     ZeroFilledReconstructor,
 )
 from cfm.manifolds.complex_diffusion import ComplexDiffusionManifold
+from cfm.manifolds.cylindrical import CylindricalManifold
+from cfm.manifolds.euclidean import EuclideanManifold
+from cfm.models.varnet import VarNetReconstructor
 from cfm.solvers.diffusion_solver import PredictorCorrectorSolver
 
 __all__ = [
@@ -45,5 +48,8 @@ __all__ = [
     "ZeroFilledReconstructor",
     "FlowMatchingReconstructor",
     "DiffusionReconstructor",
+    "VarNetReconstructor",
+    "CylindricalManifold",
+    "EuclideanManifold",
     "BaseComplexDataset",
 ]
