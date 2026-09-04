@@ -48,6 +48,7 @@ from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
+from cfm.core.reconstructor import BaseReconstructor
 from cfm.core.solver import BaseODESolver, BaseSDESolver
 from cfm.data import build_dataset, build_geometry_transform
 from cfm.data.splits import load_split_file_names, select_indices
@@ -712,22 +713,21 @@ def main(cfg: DictConfig) -> None:
             batch_ids = sample_ids[position : position + x_1.shape[0]]
             position += x_1.shape[0]
 
-            if use_dc_projection and t_start < 1.0:
+            if "masked_kspace" in batch and "sensitivity_maps" in batch:
+                y_kspace = batch["masked_kspace"].to(device)
+                sens_maps = batch["sensitivity_maps"].to(device)
+            else:
+                y_kspace = fft2c(target_complex) * sampling_mask
+                sens_maps = None
+
+            if isinstance(model, BaseReconstructor):
+                kwargs = {}
+                if "num_low_frequencies" in batch:
+                    kwargs["num_low_frequencies"] = batch["num_low_frequencies"]
+                pred_complex = model.reconstruct(y_kspace, sampling_mask, sens_maps, **kwargs)
+                pred = manifold.from_complex(pred_complex)
+            elif use_dc_projection and t_start < 1.0:
                 x_alias = batch["input"].to(device)
-
-                # Multi-coil cohorts carry the actual undersampled measurement and
-                # the maps that relate it to the image, so DC enforces the real
-                # k-space. Single-coil cohorts have no acquisition mask to load, so
-                # the measurement is simulated from the target, as documented in
-                # conf/evaluate/default.yaml.
-                if "masked_kspace" in batch and "sensitivity_maps" in batch:
-                    y_kspace = batch["masked_kspace"].to(device)
-                    sens_maps = batch["sensitivity_maps"].to(device)
-                else:
-                    y_kspace = fft2c(target_complex) * sampling_mask
-                    sens_maps = None
-
-                # The aliased input needs to be in the manifold representation
                 x_alias_manifold = manifold.from_complex(x_alias)
 
                 pred = reconstruct_batch(
