@@ -257,7 +257,7 @@ def main(cfg: DictConfig) -> None:
             pred_v = model(x_t, t_model)
 
             # --- Loss ---
-            loss, components = manifold.loss(pred_v, target_v, target_x1=x_1_sup)
+            loss, components = manifold.loss(pred_v, target_v, target_x1=x_1_sup, t=t_model)
 
             # --- Backprop ---
             loss.backward()

@@ -138,6 +138,7 @@ class BaseManifold(ABC):
         pred_v: torch.Tensor,
         target_v: torch.Tensor,
         target_x1: torch.Tensor | None = None,
+        **kwargs: Any,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """Compute matching loss between predicted and target velocity fields.
 

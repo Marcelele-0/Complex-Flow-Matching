@@ -27,6 +27,7 @@ from cfm.utils.complex_ops import euclidean_to_complex
 
 def _match_shape(val: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     """Broadcast scalar or 1D tensor to match target tensor dimensions."""
+    val = val.to(target.device)
     if val.dim() == target.dim():
         return val
     if val.dim() == 0:
@@ -268,17 +269,18 @@ class ComplexDiffusionManifold(BaseManifold):
         Returns:
             Tuple of (x_t, target_score).
         """
-        # If x_0 is drawn from sample_noise (scaled by sigma_max), normalize to standard z
-        if x_0.std() > 2.0:
-            z = x_0 / self.sigma_max
-        else:
-            z = x_0
+        # CFM convention: x_0 is noise scaled by sigma_max.
+        z = x_0 / self.sigma_max
 
-        std = _match_shape(self.sigma(t), x_1)
+        # CFM convention: t=0 is noise, t=1 is data.
+        # VE-SDE convention: t=0 is data, t=1 is noise.
+        t_internal = 1.0 - t
+
+        std = _match_shape(self.sigma(t_internal), x_1)
         x_t = x_1 + std * z
         u_t = -z / std
 
-        self._last_t = t
+        self._last_t = t_internal
         self._last_z = z
         return x_t, u_t
 
@@ -305,7 +307,7 @@ class ComplexDiffusionManifold(BaseManifold):
             Tuple of (total_loss, {"dsm": total_loss}).
         """
         del target_x1
-        time_t = t if t is not None else self._last_t
+        time_t = (1.0 - t) if t is not None else self._last_t
         use_lw = (
             self.likelihood_weighting
             if likelihood_weighting is None

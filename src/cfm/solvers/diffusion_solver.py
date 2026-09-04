@@ -20,6 +20,7 @@ from cfm.utils.fft import fft2c, ifft2c
 
 def _match_shape(val: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     """Broadcast scalar or 1D tensor to match target tensor dimensions."""
+    val = val.to(target.device)
     if val.dim() == target.dim():
         return val
     if val.dim() == 0:
@@ -187,7 +188,7 @@ class PredictorCorrectorSolver(BaseSDESolver):
         x_mean = x
 
         for _ in range(steps):
-            grad = model(x, t)
+            grad = model(x, 1.0 - t)
             noise = torch.randn(x.shape, device=x.device, dtype=x.dtype, generator=generator)
             grad_norm = torch.norm(grad.reshape(grad.shape[0], -1), dim=-1).mean()
             noise_norm = torch.norm(noise.reshape(noise.shape[0], -1), dim=-1).mean()
@@ -223,7 +224,7 @@ class PredictorCorrectorSolver(BaseSDESolver):
         Returns:
             Tuple of (x, x_mean).
         """
-        score = model(x, t)
+        score = model(x, 1.0 - t)
         g = _match_shape(self.diffusion(t), x)
         g2 = g**2
         is_pf = self.probability_flow if probability_flow is None else bool(probability_flow)
