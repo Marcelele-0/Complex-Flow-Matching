@@ -7,7 +7,7 @@ from collections.abc import Callable
 
 import torch
 
-from cfm.core.solver import BaseODESolver
+from cfm.core.solver import BaseODESolver, BaseSDESolver
 
 
 class BaseManifold(ABC):
@@ -138,6 +138,7 @@ class BaseManifold(ABC):
         pred_v: torch.Tensor,
         target_v: torch.Tensor,
         target_x1: torch.Tensor | None = None,
+        **kwargs: Any,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """Compute matching loss between predicted and target velocity fields.
 
@@ -151,8 +152,8 @@ class BaseManifold(ABC):
         """
 
     @abstractmethod
-    def make_solver(self, num_steps: int) -> BaseODESolver:
-        """Construct the ODE solver for this manifold geometry."""
+    def make_solver(self, num_steps: int) -> BaseODESolver | BaseSDESolver:
+        """Construct the ODE or SDE solver for this manifold geometry."""
 
     @abstractmethod
     def to_complex(self, state: torch.Tensor) -> torch.Tensor:

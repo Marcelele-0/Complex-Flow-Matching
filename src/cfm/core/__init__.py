@@ -7,6 +7,7 @@ from cfm.core.loss import BaseLoss, CylindricalLoss, EuclideanLoss
 from cfm.core.manifold import BaseManifold
 from cfm.core.reconstructor import (
     BaseReconstructor,
+    DiffusionReconstructor,
     FlowMatchingReconstructor,
     ZeroFilledReconstructor,
 )
@@ -40,5 +41,6 @@ __all__ = [
     "BaseReconstructor",
     "ZeroFilledReconstructor",
     "FlowMatchingReconstructor",
+    "DiffusionReconstructor",
     "BaseComplexDataset",
 ]

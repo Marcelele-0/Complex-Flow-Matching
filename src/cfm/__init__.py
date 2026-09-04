@@ -15,11 +15,14 @@ from cfm.core import (
     BaseReconstructor,
     BaseSDESolver,
     CylindricalLoss,
+    DiffusionReconstructor,
     EuclideanLoss,
     FlowMatchingReconstructor,
     Registry,
     ZeroFilledReconstructor,
 )
+from cfm.manifolds.complex_diffusion import ComplexDiffusionManifold
+from cfm.solvers.diffusion_solver import PredictorCorrectorSolver
 
 __all__ = [
     "core",
@@ -31,13 +34,16 @@ __all__ = [
     "DATASETS",
     "RECONSTRUCTORS",
     "BaseManifold",
+    "ComplexDiffusionManifold",
     "BaseODESolver",
     "BaseSDESolver",
+    "PredictorCorrectorSolver",
     "BaseLoss",
     "CylindricalLoss",
     "EuclideanLoss",
     "BaseReconstructor",
     "ZeroFilledReconstructor",
     "FlowMatchingReconstructor",
+    "DiffusionReconstructor",
     "BaseComplexDataset",
 ]

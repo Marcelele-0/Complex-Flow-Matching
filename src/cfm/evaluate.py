@@ -49,7 +49,7 @@ from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 
 from cfm.core.reconstructor import BaseReconstructor
-from cfm.core.solver import BaseODESolver
+from cfm.core.solver import BaseODESolver, BaseSDESolver
 from cfm.data import build_dataset, build_geometry_transform
 from cfm.data.splits import load_split_file_names, select_indices
 from cfm.manifolds import Manifold, build_manifold
@@ -117,7 +117,7 @@ def dc_project(
 @torch.no_grad()
 def integrate_from_t(
     model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-    solver: BaseODESolver,
+    solver: BaseODESolver | BaseSDESolver | Any,
     x_start: torch.Tensor,
     t_start: float,
     manifold: Manifold | None = None,
@@ -210,7 +210,7 @@ def integrate_from_t(
 def reconstruct_batch(
     model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     manifold: Manifold,
-    solver: BaseODESolver,
+    solver: BaseODESolver | BaseSDESolver | Any,
     x_1: torch.Tensor,
     t_start: float,
     generator: torch.Generator | None = None,
