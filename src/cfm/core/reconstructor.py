@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -125,6 +126,86 @@ class FlowMatchingReconstructor(BaseReconstructor):
                 x_complex = (sensitivity_maps.conj() * ifft2c(k_dc)).sum(dim=1, keepdim=True)
             else:
                 # Single-coil DC projection
+                k_pred = fft2c(x_complex)
+                k_dc = mask * masked_kspace + (1.0 - mask) * k_pred
+                x_complex = ifft2c(k_dc)
+
+        return x_complex
+
+
+@RECONSTRUCTORS.register("diffusion")
+@RECONSTRUCTORS.register("pc_diffusion")
+class DiffusionReconstructor(BaseReconstructor):
+    """Diffusion MRI Reconstructor using Predictor-Corrector sampling with Data Consistency.
+
+    Args:
+        model: Score prediction network (x, t) -> score.
+        manifold: Optional complex diffusion manifold. If None, instantiates
+            ComplexDiffusionManifold.
+        solver: Optional PredictorCorrectorSolver. If None, built from manifold.make_solver().
+        data_consistency: Whether to enforce k-space data consistency during / after sampling.
+        num_steps: Default number of reverse integration steps.
+    """
+
+    def __init__(
+        self,
+        model: nn.Module,
+        manifold: BaseManifold | None = None,
+        solver: Any | None = None,
+        data_consistency: bool = True,
+        num_steps: int = 50,
+    ) -> None:
+        super().__init__()
+        self.model = model
+        self.manifold = manifold
+        self.solver = solver
+        self.data_consistency = data_consistency
+        self.num_steps = num_steps
+
+    def reconstruct(
+        self,
+        masked_kspace: torch.Tensor,
+        mask: torch.Tensor,
+        sensitivity_maps: torch.Tensor | None = None,
+        num_steps: int | None = None,
+    ) -> torch.Tensor:
+        b = masked_kspace.shape[0]
+        h = masked_kspace.shape[-2]
+        w = masked_kspace.shape[-1]
+        device = masked_kspace.device
+
+        manifold = self.manifold
+        if manifold is None:
+            from cfm.manifolds.complex_diffusion import ComplexDiffusionManifold
+
+            manifold = ComplexDiffusionManifold()
+
+        steps = num_steps if num_steps is not None else self.num_steps
+        solver: Any = (
+            self.solver
+            if (self.solver is not None and num_steps is None)
+            else manifold.make_solver(steps)
+        )
+
+        noise = manifold.sample_noise(b, h, w, device)
+
+        with torch.no_grad():
+            x_pred_state = solver.sample(
+                self.model,
+                noise,
+                masked_kspace=masked_kspace if self.data_consistency else None,
+                mask=mask if self.data_consistency else None,
+                sensitivity_maps=sensitivity_maps if self.data_consistency else None,
+            )
+
+        x_complex = manifold.to_complex(x_pred_state)
+
+        if self.data_consistency:
+            if sensitivity_maps is not None:
+                k_pred = fft2c(sensitivity_maps * x_complex)
+                k_dc = mask * masked_kspace + (1.0 - mask) * k_pred
+                x_complex = (sensitivity_maps.conj() * ifft2c(k_dc)).sum(dim=1, keepdim=True)
+            else:
                 k_pred = fft2c(x_complex)
                 k_dc = mask * masked_kspace + (1.0 - mask) * k_pred
                 x_complex = ifft2c(k_dc)
