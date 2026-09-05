@@ -202,7 +202,6 @@ def process_h5_file(
     Raises:
         ValueError: If output_dir is None.
     """
-    _check_sigpy()
     file_path = Path(file_path)
     if not file_path.is_file():
         raise FileNotFoundError(f"File not found: {file_path}")
@@ -222,6 +221,38 @@ def process_h5_file(
                 logger.info("Skipping %s: sidecar already exists.", file_path.name)
                 return False
 
+    use_gpu = False
+    torch_device = "cuda"
+    if isinstance(device, int) and device >= 0:
+        use_gpu = True
+        torch_device = f"cuda:{device}"
+    elif isinstance(device, str) and (device == "cuda" or device.startswith("cuda:")):
+        use_gpu = True
+        torch_device = device
+    elif device is None:
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                use_gpu = True
+                torch_device = "cuda"
+        except ImportError:
+            pass
+
+    if use_gpu:
+        from cfm.data.torch_espirit import calibrate_fastmri_file_torch
+
+        logger.info("Calibrating %s on GPU (%s)", file_path.name, torch_device)
+        return calibrate_fastmri_file_torch(
+            src_path=file_path,
+            dest_path=dest_path,
+            device=torch_device,
+            max_iter=min(max_iter, 30),
+            overwrite=overwrite,
+            sens_key=sens_key,
+        )
+
+    _check_sigpy()
     params = (calib_width, thresh, kernel_width, crop, max_iter, device, show_pbar)
 
     # Source dataset is strictly read-only: never open with 'r+' or modify in-place.
@@ -266,7 +297,7 @@ def ensure_espirit_maps(
     output_dir: str | Path | None = None,
     num_workers: int | None = None,
     show_pbar: bool = False,
-    device: int = -1,
+    device: int | str | None = -1,
     calib_width: int = 24,
     thresh: float = 0.02,
     kernel_width: int = 6,
@@ -285,7 +316,7 @@ def ensure_espirit_maps(
         output_dir: Directory to store sidecar map files. Required.
         num_workers: Parallel workers for calibration. If None, automatically determined.
         show_pbar: Whether to display a progress bar.
-        device: Device index (-1 for CPU, >= 0 for CUDA).
+        device: Device to use (-1 for CPU, >= 0 or 'cuda' for CUDA).
         calib_width: Autocalibration region width.
         thresh: Eigenvalue threshold.
         kernel_width: Kernel width.
@@ -301,7 +332,12 @@ def ensure_espirit_maps(
         ValueError: If output_dir is None when files are provided.
         RuntimeError: If any volume fails calibration.
     """
-    _check_sigpy()
+    is_gpu = (isinstance(device, int) and device >= 0) or (
+        isinstance(device, str) and (device == "cuda" or device.startswith("cuda:"))
+    )
+    if not is_gpu:
+        _check_sigpy()
+
     if not files:
         return []
 
@@ -320,7 +356,7 @@ def ensure_espirit_maps(
     if num_workers is None:
         effective_workers = (
             1
-            if (device >= 0 or len(file_strs) <= 1)
+            if (is_gpu or len(file_strs) <= 1)
             else min(os.cpu_count() or 1, 4, len(file_strs))
         )
     else:

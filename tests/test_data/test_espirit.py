@@ -280,3 +280,46 @@ def test_fastmri_dataset_auto_calibration_ddp_failure_propagation(tmp_path: Path
         mock_broadcast.assert_called_once()
         mock_barrier.assert_not_called()
         mock_ensure.assert_not_called()
+
+
+def test_compute_espirit_torch_cpu_and_gpu() -> None:
+    """Test pure PyTorch ESPIRiT calibration on CPU and GPU (if available)."""
+    from cfm.data.torch_espirit import compute_espirit_torch
+
+    # [num_coils, H, W]
+    ksp = torch.randn(4, 32, 32, dtype=torch.complex64)
+    maps_cpu = compute_espirit_torch(ksp, calib_width=16, device="cpu", max_iter=10)
+    assert maps_cpu.shape == (4, 32, 32)
+    assert maps_cpu.dtype == torch.complex64
+    assert torch.isfinite(maps_cpu).all()
+
+    if torch.cuda.is_available():
+        maps_gpu = compute_espirit_torch(ksp, calib_width=16, device="cuda", max_iter=10)
+        assert maps_gpu.shape == (4, 32, 32)
+        assert maps_gpu.device.type == "cuda"
+        assert torch.isfinite(maps_gpu).all()
+
+
+def test_calibrate_fastmri_file_torch(tmp_path: Path) -> None:
+    """Test calibrate_fastmri_file_torch generates sidecar with correct shape."""
+    from cfm.data.torch_espirit import calibrate_fastmri_file_torch
+
+    src_file = tmp_path / "mock_vol.h5"
+    dest_file = tmp_path / "sens" / "mock_vol.h5"
+    _create_mock_kspace_file(src_file, num_slices=2, num_coils=4, height=24, width=24)
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    success = calibrate_fastmri_file_torch(
+        src_path=src_file,
+        dest_path=dest_file,
+        device=device,
+        max_iter=10,
+        overwrite=True,
+    )
+    assert success is True
+    assert dest_file.is_file()
+
+    with h5py.File(dest_file, "r") as hf:
+        assert "sensitivity_maps" in hf
+        assert hf["sensitivity_maps"].shape == (2, 4, 24, 24)
+        assert hf["sensitivity_maps"].dtype == np.complex64

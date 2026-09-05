@@ -271,6 +271,7 @@ class FastMRIDataset(BaseComplexDataset):
             f"[Auto-ESPIRiT] Found {len(missing)} volume(s) missing sensitivity maps. "
             f"Computing ESPIRiT calibration to {self.sens_dir}..."
         )
+        calib_device: int | str = "cuda" if torch.cuda.is_available() else -1
         if dist.is_available() and dist.is_initialized():
             device = torch.device("cpu")
             try:
@@ -288,6 +289,7 @@ class FastMRIDataset(BaseComplexDataset):
                         output_dir=self.sens_dir,
                         num_workers=self.calib_workers,
                         sens_key=self.sens_key,
+                        device=calib_device,
                     )
                 except Exception as exc:
                     logger.error("ESPIRiT calibration failed on rank 0: %s", exc)
@@ -303,6 +305,7 @@ class FastMRIDataset(BaseComplexDataset):
                 output_dir=self.sens_dir,
                 num_workers=self.calib_workers,
                 sens_key=self.sens_key,
+                device=calib_device,
             )
 
     def _sens_path(self, f_path: str) -> str:
