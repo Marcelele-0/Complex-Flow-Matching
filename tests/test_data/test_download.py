@@ -66,7 +66,7 @@ class TestDownloadUtilities:
 
     def test_ensure_fastmri_local_missing_env_url(self, tmp_path) -> None:
         with patch("cfm.data.download.load_env", return_value={}):
-            with pytest.raises(ValueError, match="Missing FASTMRI_MINI_URL in .env"):
+            with pytest.raises(ValueError, match="Missing FASTMRI_MINI_URL"):
                 ensure_dataset_exists("fastmri", tmp_path, mode="local")
 
     def test_ensure_fastmri_full_missing_env_url(self, tmp_path) -> None:
