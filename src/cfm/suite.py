@@ -12,7 +12,6 @@ def run_evaluation(multirun_dir):
     
     datasets_found = set()
     
-    # 1. Evaluate trained generative models from multirun
     job_dirs = sorted(glob.glob(os.path.join(multirun_dir, "[0-9]*")))
     for job_dir in job_dirs:
         checkpoints = glob.glob(os.path.join(job_dir, "checkpoints", "*.pt"))
@@ -34,12 +33,14 @@ def run_evaluation(multirun_dir):
         manifold = params.get("manifold", "unknown")
         model = params.get("model", "unknown")
         epochs = params.get("training.epochs", "unknown")
+        seed = params.get("training.seed", "0")
         datasets_found.add(dataset)
         
         if dataset not in summary:
             summary[dataset] = {"epochs_trained": epochs, "metrics": {}}
             
-        print(f"  [EVAL] {manifold} na zbiorze {dataset}...")
+        key = f"{manifold}_s{seed}" if "training.seed" in params else manifold
+        print(f"  [EVAL] {key} na zbiorze {dataset}...")
         
         eval_cmd = [
             sys.executable, "src/cfm/evaluate.py",
@@ -61,9 +62,8 @@ def run_evaluation(multirun_dir):
             if os.path.exists(metrics_file):
                 with open(metrics_file, "r") as f:
                     metrics = json.load(f)
-                summary[dataset]["metrics"][manifold] = metrics
+                summary[dataset]["metrics"][key] = metrics
 
-    # 2. Evaluate VarNet (which wasn't trained in train.py because it's supervised)
     for dataset in datasets_found:
         print(f"  [EVAL] varnet na zbiorze {dataset}...")
         eval_cmd = [
@@ -84,39 +84,50 @@ def run_evaluation(multirun_dir):
                     metrics = json.load(f)
                 summary[dataset]["metrics"]["varnet"] = metrics
             
-    summary_path = os.path.join(multirun_dir, "smoke_summary.json")
+    summary_path = os.path.join(multirun_dir, "eval_summary.json")
     with open(summary_path, "w") as f:
         json.dump(summary, f, indent=2)
         
-    print(f"\n✅ Full smoke matrix evaluated!")
-    print(f"📄 Wyniki zapisane w: {summary_path}")
+    print(f"\n✅ Zakończono! Wyniki ewaluacji zapisane w: {summary_path}")
     print(json.dumps(summary, indent=2))
 
 def main():
     parser = argparse.ArgumentParser(description="torch-cfmri Mission Control")
-    parser.add_argument("suite", choices=["smoke", "full-matrix", "seeds"], help="Suite to run")
-    parser.add_argument("--slurm", action="store_true", help="Launch on SLURM via submitit")
-    parser.add_argument("--extra", nargs=argparse.REMAINDER, help="Extra arguments for Hydra", default=[])
+    parser.add_argument("--matrix", action="store_true", help="Uruchom pełną macierz modeli i zbiorów danych")
+    parser.add_argument("--seeds", action="store_true", help="Dodaj wariancję na seedach (42, 123, 999)")
+    parser.add_argument("--smoke", action="store_true", help="Uruchom w trybie testu (3 epoki, batch 2)")
+    parser.add_argument("--eval", action="store_true", help="Automatycznie ewaluuj modele po treningu")
+    parser.add_argument("--slurm", action="store_true", help="Wyślij zadania na klastry SLURM")
+    parser.add_argument("--extra", nargs=argparse.REMAINDER, help="Dodatkowe flagi do Hydry", default=[])
     args = parser.parse_args()
 
-    cmd = [sys.executable, "src/cfm/train.py", "-m"]
+    cmd = [sys.executable, "src/cfm/train.py"]
+    is_multirun = False
     
-    if args.suite == "smoke":
-        cmd.append("+experiment=matrix_smoke")
-    elif args.suite == "full-matrix":
-        cmd.append("+experiment=matrix_train")
-    elif args.suite == "seeds":
-        cmd.extend(["training.seed=42,123,999"])
+    if args.matrix:
+        cmd.extend(["dataset=skm_tea,fastmri_local", "manifold=cylindrical,euclidean,complex_diffusion", "model=c_unet"])
+        is_multirun = True
+        
+    if args.seeds:
+        cmd.append("training.seed=42,123,999")
+        is_multirun = True
+        
+    if args.smoke:
+        cmd.extend(["training.epochs=3", "training.batch_size=2", "evaluate.max_samples=2", "dataset.use_cache=false"])
         
     if args.slurm:
         cmd.append("+hydra/launcher=submitit_slurm")
+        is_multirun = True
+        
+    if is_multirun:
+        cmd.insert(2, "-m")
         
     cmd.extend(args.extra)
     
     print(f"🚀 Launching CFM Suite: {' '.join(cmd)}")
     result = subprocess.run(cmd)
     
-    if result.returncode == 0 and args.suite == "smoke":
+    if result.returncode == 0 and args.eval and is_multirun:
         multirun_dirs = glob.glob("outputs/multirun/*/")
         if multirun_dirs:
             latest_multirun = max(multirun_dirs, key=os.path.getmtime)
