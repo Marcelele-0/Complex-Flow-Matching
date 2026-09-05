@@ -194,6 +194,7 @@ class CylindricalManifold(BaseManifold):
         pred_v: torch.Tensor,
         target_v: torch.Tensor,
         target_x1: torch.Tensor | None = None,
+        **kwargs: Any,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         total, loss_amp, loss_phi, loss_hf = self._loss(pred_v, target_v, target_x1)
         # Keys chosen to reproduce the pre-refactor W&B series names exactly
