@@ -95,7 +95,7 @@ def build_dataset(
     name = str(options.pop("name", DEFAULT_DATASET))
     dataset_cls = DATASETS.get(name)
 
-    accepted = set(inspect.signature(dataset_cls.__init__).parameters) - {"self"}
+    accepted = set(inspect.signature(dataset_cls).parameters) - {"self"}
     unknown = sorted(set(options) - accepted - _ENTRY_POINT_KEYS)
     if unknown:
         raise TypeError(

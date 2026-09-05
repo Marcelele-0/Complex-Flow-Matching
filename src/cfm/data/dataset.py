@@ -150,8 +150,9 @@ class SKMTEADataset(BaseComplexDataset):
         files_pattern: str | None = None,
     ) -> None:
         if "skm-tea-mini" in data_dir:
-            from cfm.data.download import ensure_skm_tea_mini
-            ensure_skm_tea_mini(data_dir)
+            from cfm.data.download import ensure_dataset_exists
+
+            ensure_dataset_exists("skm_tea", data_dir)
 
         if num_slices <= 0 or num_slices % 2 == 0:
             raise ValueError(f"num_slices must be a positive odd integer, got {num_slices}")

@@ -37,6 +37,7 @@ synthetic tensors.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
@@ -74,6 +75,8 @@ try:
     HAS_WANDB = True
 except ImportError:
     HAS_WANDB = False
+
+logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------------- #
@@ -625,11 +628,21 @@ def main(cfg: DictConfig) -> None:
         in_channels=manifold.state_channels,
         out_channels=manifold.velocity_channels,
     )
-    
+
+    explicit_checkpoint = eval_cfg.get("checkpoint_path") or cfg.get("reconstruct", {}).get(
+        "checkpoint_path"
+    )
     if run_name == "SKIP":
         print("Skipping checkpoint loading (run_name='SKIP'). Evaluating untrained model.")
+        logger.info("Skipping checkpoint loading due to run_name='SKIP'")
         model.eval()
         checkpoint_path = "untrained_model (SKIP)"
+    elif explicit_checkpoint:
+        checkpoint_path = explicit_checkpoint
+        if not os.path.isabs(checkpoint_path):
+            checkpoint_path = os.path.join(orig_cwd, checkpoint_path)
+        logger.info("Loading checkpoint from explicit path: %s", checkpoint_path)
+        load_weights(model, checkpoint_path, device)
     else:
         checkpoint_path = resolve_checkpoint(cfg, "evaluate", orig_cwd)
         load_weights(model, checkpoint_path, device)

@@ -46,6 +46,7 @@ seed: 0
 # Checkpoint lookup: outputs/train/{run_name}/**/*.pt, newest by mtime.
 # Falls back to logging.experiment_name when null, same rule as generate.py.
 run_name: ~
+checkpoint_path: ~
 
 # Undersampling mask for the data consistency (DC) error, which scores k-space
 # agreement on the sampled trajectories only.
