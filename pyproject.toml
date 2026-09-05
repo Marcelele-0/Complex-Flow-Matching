@@ -79,3 +79,6 @@ formats = "ipynb,py:percent"
 python_version = "3.11"
 ignore_missing_imports = true
 check_untyped_defs = true
+
+[project.scripts]
+cfmri-suite = "cfm.suite:main"
