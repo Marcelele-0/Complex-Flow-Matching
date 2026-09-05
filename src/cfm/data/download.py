@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
-import os
 import subprocess
 from pathlib import Path
+
+import dotenv
 
 try:
     from huggingface_hub import snapshot_download
@@ -14,8 +15,6 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-
-import dotenv
 
 def load_env(env_path: str | Path = ".env") -> dict[str, str | None]:
     """Parse key-value pairs from a .env file using python-dotenv.
@@ -82,7 +81,10 @@ def ensure_dataset_exists(
             )
 
         logger.info("No SKM-TEA data found in %s. Downloading from Hugging Face Hub...", path)
-        print(f"[Auto-Download] Missing SKM-TEA data in {path}. Downloading from Hugging Face Hub...")
+        print(
+            f"[Auto-Download] Missing SKM-TEA data in {path}. "
+            "Downloading from Hugging Face Hub..."
+        )
         target_dir = str(path.parent) if path.name == "v1-release" else str(path)
         snapshot_download(
             repo_id="arjundd/skm-tea-mini",
@@ -111,8 +113,14 @@ def ensure_dataset_exists(
                     "Please copy .env.example to .env and configure FASTMRI_MINI_URLS."
                 )
             urls = [u.strip() for u in urls_str.replace("\n", ",").split(",") if u.strip()]
-            logger.info("Mode 'local': Downloading %d archive(s) from FASTMRI_MINI_URLS...", len(urls))
-            print(f"[Auto-Download] Mode 'local': Found {len(urls)} archive(s) to download sequentially...")
+            logger.info(
+                "Mode 'local': Downloading %d archive(s) from FASTMRI_MINI_URLS...",
+                len(urls),
+            )
+            print(
+                f"[Auto-Download] Mode 'local': Found {len(urls)} archive(s) "
+                "to download sequentially..."
+            )
             for i, url in enumerate(urls, 1):
                 logger.info("Processing mini archive %d/%d...", i, len(urls))
                 print(f"\n[Auto-Download] Processing mini archive {i}/{len(urls)}...")
@@ -128,7 +136,8 @@ def ensure_dataset_exists(
             urls = [u.strip() for u in urls_str.replace("\n", ",").split(",") if u.strip()]
             logger.info("Mode 'full': Downloading %d archives from FASTMRI_FULL_URLS...", len(urls))
             print(
-                f"[Auto-Download] Mode 'full': Found {len(urls)} archives to download sequentially..."
+                f"[Auto-Download] Mode 'full': Found {len(urls)} archives "
+                "to download sequentially..."
             )
             for i, url in enumerate(urls, 1):
                 logger.info("Processing archive %d/%d...", i, len(urls))

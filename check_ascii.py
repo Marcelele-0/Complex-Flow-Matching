@@ -1,4 +1,3 @@
-import re
 import sys
 
 files = [
@@ -16,13 +15,13 @@ files = [
     "src/cfm/manifolds/euclidean.py",
     "src/cfm/models/varnet.py",
     "src/cfm/suite.py",
-    "tests/test_data/test_download.py"
+    "tests/test_data/test_download.py",
 ]
 
 has_errors = False
 for f in files:
     try:
-        with open(f, 'r', encoding='utf-8') as file:
+        with open(f, encoding="utf-8") as file:
             for i, line in enumerate(file, 1):
                 # check for non-ascii
                 non_ascii = [c for c in line if ord(c) > 127]
