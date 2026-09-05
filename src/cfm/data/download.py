@@ -83,10 +83,11 @@ def ensure_dataset_exists(
 
         logger.info("No SKM-TEA data found in %s. Downloading from Hugging Face Hub...", path)
         print(f"[Auto-Download] Missing SKM-TEA data in {path}. Downloading from Hugging Face Hub...")
+        target_dir = str(path.parent) if path.name == "v1-release" else str(path)
         snapshot_download(
             repo_id="arjundd/skm-tea-mini",
             repo_type="dataset",
-            local_dir=str(path),
+            local_dir=target_dir,
         )
         logger.info("SKM-TEA download complete.")
         print(f"[Auto-Download] SKM-TEA dataset successfully downloaded to {path}.")
