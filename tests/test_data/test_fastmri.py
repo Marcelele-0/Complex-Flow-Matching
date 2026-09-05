@@ -337,14 +337,17 @@ def test_fastmri_sidecar_sensitivity_maps(tmp_path) -> None:
 
     # A missing sidecar names the directory it looked in.
     missing = FastMRIDataset(
-        data_dir=str(data_dir), use_cache=False, sens_dir=str(tmp_path / "absent")
+        data_dir=str(data_dir),
+        use_cache=False,
+        sens_dir=str(tmp_path / "absent"),
+        auto_calibrate=False,
     )
     with pytest.raises(FileNotFoundError, match="No sidecar sensitivity map file"):
         _ = missing[0]
 
 
 def test_fastmri_missing_sensitivity_maps_raises(tmp_path) -> None:
-    """FastMRIDataset raises KeyError when sensitivity_maps dataset is absent."""
+    """FastMRIDataset raises KeyError when maps are absent and auto_calibrate=False."""
     data_dir = tmp_path / "no_sens"
     data_dir.mkdir(parents=True)
     f_path = data_dir / "nosens.h5"
@@ -352,7 +355,7 @@ def test_fastmri_missing_sensitivity_maps_raises(tmp_path) -> None:
     with h5py.File(f_path, "w") as hf:
         hf.create_dataset("kspace", data=np.zeros((2, 4, 16, 16), dtype=np.complex64))
 
-    dataset = FastMRIDataset(data_dir=str(data_dir), use_cache=False)
+    dataset = FastMRIDataset(data_dir=str(data_dir), use_cache=False, auto_calibrate=False)
     with pytest.raises(KeyError, match="missing 'sensitivity_maps'"):
         _ = dataset[0]
 

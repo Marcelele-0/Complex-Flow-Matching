@@ -109,6 +109,9 @@ class FastMRIDataset(BaseComplexDataset):
             maps, keyed by the same basename as the k-space file. When omitted the
             maps are read from the k-space file itself.
         sens_key: Dataset name the sensitivity maps are stored under.
+        auto_calibrate: Whether to automatically compute ESPIRiT sensitivity maps
+            for volumes that lack them.
+        calib_workers: Number of parallel worker processes for auto-calibration.
     """
 
     def __init__(
@@ -129,6 +132,8 @@ class FastMRIDataset(BaseComplexDataset):
         max_volumes: int | None = None,
         sens_dir: str | Path | None = None,
         sens_key: str = DEFAULT_SENS_KEY,
+        auto_calibrate: bool = True,
+        calib_workers: int | None = None,
     ) -> None:
         if "fastmri_local" in str(data_dir):
             from cfm.data.download import ensure_dataset_exists
@@ -168,6 +173,8 @@ class FastMRIDataset(BaseComplexDataset):
         self.cache_dir = str(cache_dir)
         self.sens_dir = str(sens_dir) if sens_dir is not None else None
         self.sens_key = sens_key
+        self.auto_calibrate = auto_calibrate
+        self.calib_workers = calib_workers
 
         # Resolve mask generator from MASKS registry
         if isinstance(mask, BaseMaskGenerator):
@@ -216,6 +223,65 @@ class FastMRIDataset(BaseComplexDataset):
         self._volume_depths: dict[str, int] = {}
 
         self._load_or_build_index()
+
+        # Automatic on-demand ESPIRiT calibration for volumes missing sensitivity maps
+        if self.auto_calibrate:
+            missing = self._find_missing_sensitivity_maps()
+            if missing:
+                self._calibrate_missing(missing)
+
+    def _has_sensitivity_map(self, f_path: str) -> bool:
+        """Check if sensitivity maps exist for a volume either in sens_dir or in-file."""
+        if self.sens_dir is not None:
+            sidecar = os.path.join(self.sens_dir, os.path.basename(f_path))
+            if os.path.isfile(sidecar):
+                try:
+                    with h5py.File(sidecar, "r") as hf:
+                        if self.sens_key in hf:
+                            return True
+                except Exception:
+                    pass
+        if os.path.isfile(f_path):
+            try:
+                with h5py.File(f_path, "r") as hf:
+                    if self.sens_key in hf:
+                        return True
+            except Exception:
+                pass
+        return False
+
+    def _find_missing_sensitivity_maps(self) -> list[str]:
+        """Return list of files in self.files that lack sensitivity maps."""
+        return [f for f in self.files if not self._has_sensitivity_map(f)]
+
+    def _calibrate_missing(self, missing: list[str]) -> None:
+        """Run ESPIRiT calibration on missing volumes, coordinating across DDP ranks."""
+        import torch.distributed as dist
+
+        from cfm.data.espirit import ensure_espirit_maps
+
+        msg = (
+            f"[Auto-ESPIRiT] Found {len(missing)} volume(s) missing sensitivity maps. "
+            "Computing ESPIRiT calibration..."
+        )
+        if dist.is_available() and dist.is_initialized():
+            if dist.get_rank() == 0:
+                print(msg, flush=True)
+                ensure_espirit_maps(
+                    missing,
+                    output_dir=self.sens_dir,
+                    num_workers=self.calib_workers,
+                    sens_key=self.sens_key,
+                )
+            dist.barrier()
+        else:
+            print(msg, flush=True)
+            ensure_espirit_maps(
+                missing,
+                output_dir=self.sens_dir,
+                num_workers=self.calib_workers,
+                sens_key=self.sens_key,
+            )
 
     def _sens_path(self, f_path: str) -> str:
         """Resolve the file holding the sensitivity maps for a k-space file."""
@@ -354,12 +420,17 @@ class FastMRIDataset(BaseComplexDataset):
             sens_handle = handle
         else:
             if not os.path.isfile(sens_path):
-                raise FileNotFoundError(
-                    f"No sidecar sensitivity map file for '{os.path.basename(f_path)}' at "
-                    f"{sens_path}. Run scripts/prep_fastmri_espirit.py with "
-                    f"--output_dir {self.sens_dir}."
-                )
-            sens_handle = WorkerHDF5Manager.get_instance().get_handle(sens_path)
+                if self.sens_key in handle:
+                    sens_handle = handle
+                    sens_path = f_path
+                else:
+                    raise FileNotFoundError(
+                        f"No sidecar sensitivity map file for '{os.path.basename(f_path)}' at "
+                        f"{sens_path}. Run scripts/prep_fastmri_espirit.py with "
+                        f"--output_dir {self.sens_dir}."
+                    )
+            else:
+                sens_handle = WorkerHDF5Manager.get_instance().get_handle(sens_path)
 
         if self.sens_key not in sens_handle:
             raise KeyError(
