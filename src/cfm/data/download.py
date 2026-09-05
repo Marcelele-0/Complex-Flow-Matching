@@ -15,27 +15,16 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-def load_env(env_path: str | Path = ".env") -> dict[str, str]:
-    """Parse key-value pairs from a .env file without external dependencies.
+import dotenv
 
-    Args:
-        env_path: Path to the .env file. Defaults to '.env'.
-
-    Returns:
-        Dictionary containing the parsed environment variables.
+def load_env(env_path: str | Path = ".env") -> dict[str, str | None]:
+    """Parse key-value pairs from a .env file using python-dotenv.
+    Supports multi-line variables if enclosed in quotes.
     """
     path = Path(env_path)
     if not path.exists():
         return {}
-
-    env: dict[str, str] = {}
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            stripped = line.strip()
-            if stripped and not stripped.startswith("#") and "=" in stripped:
-                key, val = stripped.split("=", 1)
-                env[key.strip()] = val.strip(' \'"')
-    return env
+    return dotenv.dotenv_values(str(path))
 
 
 def download_and_extract_tar(url: str, dest_dir: str | Path) -> None:
@@ -114,15 +103,19 @@ def ensure_dataset_exists(
         mode_resolved = mode or "local"
 
         if mode_resolved == "local":
-            url = env.get("FASTMRI_MINI_URL")
-            if not url:
+            urls_str = env.get("FASTMRI_MINI_URLS") or env.get("FASTMRI_MINI_URL")
+            if not urls_str:
                 raise ValueError(
-                    "Missing FASTMRI_MINI_URL in .env! "
-                    "Please copy .env.example to .env and configure FASTMRI_MINI_URL."
+                    "Missing FASTMRI_MINI_URLS in .env! "
+                    "Please copy .env.example to .env and configure FASTMRI_MINI_URLS."
                 )
-            logger.info("Mode 'local': Downloading single archive from FASTMRI_MINI_URL...")
-            print("[Auto-Download] Mode 'local': Downloading single archive from FASTMRI_MINI_URL...")
-            download_and_extract_tar(url, path)
+            urls = [u.strip() for u in urls_str.replace("\n", ",").split(",") if u.strip()]
+            logger.info("Mode 'local': Downloading %d archive(s) from FASTMRI_MINI_URLS...", len(urls))
+            print(f"[Auto-Download] Mode 'local': Found {len(urls)} archive(s) to download sequentially...")
+            for i, url in enumerate(urls, 1):
+                logger.info("Processing mini archive %d/%d...", i, len(urls))
+                print(f"\n[Auto-Download] Processing mini archive {i}/{len(urls)}...")
+                download_and_extract_tar(url, path)
 
         elif mode_resolved == "full":
             urls_str = env.get("FASTMRI_FULL_URLS")
@@ -131,7 +124,7 @@ def ensure_dataset_exists(
                     "Missing FASTMRI_FULL_URLS in .env! "
                     "Please copy .env.example to .env and configure FASTMRI_FULL_URLS."
                 )
-            urls = [u.strip() for u in urls_str.split(",") if u.strip()]
+            urls = [u.strip() for u in urls_str.replace("\n", ",").split(",") if u.strip()]
             logger.info("Mode 'full': Downloading %d archives from FASTMRI_FULL_URLS...", len(urls))
             print(
                 f"[Auto-Download] Mode 'full': Found {len(urls)} archives to download sequentially..."
