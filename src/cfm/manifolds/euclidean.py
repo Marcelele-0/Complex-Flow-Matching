@@ -243,6 +243,7 @@ class EuclideanManifold(BaseManifold):
         pred_v: torch.Tensor,
         target_v: torch.Tensor,
         target_x1: torch.Tensor | None = None,
+        **kwargs: Any,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         total, loss_vel, loss_hf = self._loss(pred_v, target_v, target_x1)
         return total, {"vel": loss_vel, "hf": loss_hf}
