@@ -62,6 +62,10 @@ exclude = [
     "build",
     "dist",
     "data",
+    "notebooks",
+    "manim",
+    "scripts/generate_figure2*.py",
+    "scripts/glue_figure2*.py",
 ]
 
 [tool.ruff.lint]

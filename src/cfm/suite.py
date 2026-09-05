@@ -13,6 +13,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_LAUNCHER_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "launch_slurm.sh"
+
 
 def run_evaluation(multirun_dir: str | Path) -> None:
     """Automatically run evaluation for all checkpoints and VarNet in a multirun dir.
@@ -110,8 +112,12 @@ def run_evaluation(multirun_dir: str | Path) -> None:
     print(json.dumps(summary, indent=2))
 
 
-def main() -> None:
-    """Entry point for CFM Suite CLI."""
+def build_parser() -> argparse.ArgumentParser:
+    """Construct CLI argument parser for CFM mission control suite.
+
+    Returns:
+        Configured ArgumentParser instance.
+    """
     parser = argparse.ArgumentParser(description="torch-cfmri Mission Control Suite")
     parser.add_argument(
         "--matrix",
@@ -136,7 +142,30 @@ def main() -> None:
     parser.add_argument(
         "--slurm",
         action="store_true",
-        help="Submit jobs to SLURM cluster via submitit launcher",
+        help="Route execution through scripts/launch_slurm.sh",
+    )
+    parser.add_argument(
+        "--submit",
+        action="store_true",
+        help="Actually submit job to Slurm queue (default without --submit is safe dry-run)",
+    )
+    parser.add_argument(
+        "--gpus",
+        type=int,
+        default=4,
+        help="GPUs per node forwarded to launch_slurm.sh -g (default: 4)",
+    )
+    parser.add_argument(
+        "--nodes",
+        type=int,
+        default=1,
+        help="Nodes count forwarded to launch_slurm.sh -N (default: 1)",
+    )
+    parser.add_argument(
+        "--experiment",
+        type=str,
+        default="suite-matrix",
+        help="Experiment name forwarded to launch_slurm.sh -e (default: 'suite-matrix')",
     )
     parser.add_argument(
         "--extra",
@@ -144,13 +173,25 @@ def main() -> None:
         help="Additional flags forwarded directly to Hydra",
         default=[],
     )
-    args = parser.parse_args()
+    return parser
 
-    cmd = [sys.executable, "src/cfm/train.py"]
+
+def build_hydra_args(args: argparse.Namespace) -> tuple[list[str], bool]:
+    """Construct Hydra arguments and multirun flag from parsed CLI options.
+
+    Args:
+        args: Parsed command-line arguments.
+
+    Returns:
+        tuple containing:
+            - list of Hydra argument strings.
+            - boolean indicating if multirun (-m) is enabled.
+    """
+    hydra_args: list[str] = []
     is_multirun = False
 
-    if args.matrix:
-        cmd.extend(
+    if getattr(args, "matrix", False):
+        hydra_args.extend(
             [
                 "dataset=skm_tea,fastmri_local",
                 "manifold=cylindrical,euclidean,complex_diffusion",
@@ -159,12 +200,12 @@ def main() -> None:
         )
         is_multirun = True
 
-    if args.seeds:
-        cmd.append("training.seed=42,123,999")
+    if getattr(args, "seeds", False):
+        hydra_args.append("training.seed=42,123,999")
         is_multirun = True
 
-    if args.smoke:
-        cmd.extend(
+    if getattr(args, "smoke", False):
+        hydra_args.extend(
             [
                 "training.epochs=3",
                 "training.batch_size=2",
@@ -173,14 +214,81 @@ def main() -> None:
             ]
         )
 
-    if args.slurm:
-        cmd.append("+hydra/launcher=submitit_slurm")
-        is_multirun = True
-
     if is_multirun:
-        cmd.insert(2, "-m")
+        hydra_args.insert(0, "-m")
 
-    cmd.extend(args.extra)
+    hydra_args.extend(getattr(args, "extra", []))
+    return hydra_args, is_multirun
+
+
+def build_command(
+    args: argparse.Namespace,
+    launcher_script: Path | str | None = None,
+) -> list[str]:
+    """Construct execution command for either local execution or Slurm launcher.
+
+    Args:
+        args: Parsed command-line arguments.
+        launcher_script: Optional override for Slurm launcher script path.
+
+    Returns:
+        List of command tokens ready for subprocess.run.
+    """
+    hydra_args, _ = build_hydra_args(args)
+
+    if getattr(args, "slurm", False):
+        script_path = launcher_script if launcher_script is not None else DEFAULT_LAUNCHER_SCRIPT
+        launcher_cmd = [str(script_path)]
+        if getattr(args, "submit", False):
+            launcher_cmd.append("--submit")
+
+        gpus = getattr(args, "gpus", 4)
+        nodes = getattr(args, "nodes", 1)
+        experiment = getattr(args, "experiment", "suite-matrix")
+
+        launcher_cmd.extend(["-g", str(gpus), "-N", str(nodes), "-e", str(experiment)])
+        launcher_cmd.append("--")
+        launcher_cmd.extend(hydra_args)
+        return launcher_cmd
+
+    return [sys.executable, "src/cfm/train.py", *hydra_args]
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Entry point for CFM Suite CLI.
+
+    Args:
+        argv: Optional list of command-line argument strings. If None, sys.argv[1:] is used.
+
+    Returns:
+        Integer exit code (0 for success, non-zero for failure).
+    """
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    # Standalone evaluation of existing multirun checkpoints without launching new training
+    if args.eval and not (args.matrix or args.seeds or args.smoke or args.extra or args.slurm):
+        multirun_dirs = glob.glob("outputs/multirun/*/")
+        if multirun_dirs:
+            latest_multirun = max(multirun_dirs, key=os.path.getmtime)
+            run_evaluation(latest_multirun)
+            return 0
+        print("No multirun outputs found under outputs/multirun/ to evaluate.")
+        return 1
+
+    cmd = build_command(args)
+    _, is_multirun = build_hydra_args(args)
+
+    if args.slurm:
+        if args.eval:
+            print(
+                "\n[INFO] --eval was requested with --slurm. Since Slurm jobs run asynchronously "
+                "in the cluster queue, automatic inline evaluation cannot run immediately. "
+                "Once your Slurm job completes, you can run evaluation via: cfmri-suite --eval\n"
+            )
+        print(f"Launching Slurm CFM Suite: {' '.join(cmd)}")
+        result = subprocess.run(cmd)
+        return result.returncode
 
     print(f"Launching CFM Suite: {' '.join(cmd)}")
     result = subprocess.run(cmd)
@@ -191,8 +299,8 @@ def main() -> None:
             latest_multirun = max(multirun_dirs, key=os.path.getmtime)
             run_evaluation(latest_multirun)
 
-    sys.exit(result.returncode)
+    return result.returncode
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
