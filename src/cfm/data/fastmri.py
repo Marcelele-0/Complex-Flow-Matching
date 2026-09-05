@@ -130,6 +130,13 @@ class FastMRIDataset(BaseComplexDataset):
         sens_dir: str | Path | None = None,
         sens_key: str = DEFAULT_SENS_KEY,
     ) -> None:
+        if "fastmri_local" in str(data_dir):
+            from cfm.data.download import ensure_fastmri
+            ensure_fastmri(str(data_dir), mode="local")
+        elif "fastmri_full" in str(data_dir):
+            from cfm.data.download import ensure_fastmri
+            ensure_fastmri(str(data_dir), mode="full")
+
         if num_slices <= 0 or num_slices % 2 == 0:
             raise ValueError(f"num_slices must be a positive odd integer, got {num_slices}")
 
