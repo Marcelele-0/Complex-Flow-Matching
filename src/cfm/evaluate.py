@@ -625,8 +625,14 @@ def main(cfg: DictConfig) -> None:
         in_channels=manifold.state_channels,
         out_channels=manifold.velocity_channels,
     )
-    checkpoint_path = resolve_checkpoint(cfg, "evaluate", orig_cwd)
-    load_weights(model, checkpoint_path, device)
+    
+    if run_name == "SKIP":
+        print("Skipping checkpoint loading (run_name='SKIP'). Evaluating untrained model.")
+        model.eval()
+        checkpoint_path = "untrained_model (SKIP)"
+    else:
+        checkpoint_path = resolve_checkpoint(cfg, "evaluate", orig_cwd)
+        load_weights(model, checkpoint_path, device)
 
     # 4. Data. Reconstruction mode normalises the target to a peak modulus of 1
     # itself, which is what keeps data_range=1.0 valid; the pipeline handed to the
