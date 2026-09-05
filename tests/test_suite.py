@@ -54,6 +54,10 @@ def test_parser_slurm_flags() -> None:
     assert args.nodes == 2
     assert args.experiment == "athena-ddp-matrix"
 
+    # Verify -e short flag
+    args_short = parser.parse_args(["-e", "short-exp"])
+    assert args_short.experiment == "short-exp"
+
 
 def test_parser_training_flags_and_extra() -> None:
     """Verify parsing of matrix, seeds, smoke, eval, and extra Hydra flags."""

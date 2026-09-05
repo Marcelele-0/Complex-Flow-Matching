@@ -162,6 +162,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Nodes count forwarded to launch_slurm.sh -N (default: 1)",
     )
     parser.add_argument(
+        "-e",
         "--experiment",
         type=str,
         default="suite-matrix",

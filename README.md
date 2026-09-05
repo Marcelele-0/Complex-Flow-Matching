@@ -62,6 +62,7 @@ src/cfm/
 ├── train.py              # Generative (ODE/SDE) training entry point
 ├── generate.py           # Generation from pure noise
 ├── evaluate.py           # Evaluation pipeline (PSNR/SSIM)
+├── suite.py              # Mission control CLI (matrix training, sweeps, Slurm dispatch, eval)
 ├── core/
 │   ├── registry.py       # Base Registry system (MODELS, MANIFOLDS, etc.)
 │   ├── manifold.py       # BaseManifold interface
@@ -255,6 +256,61 @@ picks it up automatically through a stub in `.claude/skills/`, and
 Copilot or Gemini. Adapted from
 [ofurman/plgrid-skill](https://github.com/ofurman/plgrid-skill).
 
+### Mission Control & Cluster Training (`cfmri-suite`)
+
+The `cfmri-suite` CLI provides a unified mission control interface for orchestrating end-to-end experimental workflows: full-matrix training across datasets and geometries, multi-seed variance sweeps, automated cluster submission on Slurm (Athena A100), and standardized post-training evaluation.
+
+It wraps Hydra's multirun (`-m`) engine and the PLGrid A100 submission wrapper ([`scripts/launch_slurm.sh`](scripts/launch_slurm.sh)) into a single command-line interface.
+
+#### Key Workflows & CLI Commands
+
+- **Safe Slurm dry-run** (validates parameters and job shape without consuming allocation):
+  ```bash
+  uv run cfmri-suite --matrix --slurm
+  ```
+  Validates partition availability, allocation quota, module paths, and Slurm argument syntax via `sbatch --test-only`.
+
+- **Submit full matrix to Slurm queue:**
+  ```bash
+  uv run cfmri-suite --matrix --slurm --submit --gpus 4 -e full_matrix
+  ```
+  Dispatches the full 6-model matrix across 4x A100 GPUs in DDP mode with Lustre scratch isolation.
+
+- **Submit multi-seed variance sweep (seeds 42, 123, 999):**
+  ```bash
+  uv run cfmri-suite --matrix --seeds --slurm --submit --gpus 4
+  ```
+  Executes the 6-model matrix across three distinct random seeds (18 total runs) for statistical significance testing.
+
+- **Quick smoke test on cluster:**
+  ```bash
+  uv run cfmri-suite --smoke --slurm --submit
+  ```
+  Runs a lightweight 3-epoch job with batch size 2 and no cache to confirm distributed environment health and I/O pipeline integrity.
+
+- **Post-job / Standalone evaluation:**
+  ```bash
+  uv run cfmri-suite --eval
+  ```
+  Discovers all model checkpoints produced by the latest multirun run, scores each against held-out test slices at $t_{\text{start}} = 0.5$, benchmarks them against the supervised VarNet ceiling baseline, and writes `eval_summary.json`.
+
+#### CLI Argument Reference
+
+| Flag | Type / Default | Description |
+|---|---|---|
+| `--matrix` | Flag | Expands a full grid search across both supported datasets (`dataset=skm_tea,fastmri_local`), all three geometric representations (`manifold=cylindrical,euclidean,complex_diffusion`), and the standard U-Net backbone (`model=c_unet`) in Hydra multirun (`-m`) mode (6 full experiment runs). |
+| `-e`, `--experiment <NAME>` | `str` (default: `suite-matrix`) | Sets `logging.experiment_name`, Slurm job name (`cfm-<NAME>`), atomic checkpoint state directory (`outputs/state/<NAME>/last.pt`), and WandB tag.<br><br>**Crucial Distinction:** `--matrix` defines *what* is computed (the 6-model grid matrix), whereas `-e` defines *how the run is tagged and stored* across cluster queues, Lustre state checkpoints, and experiment tracking registries. |
+| `--slurm` | Flag | Routes execution to `scripts/launch_slurm.sh` for multi-GPU A100 DDP training with Lustre storage isolation, automated scratch directory setup, and cluster preemption handling via `SIGUSR1` traps and `scontrol requeue`. |
+| `--submit` | Flag | Submits the job to the Slurm queue via `sbatch`. Omitting `--submit` executes a zero-cost validation dry-run via `sbatch --test-only`, ensuring all cluster paths, node counts, and modules are valid before consuming CPU/GPU hours. |
+| `--seeds` | Flag | Injects a multi-seed variance sweep (`training.seed=42,123,999`) into Hydra multirun (`-m`) to compute mean and standard deviation across stochastic runs for publication tables. |
+| `--smoke` | Flag | Fast verification mode for pipeline debugging: forces 3 epochs (`training.epochs=3`), batch size 2 (`training.batch_size=2`), limits evaluation to 2 samples (`evaluate.max_samples=2`), and disables dataset cache (`dataset.use_cache=false`). |
+| `--eval` | Flag | Post-training automated evaluation. In local mode, triggers automatic scoring immediately after multirun completion. In standalone mode (`cfmri-suite --eval`), inspects the latest directory under `outputs/multirun/*/`, scores every checkpoint, runs the VarNet baseline on each encountered dataset, and outputs `eval_summary.json`. |
+| `--gpus N` | `int` (default: `4`) | Number of GPUs per node allocated for Slurm jobs, forwarded to `launch_slurm.sh -g`. |
+| `--nodes N` | `int` (default: `1`) | Number of compute nodes allocated for Slurm jobs, forwarded to `launch_slurm.sh -N`. |
+| `--extra ...` | Variable | Additional Hydra overrides forwarded verbatim to `train.py` (e.g., `--extra optimizer.lr=1e-4 training.loss.lambda_phase=2.0`). |
+
+> **Asynchronous Slurm Execution & Evaluation:** Cluster jobs submitted to Slurm run asynchronously in the queue. Specifying `--eval` alongside `--slurm` will print a guidance notice explaining that inline evaluation cannot run immediately while jobs are queued. Once the Slurm job completes and checkpoints are written to disk, invoke `uv run cfmri-suite --eval` to compile the benchmark summary.
+
 ### Generation
 
 **Use latest checkpoint from a training run:**
@@ -433,6 +489,7 @@ View at: https://wandb.ai
 ✅ **Cylindrical Geometry** - Respects MRI data structure
 ✅ **Euclidean Baseline** - Same pipeline, flat R^2, for an honest comparison
 ✅ **Flow Matching** - State-of-the-art generative modeling
+✅ **Mission Control Suite** - `cfmri-suite` CLI for matrix training, Slurm dispatch, and automated evaluation
 ✅ **Hydra Configuration** - Reproducible, scriptable experiments
 ✅ **W&B Integration** - Opt in with `logging=w_and_b`
 ✅ **Batch Scheduling** - Run multiple experiments sequentially
