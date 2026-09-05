@@ -36,9 +36,11 @@ synthetic tensors.
 
 from __future__ import annotations
 
+import csv
 import json
 import logging
 import os
+import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any, cast
@@ -457,6 +459,17 @@ class MetricAccumulator:
             return torch.empty(0, dtype=torch.float64)
         return torch.cat(self._chunks)
 
+    def records(self) -> list[tuple[str, float]]:
+        """Return per-sample metric records.
+
+        Returns:
+            A list of ``(sample_id, value)`` tuples for all accumulated samples.
+        """
+        if not self._chunks:
+            return []
+        v = self.values().tolist()
+        return list(zip(self._ids, v, strict=True))
+
     def summary(self, max_reported_ids: int = 5) -> MetricSummary:
         """Partition the accumulated values and reduce the finite ones.
 
@@ -816,6 +829,48 @@ def main(cfg: DictConfig) -> None:
             indent=2,
         )
     print(f"Wrote {metrics_path}")
+
+    # Export eval_records.csv
+    csv_path = os.path.join(output_dir, "eval_records.csv")
+    metric_names = list(accumulators.keys())
+
+    # Collate records by sample_id
+    records_by_sample: dict[str, dict[str, float]] = {}
+    for m_name, acc in accumulators.items():
+        for s_id, val in acc.records():
+            if s_id not in records_by_sample:
+                records_by_sample[s_id] = {}
+            records_by_sample[s_id][m_name] = val
+
+    with open(csv_path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.writer(fh)
+        header = [
+            "sample_id",
+            "file",
+            "slice_idx",
+            "manifold",
+            "model",
+            "split",
+            "seed",
+            "t_start",
+        ] + metric_names
+        writer.writerow(header)
+
+        model_name = model.__class__.__name__ if model else "Unknown"
+
+        for s_id, m_dict in records_by_sample.items():
+            match = re.match(r"(.*)\[(\d+)\]", s_id)
+            if match:
+                file_name, slice_idx = match.groups()
+            else:
+                file_name, slice_idx = s_id, ""
+
+            row = [s_id, file_name, slice_idx, manifold.name, model_name, split, seed, t_start]
+            for m_name in metric_names:
+                row.append(m_dict.get(m_name, float("nan")))
+            writer.writerow(row)
+
+    print(f"Wrote {csv_path}")
 
     if use_wandb:
         log_dict: dict[str, float | int | str] = {
