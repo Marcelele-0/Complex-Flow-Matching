@@ -89,7 +89,10 @@ src/cfm/
 │   ├── transforms.py     # CenterCropOrPad, Modulus normalization
 │   └── hdf5_manager.py   # Safe multi-worker file handle manager
 └── utils/
+    ├── complex_ops.py    # Complex <-> cylindrical / euclidean
     ├── inference.py      # Registry-driven model/manifold building
+    ├── distributed.py    # DDP process group, rank helpers, wrapper unwrapping
+    ├── checkpoint.py     # Atomic resume state (weights + optimizer + schedule)
     └── metrics.py        # PSNR, SSIM, Circular Phase Error
 
 conf/                     # Hydra configurations
@@ -100,10 +103,24 @@ conf/                     # Hydra configurations
 ├── reconstructor/        # varnet
 └── evaluate/             # Evaluation integration settings
 
+scripts/
+├── launch_slurm.sh       # PLGrid A100 submit wrapper (dry-runs by default)
+└── slurm/
+    ├── train_ddp.sbatch              # Multi-GPU job: torchrun + requeue on preempt
+    ├── bootstrap_plgrid_storage.sh   # Group-storage tree + project-scoped symlinks
+    └── train_*.sbatch                # Single-GPU jobs, one per geometry
+
+docs/plgrid/             # PLGrid runbook, vendor-neutral (see "Multi-GPU" below)
+├── SKILL.md              # Entry point: routing + operating rules
+├── INSTALL.md            # Wiring it into Claude Code / Codex / Cursor / Copilot
+└── references/           # Setup, running experiments, CFM-on-Athena specifics
+
 outputs/
 ├── train/{experiment_name}/{date}_{time}/
-│   ├── checkpoints/      # Model weights (.pt)
+│   ├── checkpoints/      # Model weights (.pt), for generate/evaluate
 │   └── wandb/            # W&B logs
+├── state/{experiment_name}/
+│   └── last.pt           # Resume state; stable path, survives a requeue
 ├── generate/{experiment_name}/{date}_{time}/
 │   └── *.png             # Generated images
 └── evaluate/{experiment_name}/{date}_{time}/
@@ -178,6 +195,65 @@ through `build_window_transforms`.
 > **Memory:** the encoder runs on `batch_size × num_slices` images, so expect to
 > roughly halve `batch_size` versus `c_unet_attention` at `num_slices=3`. Measure
 > rather than assume — the bottleneck is actually cheaper here.
+
+### Multi-GPU training (DDP)
+
+`train.py` is one program at every scale. Under `torchrun` it wraps the model in
+`DistributedDataParallel`, shards the split with a `DistributedSampler` and reduces
+epoch metrics across ranks; without it `world_size` is 1, no process group exists
+and the same statements run unchanged.
+
+```bash
+uv run torchrun --standalone --nproc-per-node=4 src/cfm/train.py manifold=cylindrical
+```
+
+> **`training.batch_size` is per GPU.** The effective batch is
+> `batch_size × world_size` and the learning rate is **not** rescaled, so a 4-GPU run
+> at the default `batch_size=4` trains on batches of 16. Adjust one of the two before
+> putting the numbers next to a single-GPU run.
+
+Only rank 0 prints, checkpoints and logs to W&B. Checkpoints are written from the
+unwrapped module, so a checkpoint from an eight-GPU compiled run loads into
+`generate.py` and `evaluate.py` unchanged.
+
+#### On PLGrid (Athena, `plgrid-gpu-a100`)
+
+```bash
+export PLG_GROUP=<group from hpc-fs>          # once per session
+./scripts/slurm/bootstrap_plgrid_storage.sh   # once per cluster
+
+./scripts/launch_slurm.sh --gpus 4 -- manifold=cylindrical             # dry run
+./scripts/launch_slurm.sh --gpus 4 --submit -e cyl_a100 -- manifold=cylindrical
+```
+
+`launch_slurm.sh` validates the request with `sbatch --test-only` on every path and
+only consumes allocation with `--submit`. Everything after `--` is a Hydra override.
+Run `--help` for the resource flags.
+
+**Auto-resume.** `train.py` writes `outputs/state/{experiment_name}/last.pt` every
+epoch — atomically, and carrying the optimizer moments, the cosine schedule position
+and the W&B run id, not just weights. The path is deliberately stable: the Hydra run
+directory carries a timestamp that a requeued job could never guess. The batch script
+turns `training.auto_resume=true` on, so a job that Slurm interrupts comes back where
+it stopped rather than at epoch 0.
+
+Off the cluster `auto_resume` defaults to **false**, since a rerun under an existing
+`experiment_name` should restart rather than silently continue.
+
+**Preemption.** `--signal=B:USR1@600` wakes the batch script ten minutes before the
+wall clock; it touches a sentinel file, `train.py` sees it at the next epoch boundary,
+agrees across ranks that it is time to stop, saves and exits, and the script calls
+`scontrol requeue`. A file rather than a relayed signal because the signal would have
+to survive `srun` → `uv` → the `torchrun` agent, and the agent has no SIGUSR1 handler:
+it kills the workers instead of letting them finish the epoch.
+
+Full runbook, including storage layout, verification and failure diagnosis:
+[`docs/plgrid/SKILL.md`](docs/plgrid/SKILL.md). It is plain Markdown with no
+vendor-specific syntax, so humans and any coding agent read the same copy; Claude Code
+picks it up automatically through a stub in `.claude/skills/`, and
+[`docs/plgrid/INSTALL.md`](docs/plgrid/INSTALL.md) wires it into Codex, Cursor,
+Copilot or Gemini. Adapted from
+[ofurman/plgrid-skill](https://github.com/ofurman/plgrid-skill).
 
 ### Generation
 

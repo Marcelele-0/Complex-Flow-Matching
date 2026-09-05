@@ -1,10 +1,27 @@
 epochs: 100
+
+# PER GPU under torchrun, so the effective batch is batch_size * world_size and the
+# learning rate below is not rescaled for you. Halve it when you double the GPUs if
+# you want a run comparable to an existing single-GPU one.
 batch_size: 4
 num_workers: 4
 learning_rate: 2e-4
 weight_decay: 1e-4
 
 matmul_precision: "high"
+
+# Continue from paths.state_dir/last.pt when that file exists, instead of starting at
+# epoch 0. Off by default because it makes a rerun under an existing experiment_name
+# silently continue rather than restart - the SLURM scripts turn it on, since there a
+# restart is the scheduler's decision rather than the user's.
+auto_resume: false
+
+# Path the training loop watches for a "wrap up now" flag, checked at the end of each
+# epoch. scripts/slurm/train_ddp.sbatch sets it and touches the file when Slurm warns
+# that the wall clock is close, so the run saves its resume state and exits instead of
+# being killed mid-epoch. A signal cannot do this job: it does not survive the relay
+# through srun, uv and the torchrun agent. null outside a batch job.
+preempt_file: null
 
 # Seeds weight init, batch order, noise and time sampling. Set to null for an
 # unseeded run.
