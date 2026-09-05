@@ -171,6 +171,21 @@ def main(cfg: DictConfig) -> None:
         window_pipeline = None
     slice_pipeline = Compose([geometry, slice_pipeline])
 
+    # Rank 0 downloads the dataset if needed, and all other ranks wait at the barrier,
+    # preventing race conditions on concurrent downloads or extractions under DDP.
+    if ctx.is_distributed:
+        if ctx.is_main:
+            from cfm.data.download import ensure_dataset_exists
+
+            data_dir_str = str(data_dir)
+            if "skm-tea-mini" in data_dir_str:
+                ensure_dataset_exists("skm_tea", data_dir)
+            elif "fastmri_local" in data_dir_str:
+                ensure_dataset_exists("fastmri", data_dir, mode="local")
+            elif "fastmri_full" in data_dir_str:
+                ensure_dataset_exists("fastmri", data_dir, mode="full")
+        torch.distributed.barrier()
+
     dataset: BaseComplexDataset = build_dataset(
         dataset_cfg,
         data_dir=data_dir,
@@ -512,7 +527,7 @@ def main(cfg: DictConfig) -> None:
             if (epoch + 1) % 10 == 0 or (epoch + 1) == epochs:
                 checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_epoch_{epoch + 1}.pt")
                 torch.save(unwrap_model(model).state_dict(), checkpoint_path)
-                print(f"Model saved cleanly to: {checkpoint_path}")
+                print_main(f"Model saved cleanly to: {checkpoint_path}")
 
         # Agreed on across ranks: a rank stopping on a signal its peers never
         # received would leave them blocked in the next epoch's collectives.

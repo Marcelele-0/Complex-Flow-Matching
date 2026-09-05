@@ -144,7 +144,7 @@ class PredictorCorrectorSolver(BaseSDESolver):
         Returns:
             Noise standard deviation tensor.
         """
-        if isinstance(t, (int, float)):
+        if isinstance(t, int | float):
             val = self.sigma_min * (self.sigma_max / self.sigma_min) ** float(t)
             return torch.tensor(val, dtype=torch.float32)
         return self.sigma_min * (self.sigma_max / self.sigma_min) ** t
