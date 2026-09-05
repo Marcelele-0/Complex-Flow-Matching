@@ -3,11 +3,9 @@
 Iterates over .h5 files, extracts multi-coil k-space data, computes sensitivity
 maps via sigpy.mri.app.EspiritCalib, and saves them under 'sensitivity_maps'.
 
-The maps are the same dtype and shape as the k-space, so writing them back into
-the source archive roughly doubles its footprint and leaves half-modified files
-behind if the run is interrupted. Pass ``--output_dir`` to write sidecar files
-instead, and point ``dataset.sens_dir`` at that directory; in-place writing is
-kept as the default only so existing local datasets keep working.
+The maps are the same dtype and shape as the k-space, so they are saved as
+sidecar files in ``--output_dir`` (defaulting to ``<data_dir>_sens``). Source files
+are strictly read-only and never modified.
 
 The maps land on sigpy's centered image grid, which is the convention
 :mod:`cfm.utils.fft` implements and :class:`~cfm.data.fastmri.FastMRIDataset`
@@ -20,6 +18,7 @@ import argparse
 import glob
 import logging
 import os
+from pathlib import Path
 
 from cfm.data.espirit import (
     DEFAULT_SENS_KEY,
@@ -59,8 +58,7 @@ def main() -> None:
         default=None,
         help=(
             "Write sidecar map files here instead of modifying the source archive. "
-            "Point dataset.sens_dir at the same directory. Strongly recommended for "
-            "the full cohort: the maps are as large as the k-space."
+            "Defaults to '<data_dir>_sens'. Source files are never modified."
         ),
     )
     parser.add_argument(
@@ -143,17 +141,16 @@ def main() -> None:
         logger.warning("No files found matching pattern: %s", pattern)
         return
 
-    if args.output_dir is None:
-        logger.warning(
-            "No --output_dir given: maps will be written into the source files, "
-            "roughly doubling the size of %s.",
-            args.data_dir,
-        )
+    output_dir = args.output_dir
+    if output_dir is None:
+        data_p = Path(args.data_dir)
+        output_dir = str(data_p.parent / f"{data_p.name}_sens")
+        logger.info("No --output_dir given: writing sidecars to %s", output_dir)
 
     try:
         ensure_espirit_maps(
             files=files,
-            output_dir=args.output_dir,
+            output_dir=output_dir,
             num_workers=args.num_workers,
             show_pbar=args.show_pbar,
             device=args.device,

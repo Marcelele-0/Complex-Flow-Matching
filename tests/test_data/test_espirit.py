@@ -62,30 +62,18 @@ def test_compute_espirit_maps_3d_and_4d() -> None:
         compute_espirit_maps(np.zeros((24, 24), dtype=np.complex64))
 
 
-def test_process_h5_file_in_place_and_sidecar(tmp_path: Path) -> None:
-    """Test process_h5_file writes maps in-place and as sidecar files."""
-    f_in_place = tmp_path / "vol1.h5"
-    _create_mock_kspace_file(f_in_place, num_slices=2, num_coils=4, height=24, width=24)
-
-    # In-place run
-    success = process_h5_file(f_in_place, calib_width=12, overwrite=False)
-    assert success is True
-
-    with h5py.File(f_in_place, "r") as hf:
-        assert "sensitivity_maps" in hf
-        assert hf["sensitivity_maps"].shape == (2, 4, 24, 24)
-
-    # Re-running without overwrite skips
-    assert process_h5_file(f_in_place, calib_width=12, overwrite=False) is False
-    # Re-running with overwrite succeeds
-    assert process_h5_file(f_in_place, calib_width=12, overwrite=True) is True
-
-    # Sidecar run
-    f_src = tmp_path / "vol2.h5"
+def test_process_h5_file_sidecar_only(tmp_path: Path) -> None:
+    """Test process_h5_file requires output_dir and writes sidecars without modifying source."""
+    f_src = tmp_path / "vol.h5"
     out_dir = tmp_path / "sidecars"
     _create_mock_kspace_file(f_src, num_slices=2, num_coils=4, height=24, width=24)
 
-    success_sidecar = process_h5_file(f_src, calib_width=12, output_dir=out_dir, overwrite=False)
+    # Missing output_dir raises ValueError (in-place modification forbidden)
+    with pytest.raises(ValueError, match="output_dir is required"):
+        process_h5_file(f_src, calib_width=12)
+
+    # Sidecar run
+    success_sidecar = process_h5_file(f_src, output_dir=out_dir, calib_width=12, overwrite=False)
     assert success_sidecar is True
 
     # Source remains untouched
@@ -93,11 +81,16 @@ def test_process_h5_file_in_place_and_sidecar(tmp_path: Path) -> None:
         assert "sensitivity_maps" not in hf
 
     # Sidecar exists
-    sidecar_path = out_dir / "vol2.h5"
+    sidecar_path = out_dir / "vol.h5"
     assert sidecar_path.is_file()
     with h5py.File(sidecar_path, "r") as hf:
         assert "sensitivity_maps" in hf
         assert hf["sensitivity_maps"].shape == (2, 4, 24, 24)
+
+    # Re-running without overwrite skips
+    assert process_h5_file(f_src, output_dir=out_dir, calib_width=12, overwrite=False) is False
+    # Re-running with overwrite succeeds
+    assert process_h5_file(f_src, output_dir=out_dir, calib_width=12, overwrite=True) is True
 
 
 def test_ensure_espirit_maps_multiple_files(tmp_path: Path) -> None:
@@ -110,10 +103,19 @@ def test_ensure_espirit_maps_multiple_files(tmp_path: Path) -> None:
     # Empty list
     assert ensure_espirit_maps([]) == []
 
-    # Sequential in-place execution
-    out_paths = ensure_espirit_maps([f1, f2], calib_width=12, num_workers=1)
+    # Missing output_dir raises ValueError
+    with pytest.raises(ValueError, match="output_dir is required"):
+        ensure_espirit_maps([f1, f2], calib_width=12)
+
+    # Sequential sidecar execution
+    seq_dir = tmp_path / "seq_sidecars"
+    out_paths = ensure_espirit_maps([f1, f2], output_dir=seq_dir, calib_width=12, num_workers=1)
     assert len(out_paths) == 2
     for p in [f1, f2]:
+        with h5py.File(p, "r") as hf:
+            assert "sensitivity_maps" not in hf  # Source untouched
+    for p in out_paths:
+        assert p.is_file()
         with h5py.File(p, "r") as hf:
             assert "sensitivity_maps" in hf
 
@@ -129,28 +131,37 @@ def test_ensure_espirit_maps_multiple_files(tmp_path: Path) -> None:
     )
     assert len(out_paths_parallel) == 2
     for f in [f3, f4]:
+        with h5py.File(f, "r") as hf:
+            assert "sensitivity_maps" not in hf  # Source untouched
         sidecar = out_dir / f.name
         assert sidecar.is_file()
         with h5py.File(sidecar, "r") as hf:
             assert "sensitivity_maps" in hf
 
 
-def test_fastmri_dataset_auto_calibration_in_place(tmp_path: Path) -> None:
-    """Test FastMRIDataset automatically calibrates raw HDF5 files lacking sensitivity maps."""
+def test_fastmri_dataset_auto_calibration_default_sens_dir(tmp_path: Path) -> None:
+    """Test FastMRIDataset writes sidecars into default sens_dir when sens_dir=None."""
     data_dir = tmp_path / "raw_data"
     data_dir.mkdir()
     vol_path = data_dir / "raw_vol.h5"
     _create_mock_kspace_file(vol_path, num_slices=2, num_coils=4, height=24, width=24)
 
-    # Verify initially missing sensitivity maps
+    # Verify initially missing sensitivity maps in source
     with h5py.File(vol_path, "r") as hf:
         assert "sensitivity_maps" not in hf
 
-    # Initialize FastMRIDataset with auto_calibrate=True (default)
+    # Initialize FastMRIDataset with auto_calibrate=True (default) and sens_dir=None
     dataset = FastMRIDataset(data_dir=str(data_dir), mode="generation", use_cache=False)
 
-    # Sensitivity maps must now exist in-place
+    # Source file MUST remain untouched (NEVER opened r+)
     with h5py.File(vol_path, "r") as hf:
+        assert "sensitivity_maps" not in hf
+
+    # Default sidecar dir should be data_dir.parent / f"{data_dir.name}_sens"
+    expected_sens_dir = data_dir.parent / f"{data_dir.name}_sens"
+    sidecar_path = expected_sens_dir / "raw_vol.h5"
+    assert sidecar_path.is_file()
+    with h5py.File(sidecar_path, "r") as hf:
         assert "sensitivity_maps" in hf
         assert hf["sensitivity_maps"].shape == (2, 4, 24, 24)
 
@@ -196,32 +207,76 @@ def test_fastmri_dataset_auto_calibration_sidecar(tmp_path: Path) -> None:
 
 
 def test_fastmri_dataset_auto_calibration_ddp_coordination(tmp_path: Path) -> None:
-    """Test DDP coordination: rank 0 calibrates while other ranks wait at barrier."""
+    """Test DDP coordination: rank 0 calibrates while other ranks wait for broadcast and barrier."""
     data_dir = tmp_path / "ddp_data"
     data_dir.mkdir()
     vol_path = data_dir / "vol.h5"
     _create_mock_kspace_file(vol_path, num_slices=1, num_coils=4, height=20, width=20)
 
-    # Mock rank 1 in DDP: should not call ensure_espirit_maps directly, only barrier
+    # Mock rank 1 in DDP: should broadcast and barrier, not call ensure_espirit_maps directly
     with (
         patch("torch.distributed.is_available", return_value=True),
         patch("torch.distributed.is_initialized", return_value=True),
         patch("torch.distributed.get_rank", return_value=1),
+        patch("torch.distributed.broadcast") as mock_broadcast,
         patch("torch.distributed.barrier") as mock_barrier,
         patch("cfm.data.espirit.ensure_espirit_maps") as mock_ensure,
     ):
         _ = FastMRIDataset(data_dir=str(data_dir), use_cache=False)
+        mock_broadcast.assert_called_once()
         mock_barrier.assert_called_once()
         mock_ensure.assert_not_called()
 
-    # Mock rank 0 in DDP: should call ensure_espirit_maps and then barrier
+    # Mock rank 0 in DDP: should call ensure_espirit_maps, broadcast success, and then barrier
     with (
         patch("torch.distributed.is_available", return_value=True),
         patch("torch.distributed.is_initialized", return_value=True),
         patch("torch.distributed.get_rank", return_value=0),
+        patch("torch.distributed.broadcast") as mock_broadcast,
         patch("torch.distributed.barrier") as mock_barrier,
         patch("cfm.data.espirit.ensure_espirit_maps") as mock_ensure,
     ):
         _ = FastMRIDataset(data_dir=str(data_dir), use_cache=False)
         mock_ensure.assert_called_once()
+        mock_broadcast.assert_called_once()
         mock_barrier.assert_called_once()
+
+
+def test_fastmri_dataset_auto_calibration_ddp_failure_propagation(tmp_path: Path) -> None:
+    """Test DDP failure propagation: ranks raise cleanly on failure without deadlocking."""
+    data_dir = tmp_path / "ddp_fail_data"
+    data_dir.mkdir()
+    vol_path = data_dir / "vol.h5"
+    _create_mock_kspace_file(vol_path, num_slices=1, num_coils=4, height=20, width=20)
+
+    # Rank 0 fails during calibration: broadcasts failure (0) and raises RuntimeError
+    with (
+        patch("torch.distributed.is_available", return_value=True),
+        patch("torch.distributed.is_initialized", return_value=True),
+        patch("torch.distributed.get_rank", return_value=0),
+        patch("torch.distributed.broadcast") as mock_broadcast,
+        patch("torch.distributed.barrier") as mock_barrier,
+        patch("cfm.data.espirit.ensure_espirit_maps", side_effect=RuntimeError("Out of memory")),
+    ):
+        with pytest.raises(RuntimeError, match="ESPIRiT calibration failed on rank 0"):
+            _ = FastMRIDataset(data_dir=str(data_dir), use_cache=False)
+        mock_broadcast.assert_called_once()
+        mock_barrier.assert_not_called()  # barrier never called if calibration failed
+
+    # Non-zero rank receives failure broadcast (0): raises RuntimeError without deadlocking
+    def mock_broadcast_fail(tensor, src=0):
+        tensor.fill_(0)
+
+    with (
+        patch("torch.distributed.is_available", return_value=True),
+        patch("torch.distributed.is_initialized", return_value=True),
+        patch("torch.distributed.get_rank", return_value=1),
+        patch("torch.distributed.broadcast", side_effect=mock_broadcast_fail) as mock_broadcast,
+        patch("torch.distributed.barrier") as mock_barrier,
+        patch("cfm.data.espirit.ensure_espirit_maps") as mock_ensure,
+    ):
+        with pytest.raises(RuntimeError, match="ESPIRiT calibration failed on rank 0"):
+            _ = FastMRIDataset(data_dir=str(data_dir), use_cache=False)
+        mock_broadcast.assert_called_once()
+        mock_barrier.assert_not_called()
+        mock_ensure.assert_not_called()

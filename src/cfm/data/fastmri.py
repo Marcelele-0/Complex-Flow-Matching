@@ -5,6 +5,7 @@ from __future__ import annotations
 import glob
 import hashlib
 import json
+import logging
 import os
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -19,6 +20,8 @@ from cfm.core.registry import DATASETS, MASKS
 from cfm.data.hdf5_manager import WorkerHDF5Manager
 from cfm.data.masks import BaseMaskGenerator
 from cfm.utils.fft import fft2c, ifft2c
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_SENS_KEY = "sensitivity_maps"
 
@@ -106,8 +109,8 @@ class FastMRIDataset(BaseComplexDataset):
         max_volumes: Optional cap on the number of volumes, applied by striding the
             sorted file list so the subset spans the cohort rather than its first N.
         sens_dir: Optional directory of sidecar HDF5 files holding the sensitivity
-            maps, keyed by the same basename as the k-space file. When omitted the
-            maps are read from the k-space file itself.
+            maps, keyed by the same basename as the k-space file. When omitted,
+            defaults to ``Path(data_dir).parent / f"{Path(data_dir).name}_sens"``.
         sens_key: Dataset name the sensitivity maps are stored under.
         auto_calibrate: Whether to automatically compute ESPIRiT sensitivity maps
             for volumes that lack them.
@@ -171,7 +174,11 @@ class FastMRIDataset(BaseComplexDataset):
         self.post_transform = post_transform
         self.use_cache = use_cache
         self.cache_dir = str(cache_dir)
-        self.sens_dir = str(sens_dir) if sens_dir is not None else None
+        if sens_dir is not None:
+            self.sens_dir = str(sens_dir)
+        else:
+            data_path = Path(self.data_dir)
+            self.sens_dir = str(data_path.parent / f"{data_path.name}_sens")
         self.sens_key = sens_key
         self.auto_calibrate = auto_calibrate
         self.calib_workers = calib_workers
@@ -262,17 +269,32 @@ class FastMRIDataset(BaseComplexDataset):
 
         msg = (
             f"[Auto-ESPIRiT] Found {len(missing)} volume(s) missing sensitivity maps. "
-            "Computing ESPIRiT calibration..."
+            f"Computing ESPIRiT calibration to {self.sens_dir}..."
         )
         if dist.is_available() and dist.is_initialized():
+            device = torch.device("cpu")
+            try:
+                if dist.get_backend() == "nccl" and torch.cuda.is_available():
+                    device = torch.device("cuda", torch.cuda.current_device())
+            except Exception:
+                pass
+
+            success = torch.tensor([1], dtype=torch.uint8, device=device)
             if dist.get_rank() == 0:
                 print(msg, flush=True)
-                ensure_espirit_maps(
-                    missing,
-                    output_dir=self.sens_dir,
-                    num_workers=self.calib_workers,
-                    sens_key=self.sens_key,
-                )
+                try:
+                    ensure_espirit_maps(
+                        missing,
+                        output_dir=self.sens_dir,
+                        num_workers=self.calib_workers,
+                        sens_key=self.sens_key,
+                    )
+                except Exception as exc:
+                    logger.error("ESPIRiT calibration failed on rank 0: %s", exc)
+                    success.fill_(0)
+            dist.broadcast(success, src=0)
+            if success.item() == 0:
+                raise RuntimeError("ESPIRiT calibration failed on rank 0")
             dist.barrier()
         else:
             print(msg, flush=True)

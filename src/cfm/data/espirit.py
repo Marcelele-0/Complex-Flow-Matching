@@ -167,6 +167,7 @@ def _write_maps(
 
 def process_h5_file(
     file_path: str | Path,
+    output_dir: str | Path | None = None,
     calib_width: int = 24,
     thresh: float = 0.02,
     kernel_width: int = 6,
@@ -175,16 +176,16 @@ def process_h5_file(
     overwrite: bool = False,
     device: int = -1,
     show_pbar: bool = False,
-    output_dir: str | Path | None = None,
     sens_key: str = DEFAULT_SENS_KEY,
 ) -> bool:
-    """Compute and write sensitivity maps for one HDF5 file.
+    """Compute and write sensitivity maps for one HDF5 file to a sidecar file.
 
     Slices are calibrated and written one at a time, so peak memory is one slice
-    of maps rather than a whole volume.
+    of maps rather than a whole volume. Source files are strictly opened read-only.
 
     Args:
         file_path: Path to the source .h5 file holding 'kspace'.
+        output_dir: Directory where sidecar sensitivity map file will be written. Required.
         calib_width: Calibration box size.
         thresh: Eigenvalue threshold.
         kernel_width: Kernel width.
@@ -193,11 +194,13 @@ def process_h5_file(
         overwrite: Overwrite existing maps if present.
         device: Device index (-1 for CPU, >= 0 for CUDA).
         show_pbar: Whether to show progress bar.
-        output_dir: Write a sidecar file here instead of modifying the source.
         sens_key: Dataset name the sensitivity maps are stored under.
 
     Returns:
         True if processed and written, False if skipped.
+
+    Raises:
+        ValueError: If output_dir is None.
     """
     _check_sigpy()
     file_path = Path(file_path)
@@ -205,24 +208,24 @@ def process_h5_file(
         raise FileNotFoundError(f"File not found: {file_path}")
 
     if output_dir is None:
-        dest_path = file_path
-    else:
-        dest_dir = Path(output_dir)
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        dest_path = dest_dir / file_path.name
+        raise ValueError(
+            "output_dir is required; in-place modification of source files is forbidden."
+        )
 
-        if dest_path.is_file() and not overwrite:
-            with h5py.File(dest_path, "r") as existing:
-                if sens_key in existing:
-                    logger.info("Skipping %s: sidecar already exists.", file_path.name)
-                    return False
+    dest_dir = Path(output_dir)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest_path = dest_dir / file_path.name
+
+    if dest_path.is_file() and not overwrite:
+        with h5py.File(dest_path, "r") as existing:
+            if sens_key in existing:
+                logger.info("Skipping %s: sidecar already exists.", file_path.name)
+                return False
 
     params = (calib_width, thresh, kernel_width, crop, max_iter, device, show_pbar)
-    in_place = output_dir is None
 
-    # Opened read-write when writing back into the archive: HDF5 will not hand out a
-    # second handle to a file this process already holds open read-only.
-    with h5py.File(file_path, "r+" if in_place else "r") as src:
+    # Source dataset is strictly read-only: never open with 'r+' or modify in-place.
+    with h5py.File(file_path, "r") as src:
         if "kspace" not in src:
             logger.warning("Skipping %s: no 'kspace' dataset found.", file_path.name)
             return False
@@ -234,24 +237,16 @@ def process_h5_file(
             )
         shape = tuple(ksp_ds.shape)
 
-        if in_place:
-            if sens_key in src:
-                if not overwrite:
-                    logger.info("Skipping %s: '%s' already exists.", file_path.name, sens_key)
-                    return False
-                del src[sens_key]
-            _write_maps(src, ksp_ds, params, sens_key=sens_key)
-        else:
-            # Staged through a temporary file and renamed, so an interrupted run never
-            # leaves a partially populated sidecar that a later pass reads as complete.
-            tmp_path = dest_path.with_suffix(f".tmp{os.getpid()}.h5")
-            try:
-                with h5py.File(tmp_path, "w") as dest:
-                    _write_maps(dest, ksp_ds, params, sens_key=sens_key)
-                os.replace(tmp_path, dest_path)
-            except BaseException:
-                tmp_path.unlink(missing_ok=True)
-                raise
+        # Staged through a temporary file and renamed, so an interrupted run never
+        # leaves a partially populated sidecar that a later pass reads as complete.
+        tmp_path = dest_path.with_suffix(f".tmp{os.getpid()}.h5")
+        try:
+            with h5py.File(tmp_path, "w") as dest:
+                _write_maps(dest, ksp_ds, params, sens_key=sens_key)
+            os.replace(tmp_path, dest_path)
+        except BaseException:
+            tmp_path.unlink(missing_ok=True)
+            raise
 
     logger.info("Wrote %s shape %s to %s", sens_key, shape, dest_path.name)
     return True
@@ -282,9 +277,12 @@ def ensure_espirit_maps(
 ) -> list[Path]:
     """Ensure ESPIRiT sensitivity maps exist for all given files, computing them if missing.
 
+    Sensitivity maps are always written as sidecar files into output_dir. Source files
+    are strictly read-only and never modified.
+
     Args:
         files: Sequence of paths to source HDF5 files containing 'kspace'.
-        output_dir: Directory to store sidecar map files. If None, writes in-place.
+        output_dir: Directory to store sidecar map files. Required.
         num_workers: Parallel workers for calibration. If None, automatically determined.
         show_pbar: Whether to display a progress bar.
         device: Device index (-1 for CPU, >= 0 for CUDA).
@@ -297,23 +295,26 @@ def ensure_espirit_maps(
         sens_key: HDF5 dataset name for sensitivity maps.
 
     Returns:
-        List of paths to output HDF5 files containing the sensitivity maps.
+        List of paths to output HDF5 sidecar files containing the sensitivity maps.
 
     Raises:
+        ValueError: If output_dir is None when files are provided.
         RuntimeError: If any volume fails calibration.
     """
     _check_sigpy()
     if not files:
         return []
 
-    if output_dir is not None:
-        Path(output_dir).mkdir(parents=True, exist_ok=True)
+    if output_dir is None:
+        raise ValueError(
+            "output_dir is required; ESPIRiT sensitivity maps must be written as sidecars."
+        )
+
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     file_strs = [str(f) for f in files]
-    out_paths = [
-        Path(output_dir) / Path(f).name if output_dir is not None else Path(f)
-        for f in file_strs
-    ]
+    out_paths = [out_dir / Path(f).name for f in file_strs]
 
     # Volumes to calibrate in parallel: CPU uses up to 4 workers; GPU runs 1 worker.
     if num_workers is None:
@@ -326,6 +327,7 @@ def ensure_espirit_maps(
         effective_workers = max(1, num_workers)
 
     kwargs: dict[str, Any] = {
+        "output_dir": out_dir,
         "calib_width": calib_width,
         "thresh": thresh,
         "kernel_width": kernel_width,
@@ -334,7 +336,6 @@ def ensure_espirit_maps(
         "overwrite": overwrite,
         "device": device,
         "show_pbar": show_pbar and len(file_strs) == 1,
-        "output_dir": output_dir,
         "sens_key": sens_key,
     }
 
@@ -342,7 +343,7 @@ def ensure_espirit_maps(
         "Ensuring ESPIRiT maps for %d file(s) (workers=%d, output_dir=%s)",
         len(file_strs),
         effective_workers,
-        output_dir or "in-place",
+        str(out_dir),
     )
 
     num_processed = 0
