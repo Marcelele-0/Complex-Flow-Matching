@@ -56,6 +56,7 @@ class ZeroFilledReconstructor(BaseReconstructor):
         mask: torch.Tensor,
         sensitivity_maps: torch.Tensor | None = None,
         num_steps: int | None = None,
+        **kwargs: Any,
     ) -> torch.Tensor:
         del mask, num_steps
         x = ifft2c(masked_kspace)
@@ -95,6 +96,7 @@ class FlowMatchingReconstructor(BaseReconstructor):
         mask: torch.Tensor,
         sensitivity_maps: torch.Tensor | None = None,
         num_steps: int | None = None,
+        **kwargs: Any,
     ) -> torch.Tensor:
         b = masked_kspace.shape[0]
         h = masked_kspace.shape[-2]
@@ -169,6 +171,7 @@ class DiffusionReconstructor(BaseReconstructor):
         mask: torch.Tensor,
         sensitivity_maps: torch.Tensor | None = None,
         num_steps: int | None = None,
+        **kwargs: Any,
     ) -> torch.Tensor:
         b = masked_kspace.shape[0]
         h = masked_kspace.shape[-2]

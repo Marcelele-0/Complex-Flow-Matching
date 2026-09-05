@@ -117,7 +117,7 @@ class ComplexDiffusionManifold(BaseManifold):
         Returns:
             Noise scale sigma(t).
         """
-        if isinstance(t, (int, float)):
+        if isinstance(t, int | float):
             val = self.sigma_min * (self.sigma_max / self.sigma_min) ** float(t)
             return torch.tensor(val, dtype=torch.float32)
         return self.sigma_min * (self.sigma_max / self.sigma_min) ** t
@@ -291,6 +291,7 @@ class ComplexDiffusionManifold(BaseManifold):
         target_x1: torch.Tensor | None = None,
         t: torch.Tensor | None = None,
         likelihood_weighting: bool | None = None,
+        **kwargs: Any,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """Compute Denoising Score Matching loss with likelihood weighting.
 
