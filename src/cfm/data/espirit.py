@@ -247,9 +247,13 @@ def process_h5_file(
             src_path=file_path,
             dest_path=dest_path,
             device=torch_device,
-            max_iter=min(max_iter, 30),
+            max_iter=max_iter,
             overwrite=overwrite,
             sens_key=sens_key,
+            calib_width=calib_width,
+            kernel_width=kernel_width,
+            thresh=thresh,
+            crop=crop,
         )
 
     _check_sigpy()
@@ -355,9 +359,7 @@ def ensure_espirit_maps(
     # Volumes to calibrate in parallel: CPU uses up to 4 workers; GPU runs 1 worker.
     if num_workers is None:
         effective_workers = (
-            1
-            if (is_gpu or len(file_strs) <= 1)
-            else min(os.cpu_count() or 1, 4, len(file_strs))
+            1 if (is_gpu or len(file_strs) <= 1) else min(os.cpu_count() or 1, 4, len(file_strs))
         )
     else:
         effective_workers = max(1, num_workers)

@@ -262,51 +262,66 @@ class FastMRIDataset(BaseComplexDataset):
         return [f for f in self.files if not self._has_sensitivity_map(f)]
 
     def _calibrate_missing(self, missing: list[str]) -> None:
-        """Run ESPIRiT calibration on missing volumes, coordinating across DDP ranks."""
+        """Run ESPIRiT calibration on missing volumes, coordinating across DDP ranks.
+
+        Every rank calibrates its own stride of the list rather than parking on a
+        collective while rank 0 does all of it: NCCL aborts a rank that waits longer
+        than ``COLLECTIVE_TIMEOUT`` (45 min), and a cold cohort takes far longer than
+        that. Sharding both divides the work and leaves each rank waiting only for the
+        slack between shards.
+        """
         import torch.distributed as dist
 
         from cfm.data.espirit import ensure_espirit_maps
 
-        msg = (
-            f"[Auto-ESPIRiT] Found {len(missing)} volume(s) missing sensitivity maps. "
-            f"Computing ESPIRiT calibration to {self.sens_dir}..."
-        )
-        calib_device: int | str = "cuda" if torch.cuda.is_available() else -1
-        if dist.is_available() and dist.is_initialized():
-            device = torch.device("cpu")
-            try:
-                if dist.get_backend() == "nccl" and torch.cuda.is_available():
-                    device = torch.device("cuda", torch.cuda.current_device())
-            except Exception:
-                pass
+        distributed = dist.is_available() and dist.is_initialized()
+        rank = dist.get_rank() if distributed else 0
+        world_size = dist.get_world_size() if distributed else 1
+        shard = missing[rank::world_size]
 
-            success = torch.tensor([1], dtype=torch.uint8, device=device)
-            if dist.get_rank() == 0:
-                print(msg, flush=True)
-                try:
-                    ensure_espirit_maps(
-                        missing,
-                        output_dir=self.sens_dir,
-                        num_workers=self.calib_workers,
-                        sens_key=self.sens_key,
-                        device=calib_device,
-                    )
-                except Exception as exc:
-                    logger.error("ESPIRiT calibration failed on rank 0: %s", exc)
-                    success.fill_(0)
-            dist.broadcast(success, src=0)
-            if success.item() == 0:
-                raise RuntimeError("ESPIRiT calibration failed on rank 0")
-            dist.barrier()
-        else:
-            print(msg, flush=True)
-            ensure_espirit_maps(
-                missing,
-                output_dir=self.sens_dir,
-                num_workers=self.calib_workers,
-                sens_key=self.sens_key,
-                device=calib_device,
+        if rank == 0:
+            print(
+                f"[Auto-ESPIRiT] Found {len(missing)} volume(s) missing sensitivity maps. "
+                f"Computing ESPIRiT calibration to {self.sens_dir} "
+                f"across {world_size} rank(s)...",
+                flush=True,
             )
+
+        # Each rank calibrates on the GPU it already owns; without the index every rank
+        # would pile onto cuda:0.
+        calib_device: int | str = -1
+        if torch.cuda.is_available():
+            calib_device = torch.cuda.current_device() if distributed else "cuda"
+
+        failed = False
+        if shard:
+            try:
+                ensure_espirit_maps(
+                    shard,
+                    output_dir=self.sens_dir,
+                    num_workers=1 if distributed else self.calib_workers,
+                    sens_key=self.sens_key,
+                    device=calib_device,
+                )
+            except Exception as exc:
+                logger.error("ESPIRiT calibration failed on rank %d: %s", rank, exc)
+                failed = True
+
+        if not distributed:
+            if failed:
+                raise RuntimeError("ESPIRiT calibration failed")
+            return
+
+        device = torch.device("cpu")
+        if dist.get_backend() == "nccl" and torch.cuda.is_available():
+            device = torch.device("cuda", torch.cuda.current_device())
+
+        # MAX rather than a broadcast from rank 0: any rank's shard can fail, and all of
+        # them must agree to stop so none is left alone in the next collective.
+        status = torch.tensor([1 if failed else 0], dtype=torch.uint8, device=device)
+        dist.all_reduce(status, op=dist.ReduceOp.MAX)
+        if int(status.item()) != 0:
+            raise RuntimeError("ESPIRiT calibration failed on at least one rank")
 
     def _sens_path(self, f_path: str) -> str:
         """Resolve the file holding the sensitivity maps for a k-space file."""
