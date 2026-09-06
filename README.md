@@ -390,6 +390,21 @@ W&B when run with `logging=w_and_b`.
 > the numbers are then reconstruction fidelity on seen data, and must be reported
 > as such.
 
+### Statistical Significance Testing (Wilcoxon + Holm-Bonferroni)
+
+Granular per-slice metric records are automatically written to `eval_records.csv` by `evaluate.py`.
+To run automated Wilcoxon signed-rank significance testing with step-down Holm-Bonferroni correction and export a camera-ready LaTeX table:
+
+```bash
+# CLI entry point
+uv run cfmri-stats --target outputs/train/cylindrical/eval_records.csv \
+                   --baselines Euclidean=outputs/train/euclidean/eval_records.csv \
+                   --output-latex paper/tables/significance.tex
+
+# Or via script
+uv run scripts/run_stats.py --demo
+```
+
 ### Core Modular Architecture
 
 The repository is built around a highly modular, registry-based architecture. This allows for plug-and-play swapping of Geometries, Neural Architectures, and Reconstructors using Hydra configurations.
