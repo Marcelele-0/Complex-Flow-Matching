@@ -62,6 +62,7 @@ src/cfm/
 ├── train.py              # Generative (ODE/SDE) training entry point
 ├── generate.py           # Generation from pure noise
 ├── evaluate.py           # Evaluation pipeline (PSNR/SSIM)
+├── suite.py              # Mission control CLI (matrix training, sweeps, Slurm dispatch, eval)
 ├── core/
 │   ├── registry.py       # Base Registry system (MODELS, MANIFOLDS, etc.)
 │   ├── manifold.py       # BaseManifold interface
@@ -255,6 +256,88 @@ picks it up automatically through a stub in `.claude/skills/`, and
 Copilot or Gemini. Adapted from
 [ofurman/plgrid-skill](https://github.com/ofurman/plgrid-skill).
 
+### Mission Control & Cluster Training (`cfmri-suite`)
+
+`cfmri-suite` drives the experiment grid from one command: matrix training across
+datasets and geometries, multi-seed sweeps, PLGrid submission, and post-run scoring.
+
+It has two dispatch modes, and they do **not** share a mechanism:
+
+- **Local** — one `train.py` process. A grid becomes a Hydra multirun (`-m`), run
+  sequentially in that process.
+- **`--slurm`** — one **independent** `sbatch` submission per grid point through
+  [`scripts/launch_slurm.sh`](scripts/launch_slurm.sh), each its own DDP job.
+
+The split is forced, not stylistic. `train_ddp.sbatch` prepends its own overrides
+before yours, and Hydra rejects `-m` once any override precedes it, so a multirun
+flag cannot survive the trip into a DDP job. Independent jobs are also the only safe
+layout: `logging.experiment_name` keys `outputs/state/<name>/last.pt` and the batch
+script forces `auto_resume=true`, so grid points sharing a name would resume from
+each other's checkpoint. Each point therefore gets its own name, suffixed from the
+grid coordinate (`-e run` → `run-skm_tea-cylindrical-c_unet`).
+
+#### Key Workflows & CLI Commands
+
+- **Safe Slurm dry-run** (consumes no allocation):
+  ```bash
+  uv run cfmri-suite --matrix --slurm
+  ```
+  Prints the submission for each of the 6 grid points and validates each job shape
+  with `sbatch --test-only`. This checks the *request* — partition visibility,
+  account, node/GPU/memory layout. It does not run `train.py`, so a bad Hydra
+  override still surfaces only once the job starts.
+
+- **Submit full matrix to Slurm queue:**
+  ```bash
+  uv run cfmri-suite --matrix --slurm --submit --gpus 4 -e full_matrix
+  ```
+  Submits 6 separate 4x A100 DDP jobs, one per (dataset, manifold) pair. A launcher
+  rejection stops the sweep rather than queueing the rest.
+
+- **Submit multi-seed variance sweep (seeds 42, 123, 999):**
+  ```bash
+  uv run cfmri-suite --matrix --seeds --slurm --submit --gpus 4
+  ```
+  18 jobs (6 grid points x 3 seeds) for mean/std across stochastic runs.
+
+- **Quick smoke test on cluster:**
+  ```bash
+  uv run cfmri-suite --smoke --slurm --submit
+  ```
+  One 3-epoch job at batch size 2 with the cache off, to confirm the distributed
+  environment and I/O path before spending real hours.
+
+- **Standalone evaluation of a local multirun:**
+  ```bash
+  uv run cfmri-suite --eval
+  ```
+  Scores every checkpoint in the newest `outputs/multirun/*/` at
+  $t_{\text{start}} = 0.5$, adds the VarNet ceiling per dataset, and writes
+  `eval_summary.json`. **Local multiruns only** — see the note below.
+
+#### CLI Argument Reference
+
+| Flag | Type / Default | Description |
+|---|---|---|
+| `--matrix` | Flag | Grid over both datasets (`skm_tea`, `fastmri_local`) x all three geometries (`cylindrical`, `euclidean`, `complex_diffusion`) on `model=c_unet` — 6 runs. Locally one Hydra multirun; under `--slurm` six separate submissions. |
+| `--seeds` | Flag | Adds the seed axis (`42`, `123`, `999`), multiplying the grid by three. |
+| `--smoke` | Flag | 3 epochs, batch size 2, `evaluate.max_samples=2`, dataset cache off. Applies to every job; does not by itself make a grid. |
+| `--slurm` | Flag | Dispatch through `scripts/launch_slurm.sh` instead of running `train.py` here. Requires a source checkout — the launcher script is not shipped in the wheel. |
+| `--submit` | Flag | Actually queue the jobs. Without it every submission is a `sbatch --test-only` dry run. Only valid with `--slurm`. |
+| `-e`, `--experiment <NAME>` | `str` (default: `suite-matrix`) | Base `logging.experiment_name`, which in turn names the Hydra run dir, the W&B run, the Slurm job (`cfm-<NAME>-<N>gpu`) and the resume state at `outputs/state/<NAME>/last.pt`. Under a grid it is a **prefix**: each point appends its coordinate. Two single-point runs launched without `-e` share one state directory, so name them. |
+| `--gpus N` | `int` (default: `4`) | GPUs per node, forwarded to `launch_slurm.sh -g`. `training.batch_size` is per GPU. |
+| `--nodes N` | `int` (default: `1`) | Nodes, forwarded to `launch_slurm.sh -N`. |
+| `--eval` | Flag | Local mode only: score the multirun after it finishes. Ignored for `--slurm`, which prints the `evaluate.py` command to use instead. |
+| `--extra ...` | Variable | Trailing Hydra overrides, e.g. `--extra optimizer.lr=1e-4 training.loss.lambda_phase=2.0`. It consumes **everything** after it, so write suite flags first; a flag caught here is rejected rather than silently forwarded. |
+
+> **`--eval` does not cover cluster runs.** It reads `outputs/multirun/`, which only a
+> local Hydra multirun writes. Every `--slurm` job is a single run and lands in
+> `outputs/train/<experiment>/` instead. Score one when it finishes with:
+>
+> ```bash
+> uv run src/cfm/evaluate.py evaluate.run_name=<experiment>
+> ```
+
 ### Generation
 
 **Use latest checkpoint from a training run:**
@@ -433,6 +516,7 @@ View at: https://wandb.ai
 ✅ **Cylindrical Geometry** - Respects MRI data structure
 ✅ **Euclidean Baseline** - Same pipeline, flat R^2, for an honest comparison
 ✅ **Flow Matching** - State-of-the-art generative modeling
+✅ **Mission Control Suite** - `cfmri-suite` CLI for matrix training, Slurm dispatch, and automated evaluation
 ✅ **Hydra Configuration** - Reproducible, scriptable experiments
 ✅ **W&B Integration** - Opt in with `logging=w_and_b`
 ✅ **Batch Scheduling** - Run multiple experiments sequentially
