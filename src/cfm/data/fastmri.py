@@ -5,6 +5,7 @@ from __future__ import annotations
 import glob
 import hashlib
 import json
+import logging
 import os
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -19,6 +20,8 @@ from cfm.core.registry import DATASETS, MASKS
 from cfm.data.hdf5_manager import WorkerHDF5Manager
 from cfm.data.masks import BaseMaskGenerator
 from cfm.utils.fft import fft2c, ifft2c
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_SENS_KEY = "sensitivity_maps"
 
@@ -106,9 +109,12 @@ class FastMRIDataset(BaseComplexDataset):
         max_volumes: Optional cap on the number of volumes, applied by striding the
             sorted file list so the subset spans the cohort rather than its first N.
         sens_dir: Optional directory of sidecar HDF5 files holding the sensitivity
-            maps, keyed by the same basename as the k-space file. When omitted the
-            maps are read from the k-space file itself.
+            maps, keyed by the same basename as the k-space file. When omitted,
+            defaults to ``Path(data_dir).parent / f"{Path(data_dir).name}_sens"``.
         sens_key: Dataset name the sensitivity maps are stored under.
+        auto_calibrate: Whether to automatically compute ESPIRiT sensitivity maps
+            for volumes that lack them.
+        calib_workers: Number of parallel worker processes for auto-calibration.
     """
 
     def __init__(
@@ -129,6 +135,8 @@ class FastMRIDataset(BaseComplexDataset):
         max_volumes: int | None = None,
         sens_dir: str | Path | None = None,
         sens_key: str = DEFAULT_SENS_KEY,
+        auto_calibrate: bool = True,
+        calib_workers: int | None = None,
     ) -> None:
         if "fastmri_local" in str(data_dir):
             from cfm.data.download import ensure_dataset_exists
@@ -166,8 +174,14 @@ class FastMRIDataset(BaseComplexDataset):
         self.post_transform = post_transform
         self.use_cache = use_cache
         self.cache_dir = str(cache_dir)
-        self.sens_dir = str(sens_dir) if sens_dir is not None else None
+        if sens_dir is not None:
+            self.sens_dir = str(sens_dir)
+        else:
+            data_path = Path(self.data_dir)
+            self.sens_dir = str(data_path.parent / f"{data_path.name}_sens")
         self.sens_key = sens_key
+        self.auto_calibrate = auto_calibrate
+        self.calib_workers = calib_workers
 
         # Resolve mask generator from MASKS registry
         if isinstance(mask, BaseMaskGenerator):
@@ -216,6 +230,98 @@ class FastMRIDataset(BaseComplexDataset):
         self._volume_depths: dict[str, int] = {}
 
         self._load_or_build_index()
+
+        # Automatic on-demand ESPIRiT calibration for volumes missing sensitivity maps
+        if self.auto_calibrate:
+            missing = self._find_missing_sensitivity_maps()
+            if missing:
+                self._calibrate_missing(missing)
+
+    def _has_sensitivity_map(self, f_path: str) -> bool:
+        """Check if sensitivity maps exist for a volume either in sens_dir or in-file."""
+        if self.sens_dir is not None:
+            sidecar = os.path.join(self.sens_dir, os.path.basename(f_path))
+            if os.path.isfile(sidecar):
+                try:
+                    with h5py.File(sidecar, "r") as hf:
+                        if self.sens_key in hf:
+                            return True
+                except Exception:
+                    pass
+        if os.path.isfile(f_path):
+            try:
+                with h5py.File(f_path, "r") as hf:
+                    if self.sens_key in hf:
+                        return True
+            except Exception:
+                pass
+        return False
+
+    def _find_missing_sensitivity_maps(self) -> list[str]:
+        """Return list of files in self.files that lack sensitivity maps."""
+        return [f for f in self.files if not self._has_sensitivity_map(f)]
+
+    def _calibrate_missing(self, missing: list[str]) -> None:
+        """Run ESPIRiT calibration on missing volumes, coordinating across DDP ranks.
+
+        Every rank calibrates its own stride of the list rather than parking on a
+        collective while rank 0 does all of it: NCCL aborts a rank that waits longer
+        than ``COLLECTIVE_TIMEOUT`` (45 min), and a cold cohort takes far longer than
+        that. Sharding both divides the work and leaves each rank waiting only for the
+        slack between shards.
+        """
+        import torch.distributed as dist
+
+        from cfm.data.espirit import ensure_espirit_maps
+
+        distributed = dist.is_available() and dist.is_initialized()
+        rank = dist.get_rank() if distributed else 0
+        world_size = dist.get_world_size() if distributed else 1
+        shard = missing[rank::world_size]
+
+        if rank == 0:
+            print(
+                f"[Auto-ESPIRiT] Found {len(missing)} volume(s) missing sensitivity maps. "
+                f"Computing ESPIRiT calibration to {self.sens_dir} "
+                f"across {world_size} rank(s)...",
+                flush=True,
+            )
+
+        # Each rank calibrates on the GPU it already owns; without the index every rank
+        # would pile onto cuda:0.
+        calib_device: int | str = -1
+        if torch.cuda.is_available():
+            calib_device = torch.cuda.current_device() if distributed else "cuda"
+
+        failed = False
+        if shard:
+            try:
+                ensure_espirit_maps(
+                    shard,
+                    output_dir=self.sens_dir,
+                    num_workers=1 if distributed else self.calib_workers,
+                    sens_key=self.sens_key,
+                    device=calib_device,
+                )
+            except Exception as exc:
+                logger.error("ESPIRiT calibration failed on rank %d: %s", rank, exc)
+                failed = True
+
+        if not distributed:
+            if failed:
+                raise RuntimeError("ESPIRiT calibration failed")
+            return
+
+        device = torch.device("cpu")
+        if dist.get_backend() == "nccl" and torch.cuda.is_available():
+            device = torch.device("cuda", torch.cuda.current_device())
+
+        # MAX rather than a broadcast from rank 0: any rank's shard can fail, and all of
+        # them must agree to stop so none is left alone in the next collective.
+        status = torch.tensor([1 if failed else 0], dtype=torch.uint8, device=device)
+        dist.all_reduce(status, op=dist.ReduceOp.MAX)
+        if int(status.item()) != 0:
+            raise RuntimeError("ESPIRiT calibration failed on at least one rank")
 
     def _sens_path(self, f_path: str) -> str:
         """Resolve the file holding the sensitivity maps for a k-space file."""
@@ -354,12 +460,17 @@ class FastMRIDataset(BaseComplexDataset):
             sens_handle = handle
         else:
             if not os.path.isfile(sens_path):
-                raise FileNotFoundError(
-                    f"No sidecar sensitivity map file for '{os.path.basename(f_path)}' at "
-                    f"{sens_path}. Run scripts/prep_fastmri_espirit.py with "
-                    f"--output_dir {self.sens_dir}."
-                )
-            sens_handle = WorkerHDF5Manager.get_instance().get_handle(sens_path)
+                if self.sens_key in handle:
+                    sens_handle = handle
+                    sens_path = f_path
+                else:
+                    raise FileNotFoundError(
+                        f"No sidecar sensitivity map file for '{os.path.basename(f_path)}' at "
+                        f"{sens_path}. Run scripts/prep_fastmri_espirit.py with "
+                        f"--output_dir {self.sens_dir}."
+                    )
+            else:
+                sens_handle = WorkerHDF5Manager.get_instance().get_handle(sens_path)
 
         if self.sens_key not in sens_handle:
             raise KeyError(

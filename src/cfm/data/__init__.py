@@ -11,8 +11,10 @@ import torch
 from cfm.core.dataset import BaseComplexDataset
 from cfm.core.registry import DATASETS
 from cfm.data.dataset import SKMTEADataset
+from cfm.data.espirit import compute_espirit_maps, ensure_espirit_maps, process_h5_file
 from cfm.data.fastmri import FastMRIDataset
 from cfm.data.hdf5_manager import WorkerHDF5Manager
+from cfm.data.torch_espirit import calibrate_fastmri_file_torch, compute_espirit_torch
 from cfm.data.masks import (
     BaseMaskGenerator,
     CartesianMaskGenerator,
@@ -126,6 +128,11 @@ __all__ = [
     "WorkerHDF5Manager",
     "build_dataset",
     "build_geometry_transform",
+    "calibrate_fastmri_file_torch",
+    "compute_espirit_maps",
+    "compute_espirit_torch",
+    "ensure_espirit_maps",
     "load_split_file_names",
+    "process_h5_file",
     "select_indices",
 ]
