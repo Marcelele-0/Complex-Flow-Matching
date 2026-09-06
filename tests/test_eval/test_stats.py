@@ -5,10 +5,14 @@ import pytest
 from cfm.eval.stats import (
     WilcoxonResult,
     apply_holm_bonferroni,
+    cli_main,
     compute_paired_wilcoxon,
     generate_latex_table,
     load_eval_records,
     pair_evaluations,
+    print_table,
+    process_stats,
+    run_demo,
 )
 
 
@@ -135,3 +139,50 @@ def test_run_stats_cli_demo_subprocess():
     )
     assert res.returncode == 0
     assert "Running in demo mode" in res.stdout
+
+
+def test_cli_main_demo():
+    code = cli_main(["--demo"])
+    assert code == 0
+
+
+def test_cli_main_missing_args(capsys):
+    assert cli_main([]) == 1
+    assert "Error: --target is required" in capsys.readouterr().out
+
+    assert cli_main(["--target", "some_target.csv"]) == 1
+    assert "Error: --baselines is required" in capsys.readouterr().out
+
+
+def test_scripts_run_stats_reexports():
+    import importlib.util
+    from pathlib import Path
+
+    script_path = Path(__file__).resolve().parents[2] / "scripts" / "run_stats.py"
+    spec = importlib.util.spec_from_file_location("run_stats", script_path)
+    assert spec is not None and spec.loader is not None
+    srs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(srs)
+
+    assert callable(srs.cli_main)
+    assert callable(srs.main)
+    assert callable(srs.process_stats)
+    assert callable(srs.print_table)
+    assert callable(srs.run_demo)
+
+
+def test_process_stats_missing_metric_raises():
+    target_df = pd.DataFrame({"sample_id": ["s1", "s2"], "psnr_db": [30.0, 31.0]})
+    baseline_df = pd.DataFrame({"sample_id": ["s1", "s2"], "ssim": [0.8, 0.9]})
+    with pytest.raises(KeyError, match="Metric 'psnr_db' not found"):
+        process_stats(target_df, {"b": baseline_df}, ["psnr_db"])
+
+
+def test_run_demo_direct(capsys):
+    run_demo()
+    assert "Running in demo mode with synthetic data..." in capsys.readouterr().out
+
+
+def test_print_table_direct(capsys):
+    print_table([])
+    assert "Metric" in capsys.readouterr().out

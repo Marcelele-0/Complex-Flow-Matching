@@ -90,3 +90,4 @@ check_untyped_defs = true
 
 [project.scripts]
 cfmri-suite = "cfm.suite:main"
+cfmri-stats = "cfm.eval.stats:cli_main"

@@ -75,6 +75,7 @@ class CylindricalUNet(BaseModel): ...
 ### Solvers & Evaluators (`src/cfm/solvers/`, `src/cfm/eval/`)
 - All models must implement the standardized continuous flow signature: `v_t = model(t, x_t)`.
 - Reconstructors must inherit from `BaseReconstructor` and enforce strict Data Consistency: $\text{DC Error} < 10^{-6}$.
+- **Statistical Significance Testing:** Granular per-slice metric records are emitted to `eval_records.csv` by `evaluate.py`. Automated Wilcoxon signed-rank tests with Holm-Bonferroni correction can be executed via `cfmri-stats` CLI, `cfmri-suite --stats --extra ...`, or `scripts/run_stats.py` (including `--demo` mode).
 
 ---
 
