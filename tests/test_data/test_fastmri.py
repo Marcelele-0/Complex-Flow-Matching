@@ -337,14 +337,17 @@ def test_fastmri_sidecar_sensitivity_maps(tmp_path) -> None:
 
     # A missing sidecar names the directory it looked in.
     missing = FastMRIDataset(
-        data_dir=str(data_dir), use_cache=False, sens_dir=str(tmp_path / "absent")
+        data_dir=str(data_dir),
+        use_cache=False,
+        sens_dir=str(tmp_path / "absent"),
+        auto_calibrate=False,
     )
     with pytest.raises(FileNotFoundError, match="No sidecar sensitivity map file"):
         _ = missing[0]
 
 
 def test_fastmri_missing_sensitivity_maps_raises(tmp_path) -> None:
-    """FastMRIDataset raises KeyError when sensitivity_maps dataset is absent."""
+    """FastMRIDataset raises FileNotFoundError when sidecars are absent and auto-calib off."""
     data_dir = tmp_path / "no_sens"
     data_dir.mkdir(parents=True)
     f_path = data_dir / "nosens.h5"
@@ -352,8 +355,8 @@ def test_fastmri_missing_sensitivity_maps_raises(tmp_path) -> None:
     with h5py.File(f_path, "w") as hf:
         hf.create_dataset("kspace", data=np.zeros((2, 4, 16, 16), dtype=np.complex64))
 
-    dataset = FastMRIDataset(data_dir=str(data_dir), use_cache=False)
-    with pytest.raises(KeyError, match="missing 'sensitivity_maps'"):
+    dataset = FastMRIDataset(data_dir=str(data_dir), use_cache=False, auto_calibrate=False)
+    with pytest.raises(FileNotFoundError, match="No sidecar sensitivity map file"):
         _ = dataset[0]
 
 
@@ -444,8 +447,9 @@ def test_fastmri_heterogeneous_volumes_collate_with_crop(tmp_path) -> None:
 
 
 def test_prep_fastmri_espirit_pipeline(tmp_path) -> None:
-    """ESPIRiT precomputation script computes and writes valid sensitivity maps to HDF5."""
+    """ESPIRiT precomputation computes and writes valid sensitivity maps to sidecar HDF5."""
     file_path = tmp_path / "raw_kspace.h5"
+    out_dir = tmp_path / "sidecars"
 
     # Create synthetic smooth coil k-space
     img = np.zeros((1, 1, 32, 32), dtype=np.complex64)
@@ -457,22 +461,32 @@ def test_prep_fastmri_espirit_pipeline(tmp_path) -> None:
     with h5py.File(file_path, "w") as hf:
         hf.create_dataset("kspace", data=kspace)
 
-    # Run precomputation
-    success = process_h5_file(file_path=file_path, calib_width=16, overwrite=False)
+    # Run precomputation to sidecar dir
+    success = process_h5_file(
+        file_path=file_path, output_dir=out_dir, calib_width=16, overwrite=False
+    )
     assert success is True
 
+    # Source archive remains untouched
     with h5py.File(file_path, "r") as hf:
+        assert "sensitivity_maps" not in hf
+
+    sidecar_path = out_dir / "raw_kspace.h5"
+    assert sidecar_path.is_file()
+    with h5py.File(sidecar_path, "r") as hf:
         assert "sensitivity_maps" in hf
         sens_maps = hf["sensitivity_maps"][:]
         assert sens_maps.shape == (1, 4, 32, 32)
         assert np.iscomplexobj(sens_maps)
 
     # Running again without overwrite returns False (skipped)
-    skipped = process_h5_file(file_path=file_path, overwrite=False)
+    skipped = process_h5_file(file_path=file_path, output_dir=out_dir, overwrite=False)
     assert skipped is False
 
     # Running with overwrite returns True
-    overwritten = process_h5_file(file_path=file_path, calib_width=16, overwrite=True)
+    overwritten = process_h5_file(
+        file_path=file_path, output_dir=out_dir, calib_width=16, overwrite=True
+    )
     assert overwritten is True
 
 

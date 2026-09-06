@@ -23,9 +23,8 @@ crop_size: [320, 320]
 max_volumes: 150
 
 # Directory of sidecar HDF5 files holding the ESPIRiT maps, keyed by the same
-# basename as the k-space file. null reads them from the k-space files themselves,
-# which is what scripts/prep_fastmri_espirit.py does when given no --output_dir.
-sens_dir: ~
+# basename as the k-space file.
+sens_dir: "data/fastmri_local_sens"
 
 use_cache: true
 cache_dir: ".cache"
