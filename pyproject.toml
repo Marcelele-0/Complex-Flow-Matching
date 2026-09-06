@@ -23,6 +23,8 @@ dependencies = [
     "torchdiffeq>=0.2.5",
     "torchvision>=0.26.0",
     "tqdm>=4.67.3",
+    "scipy>=1.15.0",
+    "pandas>=2.2.0",
     "wandb>=0.25.1",
 ]
 
@@ -88,3 +90,4 @@ check_untyped_defs = true
 
 [project.scripts]
 cfmri-suite = "cfm.suite:main"
+cfmri-stats = "cfm.eval.stats:cli_main"

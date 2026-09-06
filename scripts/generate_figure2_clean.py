@@ -1,6 +1,4 @@
-import os
 import matplotlib.pyplot as plt
-import numpy as np
 from matplotlib.gridspec import GridSpec
 
 out_dir = "paper/NIPS workshop/figures/panels"
@@ -26,7 +24,9 @@ gs = GridSpec(3, 5, figure=fig, width_ratios=[1.8, 1, 1, 1, 1], hspace=0.15, wsp
 # Row 0: Ground Truth
 ax_txt0 = fig.add_subplot(gs[0, 0])
 ax_txt0.text(0.05, 0.65, "(a) Ground Truth", fontsize=11, fontweight="bold", va="center")
-ax_txt0.text(0.05, 0.35, "Reference Target\nFull Complex Field", fontsize=9, color="#444444", va="center")
+ax_txt0.text(
+    0.05, 0.35, "Reference Target\nFull Complex Field", fontsize=9, color="#444444", va="center"
+)
 ax_txt0.axis("off")
 
 ax0_0 = fig.add_subplot(gs[0, 1])
@@ -35,7 +35,7 @@ ax0_0.set_title("Amplitude $A$", fontsize=9, pad=3)
 ax0_0.axis("off")
 
 ax0_1 = fig.add_subplot(gs[0, 2])
-ax0_1.axis("off") # empty gap
+ax0_1.axis("off")  # empty gap
 
 ax0_2 = fig.add_subplot(gs[0, 3])
 ax0_2.imshow(gt_pha)
@@ -43,12 +43,21 @@ ax0_2.set_title("Phase $\\theta$", fontsize=9, pad=3)
 ax0_2.axis("off")
 
 ax0_3 = fig.add_subplot(gs[0, 4])
-ax0_3.axis("off") # empty gap
+ax0_3.axis("off")  # empty gap
 
 # Row 1: Euclidean Baseline
 ax_txt1 = fig.add_subplot(gs[1, 0])
-ax_txt1.text(0.05, 0.70, "(b) Euclidean ($\\mathbb{R}^2$)", fontsize=11, fontweight="bold", va="center")
-ax_txt1.text(0.05, 0.35, "PSNR: 25.35 dB\nSSIM: 0.6460\nCPE: 0.5261 rad", fontsize=8.5, color="#222222", va="center")
+ax_txt1.text(
+    0.05, 0.70, "(b) Euclidean ($\\mathbb{R}^2$)", fontsize=11, fontweight="bold", va="center"
+)
+ax_txt1.text(
+    0.05,
+    0.35,
+    "PSNR: 25.35 dB\nSSIM: 0.6460\nCPE: 0.5261 rad",
+    fontsize=8.5,
+    color="#222222",
+    va="center",
+)
 ax_txt1.axis("off")
 
 ax1_0 = fig.add_subplot(gs[1, 1])
@@ -69,8 +78,24 @@ ax1_3.axis("off")
 
 # Row 2: Cylindrical Flow (Ours)
 ax_txt2 = fig.add_subplot(gs[2, 0])
-ax_txt2.text(0.05, 0.70, "(c) Cylindrical (Ours)", fontsize=11, fontweight="bold", color="#0055aa", va="center")
-ax_txt2.text(0.05, 0.35, "PSNR: 28.39 dB\nSSIM: 0.7624\nCPE: 0.2347 rad", fontsize=8.5, fontweight="bold", color="#003388", va="center")
+ax_txt2.text(
+    0.05,
+    0.70,
+    "(c) Cylindrical (Ours)",
+    fontsize=11,
+    fontweight="bold",
+    color="#0055aa",
+    va="center",
+)
+ax_txt2.text(
+    0.05,
+    0.35,
+    "PSNR: 28.39 dB\nSSIM: 0.7624\nCPE: 0.2347 rad",
+    fontsize=8.5,
+    fontweight="bold",
+    color="#003388",
+    va="center",
+)
 ax_txt2.axis("off")
 
 ax2_0 = fig.add_subplot(gs[2, 1])

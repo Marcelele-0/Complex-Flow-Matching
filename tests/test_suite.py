@@ -29,6 +29,7 @@ def test_parser_defaults() -> None:
     assert args.seeds is False
     assert args.smoke is False
     assert args.eval is False
+    assert args.stats is False
     assert args.slurm is False
     assert args.submit is False
     assert args.gpus == 4
@@ -378,3 +379,20 @@ def test_run_evaluation_mocked(tmp_path: Path) -> None:
 
     summary_file = multirun_dir / "eval_summary.json"
     assert summary_file.exists()
+
+
+def test_main_stats_no_extra(capsys) -> None:
+    """Verify main(['--stats']) prints usage instructions and help."""
+    ret = main(["--stats"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    assert "Usage: cfmri-suite --stats --extra" in captured.out
+    assert "--target" in captured.out
+
+
+def test_main_stats_with_extra_demo(capsys) -> None:
+    """Verify main(['--stats', '--extra', '--demo']) executes stats demo."""
+    ret = main(["--stats", "--extra", "--demo"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    assert "Running in demo mode with synthetic data..." in captured.out

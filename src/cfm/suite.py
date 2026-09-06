@@ -156,6 +156,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Automatically evaluate checkpoints after training completion",
     )
     parser.add_argument(
+        "--stats",
+        action="store_true",
+        help="Run statistical significance analysis on evaluated checkpoints",
+    )
+    parser.add_argument(
         "--slurm",
         action="store_true",
         help="Route execution through scripts/launch_slurm.sh",
@@ -346,6 +351,23 @@ def main(argv: list[str] | None = None) -> int:
     """
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.stats:
+        from cfm.eval.stats import cli_main
+
+        if not args.extra:
+            print(
+                "Usage: cfmri-suite --stats --extra "
+                "[--demo | --target TARGET --baselines BASELINES...]"
+            )
+            extra_args = ["--help"]
+        else:
+            extra_args = args.extra
+
+        try:
+            return cli_main(extra_args)
+        except SystemExit as e:
+            return e.code if isinstance(e.code, int) else 0
 
     # --extra swallows everything that follows it, so a suite flag written after it
     # would silently become a Hydra override and change which mode runs.
