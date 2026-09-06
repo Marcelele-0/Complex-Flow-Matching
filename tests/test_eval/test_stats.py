@@ -7,6 +7,7 @@ from cfm.eval.stats import (
     apply_holm_bonferroni,
     compute_paired_wilcoxon,
     generate_latex_table,
+    load_eval_records,
     pair_evaluations,
 )
 
@@ -31,6 +32,17 @@ def test_pair_evaluations_mismatch():
         pair_evaluations(target_df, baseline_df, "metric")
 
 
+def test_pair_evaluations_duplicate_sample_id_raises():
+    target_df = pd.DataFrame(
+        {"sample_id": ["s1", "s1", "s2", "s3", "s4", "s5"], "metric": range(6)}
+    )
+    baseline_df = pd.DataFrame(
+        {"sample_id": ["s1", "s2", "s3", "s4", "s5", "s6"], "metric": range(6)}
+    )
+    with pytest.raises(pd.errors.MergeError):
+        pair_evaluations(target_df, baseline_df, "metric")
+
+
 def test_wilcoxon_identical():
     x = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
     stat, p_val, eff = compute_paired_wilcoxon(x, x)
@@ -42,9 +54,11 @@ def test_wilcoxon_identical():
 def test_wilcoxon_superior():
     x = np.array([5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0])
     y = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0])
-    stat, p_val, eff = compute_paired_wilcoxon(x, y)
-    assert p_val < 0.05
-    assert eff > 0.0
+    stat_f, p_f, eff_f = compute_paired_wilcoxon(x, y)
+    stat_r, p_r, eff_r = compute_paired_wilcoxon(y, x)
+    assert p_f < 0.05
+    assert eff_f == pytest.approx(-eff_r)
+    assert eff_f > 0.0
 
 
 def test_holm_bonferroni_ordering_and_monotonicity():
@@ -57,26 +71,59 @@ def test_holm_bonferroni_ordering_and_monotonicity():
     p_vals = [r.p_value_adjusted for r in adjusted]
     assert max(p_vals) <= 1.0
     assert results[1].p_value_adjusted <= results[0].p_value_adjusted <= results[2].p_value_adjusted
+    assert [r.p_value_adjusted for r in adjusted] == pytest.approx([0.02, 0.003, 0.05])
 
 
 def test_latex_table_rendering():
     results = [
         WilcoxonResult(
-            "m1", "b", "t", 10, 1.0, 0.1, 0.5, 0.1, 0.5, 0.5, 0, 0.0001, 0.0001, 0.8, True, True
+            "psnr_db",
+            "unet_baseline_seed0",
+            "cylindrical_ours",
+            10,
+            1.0,
+            0.1,
+            0.5,
+            0.1,
+            0.5,
+            0.5,
+            0,
+            0.0001,
+            0.0001,
+            0.8,
+            True,
+            True,
         ),
     ]
-    table = generate_latex_table(results)
+    table = generate_latex_table(results, target_name="cylindrical_ours")
     assert "\\toprule" in table
     assert "\\midrule" in table
     assert "\\bottomrule" in table
     assert "***" in table
+    assert "\\begin{tabular}{llrrrrrr}" in table
+    assert "psnr\\_db" in table
+    assert "unet\\_baseline\\_seed0" in table
+    assert "cylindrical\\_ours" in table
+    assert "Metric & Baseline & N &" in table
+
+    # Verify 8 columns in header and data rows
+    for line in table.splitlines():
+        if "&" in line:
+            cols = [c.strip() for c in line.rstrip("\\ ").split("&")]
+            assert len(cols) == 8
 
 
-def test_evaluate_saves_csv(tmp_path, monkeypatch):
-    # We will invoke evaluate main with a dummy config.
-    # Just need to check that eval_records.csv is saved.
-    # Because `evaluate.py` relies on hydra, we can just run a CLI command for it.
-    pass
+def test_load_eval_records_parquet_raises(tmp_path):
+    parquet_file = tmp_path / "test.parquet"
+    parquet_file.touch()
+    with pytest.raises(
+        ValueError,
+        match=(
+            "Parquet format is not supported; eval_records are emitted as CSV. "
+            "Please provide a CSV file."
+        ),
+    ):
+        load_eval_records(parquet_file)
 
 
 def test_run_stats_cli_demo_subprocess():

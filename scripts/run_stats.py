@@ -3,6 +3,7 @@ import dataclasses
 import json
 import os
 import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -18,19 +19,20 @@ from cfm.eval.stats import (
 )
 
 
-def run_demo():
+def run_demo() -> None:
     print("Running in demo mode with synthetic data...")
+    rng = np.random.default_rng(0)
     n_samples = 512
     sample_ids = [f"file_0[{i}]" for i in range(n_samples)]
 
     # Target data (slight advantage)
-    target_psnr = np.random.normal(35.5, 2.0, n_samples)
-    baseline_psnr = target_psnr - np.random.normal(0.5, 0.2, n_samples)
+    target_psnr = rng.normal(35.5, 2.0, n_samples)
+    baseline_psnr = target_psnr - rng.normal(0.5, 0.2, n_samples)
 
-    target_df = pd.DataFrame({"sample_id": sample_ids, "psnr": target_psnr})
-    baseline_df = pd.DataFrame({"sample_id": sample_ids, "psnr": baseline_psnr})
+    target_df = pd.DataFrame({"sample_id": sample_ids, "psnr_db": target_psnr})
+    baseline_df = pd.DataFrame({"sample_id": sample_ids, "psnr_db": baseline_psnr})
 
-    metrics = ["psnr"]
+    metrics = ["psnr_db"]
     baselines = {"Baseline_Model": baseline_df}
     target_name = "Target_Model"
 
@@ -38,14 +40,26 @@ def run_demo():
     print_table(results)
 
 
-def process_stats(target_df, baselines, metrics, target_name="Target"):
-    results = []
+def process_stats(
+    target_df: pd.DataFrame,
+    baselines: dict[str, pd.DataFrame],
+    metrics: list[str],
+    target_name: str = "Target",
+) -> list[WilcoxonResult]:
+    results: list[WilcoxonResult] = []
 
-    for b_name, b_df in baselines.items():
-        for metric in metrics:
-            if metric not in target_df.columns or metric not in b_df.columns:
-                continue
+    for metric in metrics:
+        missing = [b_name for b_name, b_df in baselines.items() if metric not in b_df.columns]
+        if metric not in target_df.columns or missing:
+            common_sets = [set(target_df.columns)] + [set(b.columns) for b in baselines.values()]
+            avail = (
+                sorted(set.intersection(*common_sets)) if baselines else sorted(target_df.columns)
+            )
+            raise KeyError(
+                f"Metric '{metric}' not found in evaluations. Available common metrics: {avail}"
+            )
 
+        for b_name, b_df in baselines.items():
             t_vals, b_vals, _ = pair_evaluations(target_df, b_df, metric)
             stat, p_val, eff = compute_paired_wilcoxon(t_vals, b_vals)
 
@@ -72,7 +86,7 @@ def process_stats(target_df, baselines, metrics, target_name="Target"):
     return apply_holm_bonferroni(results)
 
 
-def print_table(results):
+def print_table(results: list[WilcoxonResult]) -> None:
     print(
         f"{'Metric':<10} {'Baseline':<15} {'Target Mean':<15} "
         f"{'Base Mean':<15} {'Diff':<10} {'p-value':<12} {'Sig':<5}"
@@ -88,7 +102,7 @@ def print_table(results):
         )
 
 
-def main():
+def main() -> int:
     parser = argparse.ArgumentParser(
         description="Automated statistical significance testing module."
     )
@@ -97,7 +111,11 @@ def main():
         "--baselines", type=str, nargs="+", help="Baselines (name=path.csv or path.csv)"
     )
     parser.add_argument(
-        "--metrics", type=str, nargs="+", default=["psnr", "ssim", "nmse"], help="Metrics to test"
+        "--metrics",
+        type=str,
+        nargs="+",
+        default=["psnr_db", "ssim", "phase_error_rad"],
+        help="Metrics to test",
     )
     parser.add_argument("--output-latex", type=str, help="Output file path for LaTeX table")
     parser.add_argument("--output-json", type=str, help="Output file path for JSON dump")
@@ -107,15 +125,15 @@ def main():
 
     if args.demo:
         run_demo()
-        return
+        return 0
 
     if not args.target:
         print("Error: --target is required unless --demo is used.")
-        sys.exit(1)
+        return 1
 
     if not args.baselines:
         print("Error: --baselines is required unless --demo is used.")
-        sys.exit(1)
+        return 1
 
     target_df = load_eval_records(args.target)
 
@@ -136,17 +154,21 @@ def main():
     print_table(results)
 
     if args.output_latex:
+        Path(args.output_latex).parent.mkdir(parents=True, exist_ok=True)
         latex_str = generate_latex_table(results)
         with open(args.output_latex, "w", encoding="utf-8") as f:
             f.write(latex_str)
         print(f"Wrote LaTeX table to {args.output_latex}")
 
     if args.output_json:
+        Path(args.output_json).parent.mkdir(parents=True, exist_ok=True)
         out_dict = [dataclasses.asdict(r) for r in results]
         with open(args.output_json, "w", encoding="utf-8") as f:
             json.dump(out_dict, f, indent=2)
         print(f"Wrote JSON stats to {args.output_json}")
 
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

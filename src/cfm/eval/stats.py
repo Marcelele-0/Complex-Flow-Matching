@@ -34,8 +34,17 @@ def load_eval_records(path: str | Path) -> pd.DataFrame:
 
     Returns:
         DataFrame containing evaluation records.
+
+    Raises:
+        ValueError: If a parquet file path is provided.
     """
-    return pd.read_csv(path)
+    p = Path(path)
+    if p.suffix.lower() == ".parquet":
+        raise ValueError(
+            "Parquet format is not supported; eval_records are emitted as CSV. "
+            "Please provide a CSV file."
+        )
+    return pd.read_csv(p)
 
 
 def pair_evaluations(
@@ -54,8 +63,16 @@ def pair_evaluations(
 
     Raises:
         ValueError: If fewer than 5 matching samples are found.
+        pd.errors.MergeError: If duplicate sample keys violate one-to-one merge.
     """
-    merged = pd.merge(target_df, baseline_df, on=on, suffixes=("_target", "_baseline"), how="inner")
+    merged = pd.merge(
+        target_df,
+        baseline_df,
+        on=on,
+        suffixes=("_target", "_baseline"),
+        how="inner",
+        validate="one_to_one",
+    )
 
     if len(merged) < 5:
         raise ValueError(f"Found {len(merged)} matching samples, need at least 5 for testing.")
@@ -79,6 +96,7 @@ def compute_paired_wilcoxon(
 
     Returns:
         Tuple of (statistic, p_value, effect_size_r).
+        effect_size_r is signed; a positive value indicates target > baseline in median.
     """
     if len(x) == 0 or len(y) == 0:
         return 0.0, 1.0, 0.0
@@ -100,14 +118,14 @@ def compute_paired_wilcoxon(
 
     # Effect size r = Z / sqrt(N)
     # approximate Z from p-value or just use statistic
-    # Here we compute rank-biserial correlation approximation or simple r
     from scipy.stats import norm
 
     # Clamp p_value to avoid exactly 0.0 which yields inf
     clamped_p = max(p_value, np.finfo(float).tiny)
     # Use ISF (Inverse Survival Function) instead of PPF (1 - p) to avoid float precision
     # making (1 - tiny) = 1.0 which results in inf Z-score.
-    z = norm.isf(clamped_p / 2)
+    sign = float(np.sign(np.median(diff))) or 1.0
+    z = norm.isf(clamped_p / 2) * sign
     effect_size_r = float(z / np.sqrt(n)) if n > 0 else 0.0
 
     return stat, p_value, effect_size_r
@@ -160,6 +178,22 @@ def format_significance(p_val: float) -> str:
     return "ns"
 
 
+_LATEX_ESCAPES = str.maketrans(
+    {
+        "_": r"\_",
+        "&": r"\&",
+        "%": r"\%",
+        "#": r"\#",
+        "$": r"\$",
+    }
+)
+
+
+def escape_latex(text: str) -> str:
+    """Escape characters that are special in LaTeX text mode."""
+    return text.translate(_LATEX_ESCAPES)
+
+
 def generate_latex_table(
     results: list[WilcoxonResult],
     target_name: str = "Cylindrical (Ours)",
@@ -180,11 +214,11 @@ def generate_latex_table(
     lines = [
         "\\begin{table}[t]",
         "\\centering",
-        "\\begin{tabular}{llrrrrr}",
+        "\\begin{tabular}{llrrrrrr}",
         "\\toprule",
         (
-            "Metric & Baseline & Target (Ours) & Baseline (Theirs) & "
-            "$\\Delta$ (Ours - Theirs) & $p$-value & Effect Size \\\\"
+            f"Metric & Baseline & N & {escape_latex(target_name)} & Baseline & "
+            "$\\Delta$ & $p$-value & Effect Size \\\\"
         ),
         "\\midrule",
     ]
@@ -197,7 +231,8 @@ def generate_latex_table(
         p_str = f"{r.p_value_adjusted:.1e}"
         e_str = f"{r.effect_size_r:.3f}"
         lines.append(
-            f"{r.metric} & {r.baseline} & {t_str} & {b_str} & "
+            f"{escape_latex(r.metric)} & {escape_latex(r.baseline)} & "
+            f"{r.n_pairs} & {t_str} & {b_str} & "
             f"{d_str} & {p_str} ({sig}) & {e_str} \\\\"
         )
 

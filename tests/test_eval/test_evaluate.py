@@ -4,6 +4,7 @@ Everything here runs with a dummy model and synthetic tensors (no checkpoint, no
 HDF5), which is what makes the eval path verifiable on a machine that has neither.
 """
 
+import csv
 import math
 
 import pytest
@@ -16,6 +17,7 @@ from cfm.evaluate import (
     format_summary_table,
     integrate_from_t,
     reconstruct_batch,
+    write_eval_records,
 )
 from cfm.flow.solver import CylindricalODESolver
 from cfm.manifolds import CylindricalManifold, EuclideanManifold
@@ -400,10 +402,64 @@ class TestSelectIndices:
         assert select_indices(slice_map, None, max_samples=10) == [0, 1, 2]
 
 
-def test_evaluate_saves_csv(tmp_path) -> None:
-    # Just run a quick check using evaluate main or a mocked version
-    # It's easier to verify that the CSV patch works by passing in dummy accumulators
-    pass
+def test_write_eval_records_round_trips(tmp_path) -> None:
+    acc = MetricAccumulator("psnr_db")
+    acc.update(torch.tensor([30.5, 32.1]), ["file1.h5[0]", "file1.h5[1]"])
+    accumulators = {"psnr_db": acc}
+    csv_path = write_eval_records(
+        tmp_path,
+        accumulators,
+        manifold="cylindrical",
+        model="TestModel",
+        split="test",
+        seed=42,
+        t_start=0.5,
+    )
+    assert csv_path.exists()
+
+    with open(csv_path, encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        fieldnames = reader.fieldnames
+        rows = list(reader)
+
+    expected_fields = [
+        "sample_id",
+        "file",
+        "slice_idx",
+        "manifold",
+        "model",
+        "split",
+        "seed",
+        "t_start",
+        "psnr_db",
+    ]
+    assert fieldnames == expected_fields
+    assert len(rows) == 2
+
+    assert rows[0]["sample_id"] == "file1.h5[0]"
+    assert rows[0]["file"] == "file1.h5"
+    assert rows[0]["slice_idx"] == "0"
+    assert rows[0]["manifold"] == "cylindrical"
+    assert rows[0]["model"] == "TestModel"
+    assert rows[0]["split"] == "test"
+    assert rows[0]["seed"] == "42"
+    assert rows[0]["t_start"] == "0.5"
+    assert float(rows[0]["psnr_db"]) == pytest.approx(30.5)
+
+    assert rows[1]["sample_id"] == "file1.h5[1]"
+    assert rows[1]["file"] == "file1.h5"
+    assert rows[1]["slice_idx"] == "1"
+    assert float(rows[1]["psnr_db"]) == pytest.approx(32.1)
+
+
+def test_write_eval_records_duplicate_sample_id_raises(tmp_path) -> None:
+    acc = MetricAccumulator("psnr_db")
+    acc.update(torch.tensor([30.5]), ["file1.h5[0]"])
+    acc.update(torch.tensor([32.1]), ["file1.h5[0]"])
+    accumulators = {"psnr_db": acc}
+
+    with pytest.raises(ValueError, match="duplicate basenames under data_dir"):
+        write_eval_records(tmp_path, accumulators)
 
 
 def test_metric_accumulator_records() -> None:

@@ -43,6 +43,7 @@ import os
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any, cast
 
 import hydra
@@ -563,9 +564,90 @@ def format_summary_table(summaries: Sequence[MetricSummary]) -> str:
     return "\n".join(lines)
 
 
-# --------------------------------------------------------------------------- #
-# Split selection
-# --------------------------------------------------------------------------- #
+def write_eval_records(
+    output_dir: str | Path,
+    accumulators: Mapping[str, MetricAccumulator],
+    manifold: str = "unknown",
+    model: str = "unknown",
+    split: str | None = "test",
+    seed: int = 0,
+    t_start: float = 0.0,
+) -> Path:
+    """Write individual slice evaluation records to CSV.
+
+    Args:
+        output_dir: Directory to save eval_records.csv.
+        accumulators: Mapping from metric name to MetricAccumulator.
+        manifold: Manifold name.
+        model: Model class name.
+        split: Split name or None.
+        seed: Random seed.
+        t_start: Start time of integration.
+
+    Returns:
+        Path to written eval_records.csv file.
+
+    Raises:
+        ValueError: If duplicate sample_ids collapse the records.
+    """
+    csv_path = Path(output_dir) / "eval_records.csv"
+    metric_names = list(accumulators.keys())
+
+    # Collate records by sample_id
+    records_by_sample: dict[str, dict[str, float]] = {}
+    for m_name, acc in accumulators.items():
+        for s_id, val in acc.records():
+            if s_id not in records_by_sample:
+                records_by_sample[s_id] = {}
+            records_by_sample[s_id][m_name] = val
+
+    n_expected = max((len(acc.records()) for acc in accumulators.values()), default=0)
+    if len(records_by_sample) != n_expected:
+        raise ValueError(
+            f"{n_expected} scored slices collapsed to {len(records_by_sample)} sample_ids; "
+            "duplicate basenames under data_dir"
+        )
+
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+    with open(csv_path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.writer(fh)
+        header = [
+            "sample_id",
+            "file",
+            "slice_idx",
+            "manifold",
+            "model",
+            "split",
+            "seed",
+            "t_start",
+        ] + metric_names
+        writer.writerow(header)
+
+        for s_id, m_dict in records_by_sample.items():
+            match = re.match(r"(.*)\[(\d+)\]", s_id)
+            if match:
+                file_name, slice_idx = match.groups()
+            else:
+                file_name, slice_idx = s_id, ""
+
+            row = [
+                s_id,
+                file_name,
+                slice_idx,
+                manifold,
+                model,
+                "" if split is None else split,
+                seed,
+                t_start,
+            ]
+            for m_name in metric_names:
+                row.append(m_dict.get(m_name, float("nan")))
+            writer.writerow(row)
+
+    print(f"Wrote {csv_path}")
+    return csv_path
+
+
 # --------------------------------------------------------------------------- #
 # Hydra entry point
 # --------------------------------------------------------------------------- #
@@ -831,46 +913,15 @@ def main(cfg: DictConfig) -> None:
     print(f"Wrote {metrics_path}")
 
     # Export eval_records.csv
-    csv_path = os.path.join(output_dir, "eval_records.csv")
-    metric_names = list(accumulators.keys())
-
-    # Collate records by sample_id
-    records_by_sample: dict[str, dict[str, float]] = {}
-    for m_name, acc in accumulators.items():
-        for s_id, val in acc.records():
-            if s_id not in records_by_sample:
-                records_by_sample[s_id] = {}
-            records_by_sample[s_id][m_name] = val
-
-    with open(csv_path, "w", newline="", encoding="utf-8") as fh:
-        writer = csv.writer(fh)
-        header = [
-            "sample_id",
-            "file",
-            "slice_idx",
-            "manifold",
-            "model",
-            "split",
-            "seed",
-            "t_start",
-        ] + metric_names
-        writer.writerow(header)
-
-        model_name = model.__class__.__name__ if model else "Unknown"
-
-        for s_id, m_dict in records_by_sample.items():
-            match = re.match(r"(.*)\[(\d+)\]", s_id)
-            if match:
-                file_name, slice_idx = match.groups()
-            else:
-                file_name, slice_idx = s_id, ""
-
-            row = [s_id, file_name, slice_idx, manifold.name, model_name, split, seed, t_start]
-            for m_name in metric_names:
-                row.append(m_dict.get(m_name, float("nan")))
-            writer.writerow(row)
-
-    print(f"Wrote {csv_path}")
+    write_eval_records(
+        output_dir,
+        accumulators,
+        manifold=manifold.name,
+        model=model.__class__.__name__ if model else "Unknown",
+        split=split,
+        seed=seed,
+        t_start=t_start,
+    )
 
     if use_wandb:
         log_dict: dict[str, float | int | str] = {
