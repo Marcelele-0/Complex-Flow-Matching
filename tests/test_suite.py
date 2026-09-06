@@ -7,13 +7,17 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from cfm.suite import (
     DEFAULT_LAUNCHER_SCRIPT,
     build_command,
     build_hydra_args,
+    build_launcher_command,
     build_parser,
     main,
     run_evaluation,
+    slurm_jobs,
 )
 
 
@@ -145,88 +149,102 @@ def test_build_command_local_mode() -> None:
     assert cmd[-1] == "logging.wandb=false"
 
 
-def test_build_command_slurm_dry_run() -> None:
-    """Verify Slurm command building for safe dry-run (default without --submit)."""
-    args = argparse.Namespace(
-        slurm=True,
-        submit=False,
-        gpus=4,
-        nodes=1,
-        experiment="suite-matrix",
-        matrix=False,
-        seeds=False,
-        smoke=True,
-        extra=[],
-    )
-    cmd = build_command(args)
+def test_build_launcher_command_dry_run() -> None:
+    """Verify launcher command building for safe dry-run (default without --submit)."""
+    args = build_parser().parse_args(["--slurm", "--smoke"])
+    (experiment, overrides) = slurm_jobs(args)[0]
+    cmd = build_launcher_command(args, experiment, overrides)
+
     assert cmd[0] == str(DEFAULT_LAUNCHER_SCRIPT)
     assert "--submit" not in cmd
-    assert "-g" in cmd and cmd[cmd.index("-g") + 1] == "4"
-    assert "-N" in cmd and cmd[cmd.index("-N") + 1] == "1"
-    assert "-e" in cmd and cmd[cmd.index("-e") + 1] == "suite-matrix"
-    assert "--" in cmd
-
-    separator_idx = cmd.index("--")
-    hydra_part = cmd[separator_idx + 1 :]
-    assert "training.epochs=3" in hydra_part
+    assert cmd[cmd.index("-g") + 1] == "4"
+    assert cmd[cmd.index("-N") + 1] == "1"
+    assert cmd[cmd.index("-e") + 1] == "suite-matrix"
+    assert cmd[cmd.index("--") + 1 :] == overrides
+    assert "training.epochs=3" in overrides
 
 
-def test_build_command_slurm_submit() -> None:
-    """Verify Slurm command building when --submit is specified."""
-    args = argparse.Namespace(
-        slurm=True,
-        submit=True,
-        gpus=8,
-        nodes=2,
-        experiment="a100-full-matrix",
-        matrix=True,
-        seeds=True,
-        smoke=False,
-        extra=["checkpoint.save_freq=5"],
+def test_build_launcher_command_submit() -> None:
+    """Verify launcher command building when --submit is specified."""
+    args = build_parser().parse_args(
+        ["--slurm", "--submit", "--gpus", "8", "--nodes", "2", "-e", "a100-full-matrix"]
     )
     custom_script = Path("/custom/path/launch_slurm.sh")
-    cmd = build_command(args, launcher_script=custom_script)
+    cmd = build_launcher_command(args, "a100-full-matrix", ["manifold=cylindrical"], custom_script)
 
     assert cmd[0] == str(custom_script)
     assert cmd[1] == "--submit"
     assert cmd[cmd.index("-g") + 1] == "8"
     assert cmd[cmd.index("-N") + 1] == "2"
     assert cmd[cmd.index("-e") + 1] == "a100-full-matrix"
+    assert cmd[cmd.index("--") + 1 :] == ["manifold=cylindrical"]
 
-    separator_idx = cmd.index("--")
-    hydra_part = cmd[separator_idx + 1 :]
-    assert hydra_part[0] == "-m"
-    assert "dataset=skm_tea,fastmri_local" in hydra_part
-    assert "training.seed=42,123,999" in hydra_part
-    assert hydra_part[-1] == "checkpoint.save_freq=5"
+
+def test_slurm_jobs_never_forward_multirun_flag() -> None:
+    """Regression: -m must never reach launch_slurm.sh.
+
+    train_ddp.sbatch prepends its own overrides before the caller's, and Hydra's
+    parser rejects -m once any override precedes it, so a forwarded -m would make
+    every submitted job die with `unrecognized arguments` after the queue wait.
+    """
+    args = build_parser().parse_args(["--slurm", "--matrix", "--seeds", "--smoke"])
+    for experiment, overrides in slurm_jobs(args):
+        cmd = build_launcher_command(args, experiment, overrides)
+        assert "-m" not in overrides
+        assert "-m" not in cmd
+        assert not any("," in override for override in overrides)
+
+
+def test_slurm_jobs_expand_grid_with_unique_experiment_names() -> None:
+    """Each grid point becomes its own job under its own experiment name.
+
+    experiment_name keys outputs/state/<name>/last.pt and train_ddp.sbatch forces
+    auto_resume=true, so points sharing a name would resume from each other.
+    """
+    args = build_parser().parse_args(["--slurm", "--matrix", "--seeds", "-e", "run"])
+    jobs = slurm_jobs(args)
+
+    # 2 datasets x 3 manifolds x 1 model x 3 seeds
+    assert len(jobs) == 18
+    names = [experiment for experiment, _ in jobs]
+    assert len(set(names)) == len(names)
+    assert all(name.startswith("run-") for name in names)
+
+    assert (
+        "run-skm_tea-cylindrical-c_unet-42",
+        [
+            "dataset=skm_tea",
+            "manifold=cylindrical",
+            "model=c_unet",
+            "training.seed=42",
+        ],
+    ) in jobs
+
+
+def test_slurm_jobs_single_point_without_sweep() -> None:
+    """Without --matrix/--seeds a single job runs under the bare experiment name."""
+    args = build_parser().parse_args(["--slurm", "-e", "solo", "--extra", "manifold=euclidean"])
+    assert slurm_jobs(args) == [("solo", ["manifold=euclidean"])]
 
 
 def test_build_command_all_combinations() -> None:
-    """Test matrix, smoke, seeds, slurm, submit flag permutations."""
+    """Test matrix, smoke, seeds flag permutations for local execution."""
     # Permutation A: local, no matrix, no seeds, no smoke
     p1 = build_parser().parse_args([])
     cmd1 = build_command(p1)
     assert cmd1 == [sys.executable, "src/cfm/train.py"]
 
-    # Permutation B: local, matrix only
+    # Permutation B: local, matrix only -- -m must lead, Hydra rejects it elsewhere
     p2 = build_parser().parse_args(["--matrix"])
     cmd2 = build_command(p2)
     assert cmd2[0] == sys.executable
     assert cmd2[2] == "-m"
 
-    # Permutation C: slurm dry run with matrix, smoke, seeds
-    p3 = build_parser().parse_args(["--slurm", "--matrix", "--smoke", "--seeds"])
+    # Permutation C: local, matrix + smoke + seeds keeps a single leading -m
+    p3 = build_parser().parse_args(["--matrix", "--smoke", "--seeds"])
     cmd3 = build_command(p3)
-    assert "--submit" not in cmd3
-    assert "--" in cmd3
-    sep_idx = cmd3.index("--")
-    assert cmd3[sep_idx + 1] == "-m"
-
-    # Permutation D: slurm submit with matrix, smoke, seeds
-    p4 = build_parser().parse_args(["--slurm", "--submit", "--matrix", "--smoke", "--seeds"])
-    cmd4 = build_command(p4)
-    assert cmd4[1] == "--submit"
-    assert "--" in cmd4
+    assert cmd3[2] == "-m"
+    assert cmd3.count("-m") == 1
 
 
 def test_main_local_execution_mocked() -> None:
@@ -252,20 +270,51 @@ def test_main_slurm_execution_mocked() -> None:
         called_cmd = mock_run.call_args[0][0]
         assert called_cmd[0] == str(DEFAULT_LAUNCHER_SCRIPT)
         assert "--submit" in called_cmd
-        assert "-g" in called_cmd and called_cmd[called_cmd.index("-g") + 1] == "4"
-        assert "-e" in called_cmd and called_cmd[called_cmd.index("-e") + 1] == "test-run"
+        assert called_cmd[called_cmd.index("-g") + 1] == "4"
+        assert called_cmd[called_cmd.index("-e") + 1] == "test-run"
+
+
+def test_main_slurm_matrix_submits_one_job_per_grid_point() -> None:
+    """--matrix dispatches six independent submissions, not one multirun job."""
+    with patch("cfm.suite.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0)
+        ret = main(["--slurm", "--submit", "--matrix"])
+        assert ret == 0
+        assert mock_run.call_count == 6
+        names = [call[0][0][call[0][0].index("-e") + 1] for call in mock_run.call_args_list]
+        assert len(set(names)) == 6
+
+
+def test_main_slurm_stops_at_first_launcher_failure() -> None:
+    """A rejected submission stops the sweep instead of spamming the queue."""
+    with patch("cfm.suite.subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=2)
+        ret = main(["--slurm", "--submit", "--matrix"])
+        assert ret == 2
+        mock_run.assert_called_once()
 
 
 def test_main_slurm_eval_guidance(capsys) -> None:
-    """Test that --eval with --slurm prints informative asynchronous queue guidance."""
+    """--eval with --slurm points at evaluate.py, not at the multirun-only --eval."""
     with patch("cfm.suite.subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0)
         ret = main(["--slurm", "--eval", "--matrix"])
         assert ret == 0
-        mock_run.assert_called_once()
         captured = capsys.readouterr()
-        assert "[INFO] --eval was requested with --slurm" in captured.out
-        assert "cfmri-suite --eval" in captured.out
+        assert "[INFO] --eval does not apply to --slurm" in captured.out
+        assert "evaluate.run_name=<experiment>" in captured.out
+
+
+def test_main_rejects_flags_after_extra() -> None:
+    """--extra is REMAINDER, so a trailing suite flag must fail loudly, not silently."""
+    with pytest.raises(SystemExit):
+        main(["--extra", "optimizer.lr=1e-4", "--slurm", "--submit"])
+
+
+def test_main_rejects_submit_without_slurm() -> None:
+    """--submit without --slurm must not silently start a local run."""
+    with pytest.raises(SystemExit):
+        main(["--submit", "--matrix"])
 
 
 def test_main_standalone_eval_no_runs(capsys) -> None:

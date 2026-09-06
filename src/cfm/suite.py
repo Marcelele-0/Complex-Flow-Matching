@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import itertools
 import json
 import logging
 import os
@@ -14,6 +15,21 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 DEFAULT_LAUNCHER_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "launch_slurm.sh"
+
+# One source of truth for the sweep: joined with commas it is a Hydra multirun
+# override, expanded with itertools.product it is one Slurm job per grid point.
+MATRIX_AXES: dict[str, list[str]] = {
+    "dataset": ["skm_tea", "fastmri_local"],
+    "manifold": ["cylindrical", "euclidean", "complex_diffusion"],
+    "model": ["c_unet"],
+}
+SEED_AXIS: tuple[str, list[str]] = ("training.seed", ["42", "123", "999"])
+SMOKE_OVERRIDES: list[str] = [
+    "training.epochs=3",
+    "training.batch_size=2",
+    "evaluate.max_samples=2",
+    "dataset.use_cache=false",
+]
 
 
 def run_evaluation(multirun_dir: str | Path) -> None:
@@ -191,68 +207,132 @@ def build_hydra_args(args: argparse.Namespace) -> tuple[list[str], bool]:
     hydra_args: list[str] = []
     is_multirun = False
 
-    if getattr(args, "matrix", False):
-        hydra_args.extend(
-            [
-                "dataset=skm_tea,fastmri_local",
-                "manifold=cylindrical,euclidean,complex_diffusion",
-                "model=c_unet",
-            ]
-        )
+    if args.matrix:
+        hydra_args.extend(f"{key}={','.join(values)}" for key, values in MATRIX_AXES.items())
         is_multirun = True
 
-    if getattr(args, "seeds", False):
-        hydra_args.append("training.seed=42,123,999")
+    if args.seeds:
+        key, values = SEED_AXIS
+        hydra_args.append(f"{key}={','.join(values)}")
         is_multirun = True
 
-    if getattr(args, "smoke", False):
-        hydra_args.extend(
-            [
-                "training.epochs=3",
-                "training.batch_size=2",
-                "evaluate.max_samples=2",
-                "dataset.use_cache=false",
-            ]
-        )
+    if args.smoke:
+        hydra_args.extend(SMOKE_OVERRIDES)
 
     if is_multirun:
         hydra_args.insert(0, "-m")
 
-    hydra_args.extend(getattr(args, "extra", []))
+    hydra_args.extend(args.extra)
     return hydra_args, is_multirun
 
 
-def build_command(
-    args: argparse.Namespace,
-    launcher_script: Path | str | None = None,
-) -> list[str]:
-    """Construct execution command for either local execution or Slurm launcher.
+def slurm_jobs(args: argparse.Namespace) -> list[tuple[str, list[str]]]:
+    """Expand the sweep into one independent Slurm job per grid point.
+
+    Hydra multirun cannot be forwarded into a DDP job. ``train_ddp.sbatch`` prepends
+    its own overrides before the caller's, and Hydra's parser rejects ``-m`` once any
+    override precedes it. A single grid point per job is also the only safe layout:
+    ``logging.experiment_name`` keys ``outputs/state/<name>/last.pt`` and the batch
+    script forces ``auto_resume=true``, so points sharing a name would resume from
+    each other's checkpoint.
 
     Args:
         args: Parsed command-line arguments.
-        launcher_script: Optional override for Slurm launcher script path.
+
+    Returns:
+        List of (experiment_name, hydra_overrides) pairs, one per job to submit.
+    """
+    axes: list[tuple[str, list[str]]] = []
+    if args.matrix:
+        axes.extend(MATRIX_AXES.items())
+    if args.seeds:
+        axes.append(SEED_AXIS)
+
+    shared = [*(SMOKE_OVERRIDES if args.smoke else []), *args.extra]
+    if not axes:
+        return [(args.experiment, shared)]
+
+    jobs: list[tuple[str, list[str]]] = []
+    for point in itertools.product(*(values for _, values in axes)):
+        overrides = [f"{key}={value}" for (key, _), value in zip(axes, point, strict=True)]
+        jobs.append((f"{args.experiment}-{'-'.join(point)}", [*overrides, *shared]))
+    return jobs
+
+
+def build_command(args: argparse.Namespace) -> list[str]:
+    """Construct the local ``train.py`` invocation.
+
+    Args:
+        args: Parsed command-line arguments.
 
     Returns:
         List of command tokens ready for subprocess.run.
     """
     hydra_args, _ = build_hydra_args(args)
-
-    if getattr(args, "slurm", False):
-        script_path = launcher_script if launcher_script is not None else DEFAULT_LAUNCHER_SCRIPT
-        launcher_cmd = [str(script_path)]
-        if getattr(args, "submit", False):
-            launcher_cmd.append("--submit")
-
-        gpus = getattr(args, "gpus", 4)
-        nodes = getattr(args, "nodes", 1)
-        experiment = getattr(args, "experiment", "suite-matrix")
-
-        launcher_cmd.extend(["-g", str(gpus), "-N", str(nodes), "-e", str(experiment)])
-        launcher_cmd.append("--")
-        launcher_cmd.extend(hydra_args)
-        return launcher_cmd
-
     return [sys.executable, "src/cfm/train.py", *hydra_args]
+
+
+def build_launcher_command(
+    args: argparse.Namespace,
+    experiment: str,
+    overrides: list[str],
+    launcher_script: Path | str | None = None,
+) -> list[str]:
+    """Construct the ``launch_slurm.sh`` invocation for one grid point.
+
+    Args:
+        args: Parsed command-line arguments.
+        experiment: ``logging.experiment_name`` for this job, from :func:`slurm_jobs`.
+        overrides: Hydra overrides for this job, forwarded after ``--``.
+        launcher_script: Optional override for the launcher script path.
+
+    Returns:
+        List of command tokens ready for subprocess.run.
+    """
+    script_path = launcher_script if launcher_script is not None else DEFAULT_LAUNCHER_SCRIPT
+    cmd = [str(script_path)]
+    if args.submit:
+        cmd.append("--submit")
+    cmd.extend(["-g", str(args.gpus), "-N", str(args.nodes), "-e", experiment, "--", *overrides])
+    return cmd
+
+
+def dispatch_slurm(args: argparse.Namespace) -> int:
+    """Submit one Slurm job per grid point, stopping at the first launcher failure.
+
+    Args:
+        args: Parsed command-line arguments.
+
+    Returns:
+        Integer exit code (0 for success, the failing launcher's code otherwise).
+    """
+    if not DEFAULT_LAUNCHER_SCRIPT.exists():
+        print(f"Slurm launcher not found at {DEFAULT_LAUNCHER_SCRIPT}.")
+        print("--slurm needs a source checkout of the repository.")
+        return 1
+
+    if args.eval:
+        print(
+            "\n[INFO] --eval does not apply to --slurm. Jobs run asynchronously in the "
+            "queue, and each writes to outputs/train/<experiment>/ rather than "
+            "outputs/multirun/, which is the only tree `cfmri-suite --eval` reads. "
+            "Score a finished job with:\n"
+            "  uv run src/cfm/evaluate.py evaluate.run_name=<experiment>\n"
+        )
+
+    jobs = slurm_jobs(args)
+    mode = "submitting" if args.submit else "dry-running (add --submit to consume allocation)"
+    print(f"CFM Suite: {mode} {len(jobs)} Slurm job(s) via {DEFAULT_LAUNCHER_SCRIPT}")
+
+    for experiment, overrides in jobs:
+        cmd = build_launcher_command(args, experiment, overrides)
+        print(f"\n--- {experiment} ---\n{' '.join(cmd)}")
+        result = subprocess.run(cmd)
+        if result.returncode != 0:
+            print(f"\nLauncher failed for '{experiment}' (exit {result.returncode}). Stopping.")
+            return result.returncode
+
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -267,6 +347,17 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    # --extra swallows everything that follows it, so a suite flag written after it
+    # would silently become a Hydra override and change which mode runs.
+    misplaced = [token for token in args.extra if token.startswith("-")]
+    if misplaced:
+        parser.error(
+            f"--extra takes Hydra overrides, not flags: {' '.join(misplaced)}. "
+            "Write suite flags before --extra."
+        )
+    if args.submit and not args.slurm:
+        parser.error("--submit only applies to --slurm dispatch.")
+
     # Standalone evaluation of existing multirun checkpoints without launching new training
     if args.eval and not (args.matrix or args.seeds or args.smoke or args.extra or args.slurm):
         multirun_dirs = glob.glob("outputs/multirun/*/")
@@ -277,19 +368,11 @@ def main(argv: list[str] | None = None) -> int:
         print("No multirun outputs found under outputs/multirun/ to evaluate.")
         return 1
 
+    if args.slurm:
+        return dispatch_slurm(args)
+
     cmd = build_command(args)
     _, is_multirun = build_hydra_args(args)
-
-    if args.slurm:
-        if args.eval:
-            print(
-                "\n[INFO] --eval was requested with --slurm. Since Slurm jobs run asynchronously "
-                "in the cluster queue, automatic inline evaluation cannot run immediately. "
-                "Once your Slurm job completes, you can run evaluation via: cfmri-suite --eval\n"
-            )
-        print(f"Launching Slurm CFM Suite: {' '.join(cmd)}")
-        result = subprocess.run(cmd)
-        return result.returncode
 
     print(f"Launching CFM Suite: {' '.join(cmd)}")
     result = subprocess.run(cmd)
