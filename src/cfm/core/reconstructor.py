@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 
 from cfm.core.manifold import BaseManifold
-from cfm.core.registry import RECONSTRUCTORS
+from cfm.core.registry import MODELS, RECONSTRUCTORS
 from cfm.core.solver import BaseODESolver
 from cfm.utils.fft import fft2c, ifft2c
 
@@ -46,9 +46,25 @@ class BaseReconstructor(ABC, nn.Module):
         """
 
 
+@MODELS.register("zero_filled")
 @RECONSTRUCTORS.register("zero_filled")
 class ZeroFilledReconstructor(BaseReconstructor):
-    """Zero-filled reconstruction baseline via inverse fast Fourier transform."""
+    """Zero-filled reconstruction baseline via inverse fast Fourier transform.
+
+    Registered in MODELS as well as RECONSTRUCTORS so ``evaluate.py`` can score it
+    through :func:`~cfm.utils.inference.build_model` like any other arm of the
+    comparison. It carries no parameters, so it is evaluated with
+    ``evaluate.run_name=SKIP``; the channel counts the generic build path passes
+    are accepted and ignored.
+
+    Args:
+        **kwargs: Ignored. Absorbs ``in_channels`` / ``out_channels`` from the
+            generic registry build path, which every architecture receives.
+    """
+
+    def __init__(self, **kwargs: Any) -> None:
+        del kwargs
+        super().__init__()
 
     def reconstruct(
         self,
