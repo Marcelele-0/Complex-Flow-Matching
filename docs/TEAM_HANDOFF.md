@@ -1,6 +1,9 @@
 # 🚀 Complex Flow Matching: Team & Agent Handoff Guide
 
-> **Target Venue:** ICLR 2027 Main Conference (Submission: Sep 25, 2026)
+> **Target Venue:** a top-tier ML conference; the ICLR 2027 cycle was ruled out on
+> 2026-09-07 (see `docs/GATE_63_PLAN.md`). The contribution is now positioned as optimal
+> transport on the cylindrical manifold for complex-valued generative modelling, with MRI
+> as one domain rather than the subject.
 > **Repository:** `Marcelele-0/Complex-Flow-Matching`
 > **Project Board:** [GitHub Project #5 — Complex FM](https://github.com/users/Marcelele-0/projects/5)
 

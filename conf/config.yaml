@@ -1,7 +1,7 @@
 defaults:
   - hydra: default
   - paths: default
-  - dataset: skm_tea
+  - dataset: fastmri_local
   - manifold: cylindrical
   - logging: default
   - model: c_unet_attention
