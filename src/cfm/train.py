@@ -32,6 +32,7 @@ from cfm.core.dataset import BaseComplexDataset
 from cfm.data import build_dataset, build_geometry_transform
 from cfm.data.splits import load_split_file_names, select_indices
 from cfm.data.transforms import Compose
+from cfm.flow import BRIDGE_ENDPOINTS
 from cfm.manifolds import build_manifold
 from cfm.utils.checkpoint import load_training_state, save_training_state, state_path
 from cfm.utils.distributed import (
@@ -150,6 +151,21 @@ def main(cfg: DictConfig) -> None:
             "Use model=c_unet_cross_slice, or set dataset.num_slices=1."
         )
 
+    # Validated here rather than at first use: the alternative is discovering an
+    # unusable combination after the dataset has been indexed and the model built.
+    bridge_endpoint = str(cfg.get("training", {}).get("bridge", "noise"))
+    if bridge_endpoint not in BRIDGE_ENDPOINTS:
+        raise ValueError(
+            f"training.bridge must be one of {list(BRIDGE_ENDPOINTS)}, got {bridge_endpoint!r}."
+        )
+    conditional_bridge = bridge_endpoint == "aliased"
+    if conditional_bridge and num_slices > 1:
+        raise ValueError(
+            "training.bridge='aliased' needs the dataset's reconstruction mode, which is "
+            f"single-slice only, but dataset.num_slices={num_slices}. Set "
+            "dataset.num_slices=1, or train the 2.5D model with training.bridge=noise."
+        )
+
     # The manifold owns the transform either way, so x_1 arrives in whatever
     # representation the selected geometry trains on and everything downstream is
     # shape-agnostic. 2.5D splits the pipeline in two: normalisation needs the whole
@@ -186,13 +202,30 @@ def main(cfg: DictConfig) -> None:
                 ensure_dataset_exists("fastmri", data_dir, mode="full")
         torch.distributed.barrier()
 
-    dataset: BaseComplexDataset = build_dataset(
-        dataset_cfg,
-        data_dir=data_dir,
-        transform=slice_pipeline,
-        window_transform=window_pipeline,
-        num_slices=num_slices,
-    )
+    # Two dataset modes for two bridges. Generation mode hands back a state tensor
+    # already in the manifold's representation, because the geometry pipeline runs
+    # inside the dataset. Reconstruction mode hands back complex `input`/`target`
+    # tensors sharing one amplitude scale, and the loop maps both through
+    # `from_complex` itself - the same arrangement evaluate.py uses, which is the
+    # point: the conditional bridge only helps if training and evaluation construct
+    # their states identically.
+    dataset: BaseComplexDataset
+    if conditional_bridge:
+        dataset = build_dataset(
+            dataset_cfg,
+            data_dir=data_dir,
+            mode="reconstruction",
+            pre_transform=geometry,
+            num_slices=1,
+        )
+    else:
+        dataset = build_dataset(
+            dataset_cfg,
+            data_dir=data_dir,
+            transform=slice_pipeline,
+            window_transform=window_pipeline,
+            num_slices=num_slices,
+        )
 
     # Train only on the volumes the split manifest lists, through the same two
     # functions evaluate.py uses. Without this the loader globs every .h5 and
@@ -208,6 +241,14 @@ def main(cfg: DictConfig) -> None:
         f"Split '{split}': {len(indices)} of {len(dataset.slice_map)} slices "
         f"from {num_files} volume(s)."
     )
+    if conditional_bridge:
+        acceleration = dataset_cfg.get("acceleration", "?")
+        print_main(
+            f"Bridge: aliased -> clean (conditional, R={acceleration}). The model sees "
+            "the undersampled reconstruction at t=0, matching evaluate.py's warm start."
+        )
+    else:
+        print_main("Bridge: noise -> clean (unconditional prior).")
     dataset_subset: BaseComplexDataset | Subset[Any] = (
         Subset(dataset, indices) if len(indices) < len(dataset.slice_map) else dataset
     )
@@ -380,7 +421,16 @@ def main(cfg: DictConfig) -> None:
         pbar = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{epochs}", disable=not ctx.is_main)
 
         for _batch_idx, batch in enumerate(pbar):
-            x_1 = batch.to(device)
+            # Reconstruction mode yields a dict of complex tensors; generation mode a
+            # single state tensor. Both ends of the conditional bridge are mapped
+            # through the manifold here, so the geometry still owns the
+            # representation and nothing below this point is mode-specific.
+            x_alias: torch.Tensor | None = None
+            if conditional_bridge:
+                x_1 = manifold.from_complex(batch["target"].to(device))
+                x_alias = manifold.from_complex(batch["input"].to(device))
+            else:
+                x_1 = batch.to(device)
 
             # 2.5D batches are [B, S, C, H, W]; plain 2D batches are [B, C, H, W].
             # S is folded into the batch for the bridge, which slices channels as
@@ -394,7 +444,14 @@ def main(cfg: DictConfig) -> None:
                 b, c, h, w = x_1.shape
                 s, center, flat = 1, 0, b
 
-            x_0 = manifold.sample_noise(flat, h, w, device)
+            # The only difference between the two bridges: where the path starts.
+            # Everything downstream - the time draw, the bridge, the target velocity,
+            # the loss - is identical, which is what keeps the two training regimes
+            # comparable and keeps the geometry the only variable under study.
+            if x_alias is not None:
+                x_0 = x_alias
+            else:
+                x_0 = manifold.sample_noise(flat, h, w, device)
 
             # --- Time Sampling ---
             # One time per sample: every slice of a window is the same example, so

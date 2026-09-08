@@ -76,3 +76,18 @@ mask: {}
 # Enable DC projection during ODE integration for posterior sampling.
 # When true, measured k-space lines are enforced after each solver step.
 use_dc_projection: true
+
+# Which endpoint the path starts from at t=0. Must match the endpoint the
+# checkpoint was trained under, so it mirrors training.bridge by default and a
+# single `training.bridge=aliased` override moves both scripts at once.
+#
+#   noise    the manifold's prior; t_start controls how much of the target is
+#            handed back to the model before it starts integrating.
+#   aliased  the zero-filled reconstruction of the slice being scored, taken
+#            verbatim as the initial condition. Requires t_start=0.0, since the
+#            ground truth must not enter the start state at all.
+#
+# A checkpoint scored under the wrong endpoint is scored on a starting
+# distribution it never saw in training, which is the mismatch these keys exist
+# to remove; the wrong combination raises rather than reporting a number.
+bridge: ${training.bridge}
