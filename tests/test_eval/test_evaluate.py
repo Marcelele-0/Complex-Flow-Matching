@@ -469,3 +469,152 @@ def test_metric_accumulator_records() -> None:
     assert len(records) == 2
     assert records[0] == ("s1", 1.0)
     assert records[1] == ("s2", 2.0)
+
+
+class TestConditionalBridge:
+    """The 'aliased' endpoint: the measurement is the initial condition.
+
+    Under this endpoint the ground truth must not reach the start state at all,
+    which is the whole point of the key. These tests pin that property, since a
+    leak would inflate every metric the gate experiment reports.
+    """
+
+    def test_start_state_is_the_alias_verbatim(self) -> None:
+        """At t=0 the solver must receive x_alias itself, untouched by noise."""
+        seen: list[torch.Tensor] = []
+
+        def recording_model(x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+            seen.append(x.clone())
+            return torch.zeros(x.shape[0], 2, x.shape[2], x.shape[3])
+
+        manifold = CylindricalManifold()
+        x_1 = _cylindrical_state(2, 8, 8, seed=3)
+        x_alias = _cylindrical_state(2, 8, 8, seed=9)
+
+        reconstruct_batch(
+            recording_model,
+            manifold,
+            manifold.make_solver(2),
+            x_1,
+            t_start=0.0,
+            x_alias=x_alias,
+            bridge_endpoint="aliased",
+        )
+
+        assert torch.equal(seen[0], x_alias)
+
+    def test_target_never_enters_the_start_state(self) -> None:
+        """Changing the target alone must not change the reconstruction.
+
+        With a zero velocity field the output is exactly the start state, so this
+        is a direct test that x_1 contributes nothing but its shape.
+        """
+
+        def zero_model(x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+            return torch.zeros(x.shape[0], 2, x.shape[2], x.shape[3])
+
+        manifold = CylindricalManifold()
+        x_alias = _cylindrical_state(2, 8, 8, seed=9)
+        solver = manifold.make_solver(2)
+
+        first = reconstruct_batch(
+            zero_model,
+            manifold,
+            solver,
+            _cylindrical_state(2, 8, 8, seed=3),
+            t_start=0.0,
+            x_alias=x_alias,
+            bridge_endpoint="aliased",
+        )
+        second = reconstruct_batch(
+            zero_model,
+            manifold,
+            solver,
+            _cylindrical_state(2, 8, 8, seed=44),
+            t_start=0.0,
+            x_alias=x_alias,
+            bridge_endpoint="aliased",
+        )
+
+        assert torch.equal(first, second)
+
+    def test_is_deterministic_without_a_generator(self) -> None:
+        """No noise is drawn, so two calls must agree bit-for-bit."""
+
+        manifold = CylindricalManifold()
+        x_1 = _cylindrical_state(2, 8, 8, seed=3)
+        x_alias = _cylindrical_state(2, 8, 8, seed=9)
+        solver = manifold.make_solver(3)
+
+        runs = [
+            reconstruct_batch(
+                _state_and_time_model,
+                manifold,
+                solver,
+                x_1,
+                t_start=0.0,
+                x_alias=x_alias,
+                bridge_endpoint="aliased",
+            )
+            for _ in range(2)
+        ]
+
+        assert torch.equal(runs[0], runs[1])
+
+    def test_rejects_a_non_zero_t_start(self) -> None:
+        """t_start > 0 would mix the target back in; it must raise, not report."""
+        manifold = CylindricalManifold()
+
+        with pytest.raises(ValueError, match="requires t_start=0.0"):
+            reconstruct_batch(
+                _state_and_time_model,
+                manifold,
+                manifold.make_solver(2),
+                _cylindrical_state(2, 8, 8, seed=3),
+                t_start=0.5,
+                x_alias=_cylindrical_state(2, 8, 8, seed=9),
+                bridge_endpoint="aliased",
+            )
+
+    def test_rejects_a_missing_alias(self) -> None:
+        """Without a measurement there is no initial condition to start from."""
+        manifold = CylindricalManifold()
+
+        with pytest.raises(ValueError, match="needs x_alias"):
+            reconstruct_batch(
+                _state_and_time_model,
+                manifold,
+                manifold.make_solver(2),
+                _cylindrical_state(2, 8, 8, seed=3),
+                t_start=0.0,
+                bridge_endpoint="aliased",
+            )
+
+    def test_rejects_an_unknown_endpoint(self) -> None:
+        """A typo must not fall through to the noise path."""
+        manifold = CylindricalManifold()
+
+        with pytest.raises(ValueError, match="bridge_endpoint must be one of"):
+            reconstruct_batch(
+                _state_and_time_model,
+                manifold,
+                manifold.make_solver(2),
+                _cylindrical_state(2, 8, 8, seed=3),
+                t_start=0.0,
+                bridge_endpoint="zero_filled",
+            )
+
+    def test_noise_endpoint_is_unchanged(self) -> None:
+        """The default path must be bit-for-bit what it was before the key existed."""
+        manifold = CylindricalManifold()
+        x_1 = _cylindrical_state(2, 8, 8, seed=3)
+        solver = manifold.make_solver(3)
+
+        torch.manual_seed(0)
+        explicit = reconstruct_batch(
+            _state_and_time_model, manifold, solver, x_1, t_start=0.5, bridge_endpoint="noise"
+        )
+        torch.manual_seed(0)
+        default = reconstruct_batch(_state_and_time_model, manifold, solver, x_1, t_start=0.5)
+
+        assert torch.equal(explicit, default)

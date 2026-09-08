@@ -13,7 +13,17 @@ accumulator, which is what makes the two columns of a comparison table
 comparable. Scoring always happens in the complex domain, where both
 representations agree on what a pixel means.
 
-``t_start`` sets how much work the model is asked to do:
+``evaluate.bridge`` selects where ``t=0`` sits, and must name the same endpoint
+the checkpoint was trained under (it defaults to ``${training.bridge}`` so that a
+single override moves both scripts at once):
+
+* ``noise``: the path starts at the manifold's prior, and ``t_start`` sets how
+  much work the model is asked to do.
+* ``aliased``: the path starts at the zero-filled reconstruction of the very
+  slice being scored. There is nothing to interpolate, so integration always runs
+  the full ``[0, 1]`` and ``t_start`` must be ``0.0``.
+
+Under ``bridge=noise``, ``t_start`` means:
 
 * ``0.0``: the bridge state is pure noise, so this is plain generation. Metrics
   are poor by construction; an unconditional sample has no reason to match the
@@ -21,6 +31,11 @@ representations agree on what a pixel means.
 * ``0.5``: half-noised, the model restores the rest.
 * ``1.0``: the bridge returns the target, so metrics come out near-perfect. Tests
   the eval plumbing, not the model.
+
+Scoring a checkpoint under the endpoint it was *not* trained on reintroduces the
+train/inference mismatch these keys exist to remove, so the mismatch is made
+loud rather than silent: an ``aliased`` checkpoint scored at ``t_start=0.5``
+raises instead of quietly reporting a number.
 
 ``split`` selects the volumes to score through
 :func:`~cfm.data.splits.load_split_file_names`, the same function ``train.py``
@@ -56,6 +71,7 @@ from cfm.core.reconstructor import BaseReconstructor
 from cfm.core.solver import BaseODESolver, BaseSDESolver
 from cfm.data import build_dataset, build_geometry_transform
 from cfm.data.splits import load_split_file_names, select_indices
+from cfm.flow import BRIDGE_ENDPOINTS
 from cfm.manifolds import Manifold, build_manifold
 from cfm.utils.config import as_plain_dict as _as_plain_dict
 from cfm.utils.fft import fft2c, ifft2c
@@ -225,35 +241,80 @@ def reconstruct_batch(
     y_measured_kspace: torch.Tensor | None = None,
     use_dc_projection: bool = False,
     sensitivity_maps: torch.Tensor | None = None,
+    bridge_endpoint: str = "noise",
 ) -> torch.Tensor:
-    """Noise the target to ``t_start`` via the bridge, then integrate back to ``t=1``.
+    """Build the state at ``t_start`` and integrate it forward to ``t=1``.
+
+    How the start state is built depends on which endpoint the checkpoint was
+    trained from:
+
+    * ``bridge_endpoint="noise"``: the target is pushed back along the bridge to
+      ``t_start`` and the model restores the rest. ``t_start`` therefore controls
+      the difficulty, and at ``1.0`` the bridge returns the target unchanged.
+    * ``bridge_endpoint="aliased"``: the start state *is* ``x_alias``, taken
+      verbatim. The measurement is the model's input rather than a perturbation
+      of the answer, so no noise is drawn and ``x_1`` is used only for its shape.
+      This is the only path that leaves the target out of the initial condition,
+      and hence the only one whose numbers are a reconstruction result rather
+      than a partial-restoration result.
 
     Args:
         model: The velocity field, ``(state, time) -> velocity``.
         manifold: Supplies the noise prior and the bridge.
         solver: ODE solver supplying ``num_steps`` and ``step``.
         x_1: Clean target in the manifold's representation, ``[B, C, H, W]``.
-        t_start: Where on the noise-to-data path to start from.
+        t_start: Where on the path to start from. Must be ``0.0`` when
+            ``bridge_endpoint="aliased"``.
         generator: Optional RNG for the noise draw. One seed makes a run
             repeatable, but it does not by itself pair the two geometries: the
             Euclidean prior defaults to ``uniform``, which draws the same *law* as
             the cylindrical prior but not the same sample. Under
             ``manifold.noise_prior=matched`` one seed does give both arms the same
             complex noise field, so they are scored on the same perturbation
-            rather than merely the same slice.
+            rather than merely the same slice. Unused when the start state is the
+            measurement, which makes that path deterministic.
+        x_alias: Zero-filled reconstruction in the manifold's representation,
+            ``[B, C, H, W]``. Required when ``bridge_endpoint="aliased"``.
+        sampling_mask: Boolean k-space mask, forwarded to the DC projection.
+        y_measured_kspace: Measured k-space, forwarded to the DC projection.
+        use_dc_projection: Re-impose the measured lines after every solver step.
+        sensitivity_maps: Coil sensitivities for multi-coil DC projection.
+        bridge_endpoint: One of :data:`~cfm.flow.BRIDGE_ENDPOINTS`.
 
     Returns:
         The reconstructed state at ``t=1``, shape ``[B, C, H, W]``.
-    """
-    b, _, h, w = x_1.shape
-    x_0 = manifold.sample_noise(b, h, w, x_1.device, generator)
 
-    t = torch.full((b, 1, 1, 1), t_start, device=x_1.device, dtype=torch.float32)
-    # target_v is the training signal; only the state matters at eval time.
-    if use_dc_projection and x_alias is not None:
-        x_t, _ = manifold.bridge(x_0, x_alias, t)
+    Raises:
+        ValueError: If ``bridge_endpoint`` is unknown, or names ``"aliased"``
+            without an ``x_alias`` to start from or at a non-zero ``t_start``.
+    """
+    if bridge_endpoint not in BRIDGE_ENDPOINTS:
+        raise ValueError(
+            f"bridge_endpoint must be one of {list(BRIDGE_ENDPOINTS)}, got {bridge_endpoint!r}"
+        )
+
+    if bridge_endpoint == "aliased":
+        if x_alias is None:
+            raise ValueError(
+                "bridge_endpoint='aliased' needs x_alias: the measurement is the "
+                "initial condition, and there is nothing else to start from."
+            )
+        if t_start != 0.0:
+            raise ValueError(
+                "bridge_endpoint='aliased' requires t_start=0.0; the start state is "
+                f"the measurement itself, not a point on a path, got {t_start}."
+            )
+        x_t = x_alias
     else:
-        x_t, _ = manifold.bridge(x_0, x_1, t)
+        b, _, h, w = x_1.shape
+        x_0 = manifold.sample_noise(b, h, w, x_1.device, generator)
+
+        t = torch.full((b, 1, 1, 1), t_start, device=x_1.device, dtype=torch.float32)
+        # target_v is the training signal; only the state matters at eval time.
+        if use_dc_projection and x_alias is not None:
+            x_t, _ = manifold.bridge(x_0, x_alias, t)
+        else:
+            x_t, _ = manifold.bridge(x_0, x_1, t)
 
     return integrate_from_t(
         model,
@@ -671,6 +732,7 @@ def main(cfg: DictConfig) -> None:
     dc_acceleration = int(dc_mask_dict["acceleration"])
     dc_center_fraction = dc_mask_dict.get("center_fraction")
     use_dc_projection = eval_cfg.get("use_dc_projection", False)
+    bridge_endpoint = str(eval_cfg.get("bridge", "noise"))
 
     if dc_acceleration < 1:
         raise ValueError(f"evaluate.mask.acceleration must be >= 1, got {dc_acceleration}")
@@ -684,6 +746,21 @@ def main(cfg: DictConfig) -> None:
 
     if not 0.0 <= t_start <= 1.0:
         raise ValueError(f"evaluate.t_start must be in [0, 1], got {t_start}")
+    if bridge_endpoint not in BRIDGE_ENDPOINTS:
+        raise ValueError(
+            f"evaluate.bridge must be one of {list(BRIDGE_ENDPOINTS)}, got {bridge_endpoint!r}. "
+            "It has to name the endpoint the checkpoint was trained from "
+            "(training.bridge), or the model is scored on a starting distribution "
+            "it has never seen."
+        )
+    conditional_bridge = bridge_endpoint == "aliased"
+    if conditional_bridge and t_start != 0.0:
+        raise ValueError(
+            "evaluate.bridge='aliased' requires evaluate.t_start=0.0: the model starts "
+            f"from the measurement, so there is no path to enter part-way, got {t_start}. "
+            "Any other value would mix the ground truth into the initial condition and "
+            "inflate every metric."
+        )
     if num_steps < 1:
         raise ValueError(f"evaluate.num_steps must be >= 1, got {num_steps}")
     if mask_threshold is not None:
@@ -815,6 +892,10 @@ def main(cfg: DictConfig) -> None:
         f"Reconstructing from t_start={t_start} (span {span:.3f} over {num_steps} steps "
         f"-> dt {span / num_steps:.6f})"
     )
+    if conditional_bridge:
+        print("Bridge 'aliased': start state is the zero-filled reconstruction, no noise drawn.")
+    else:
+        print("Bridge 'noise': start state is the target pushed back along the prior bridge.")
 
     # shuffle=False and drop_last=False keep this position aligned with sample_ids.
     position = 0
@@ -840,7 +921,9 @@ def main(cfg: DictConfig) -> None:
                     kwargs["num_low_frequencies"] = batch["num_low_frequencies"]
                 pred_complex = model.reconstruct(y_kspace, sampling_mask, sens_maps, **kwargs)
                 pred = manifold.from_complex(pred_complex)
-            elif use_dc_projection and t_start < 1.0:
+            elif conditional_bridge or (use_dc_projection and t_start < 1.0):
+                # The zero-filled reconstruction: the DC projection's anchor under
+                # bridge=noise, and the entire initial condition under bridge=aliased.
                 x_alias = batch["input"].to(device)
                 x_alias_manifold = manifold.from_complex(x_alias)
 
@@ -854,8 +937,9 @@ def main(cfg: DictConfig) -> None:
                     x_alias=x_alias_manifold,
                     sampling_mask=sampling_mask,
                     y_measured_kspace=y_kspace,
-                    use_dc_projection=True,
+                    use_dc_projection=use_dc_projection,
                     sensitivity_maps=sens_maps,
+                    bridge_endpoint=bridge_endpoint,
                 )
             else:
                 pred = reconstruct_batch(model, manifold, solver, x_1, t_start, generator)
@@ -879,6 +963,7 @@ def main(cfg: DictConfig) -> None:
     print(f"  checkpoint : {checkpoint_path}")
     print(f"  split      : {split}   ({num_files} file(s), {len(indices)} slices)")
     print(f"  t_start    : {t_start:.3f}   num_steps: {num_steps}")
+    print(f"  bridge     : {bridge_endpoint}")
     print(f"  mask thr.  : {mask_threshold}")
     if dc_center_fraction is not None:
         print(
@@ -902,6 +987,7 @@ def main(cfg: DictConfig) -> None:
                 "split": split,
                 "num_slices": len(indices),
                 "t_start": t_start,
+                "bridge": bridge_endpoint,
                 "num_steps": num_steps,
                 "mask_threshold": mask_threshold,
                 "seed": seed,
@@ -927,6 +1013,7 @@ def main(cfg: DictConfig) -> None:
         log_dict: dict[str, float | int | str] = {
             "eval/manifold": manifold.name,
             "eval/t_start": t_start,
+            "eval/bridge": bridge_endpoint,
             "eval/num_steps": num_steps,
             "eval/num_samples": len(indices),
             "eval/split": str(split),
