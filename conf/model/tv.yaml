@@ -1,0 +1,22 @@
+# Compressed-sensing floor: TV-regularised reconstruction via sigpy.
+#
+# Unlike zero-filling, this row DOES belong in the paper table - it is the
+# classical baseline the literature reports, and the one a reviewer checks.
+# Losing to a supervised network is ordinary for a generative reconstructor;
+# losing to TV is not defensible in any framing.
+#
+# Carries no learned parameters, so score it with evaluate.run_name=SKIP.
+name: "total_variation"
+
+# Weight on the total variation term. Tune on the TRAINING split only: fitting
+# it to the scored volume makes the floor artificially weak and defeats the
+# point of measuring it.
+lamda: 0.005
+
+# Primal-dual iterations. Runtime is linear in this and the solver is CPU-only
+# (the GPU path needs cupy, which is not a dependency).
+max_iter: 100
+
+# Base seed for sigpy's power iteration, which starts from a random vector.
+# Unseeded, two runs of the same slice differ by ~3e-4 on a unit-scale image.
+seed: 0
