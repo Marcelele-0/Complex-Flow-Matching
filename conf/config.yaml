@@ -8,5 +8,4 @@ defaults:
   - training: default
   - generate: default
   - evaluate: default
-  - reconstruct: default
   - _self_

@@ -1,93 +1,27 @@
-# Where on the noise -> data bridge the reconstruction starts.
-#   0.0  pure generation: the target contributes nothing, so metrics are poor by
-#        construction (an unconditional sample has no reason to match the slice
-#        it was paired with).
-#   0.5  half-noised target; the model restores the rest.
-#   1.0  degenerate self-test: the bridge returns the target, so metrics come out
-#        near-perfect (PSNR ~150 dB, SSIM 1.0). Validates the pipeline, not the model.
-t_start: 0.5
+# Generative evaluation. Every metric here is distributional: synthesis has no
+# paired target, so PSNR and SSIM against "the" slice are meaningless by
+# construction, which is why the paired path was removed rather than reused.
 
-# Heun steps over the remaining interval [t_start, 1]. Step size is
-# (1 - t_start) / num_steps, so cost is independent of t_start.
-num_steps: 100
+# How many fields to draw and to compare against. Coefficients are pooled, so a
+# 64x64 field contributes 4096 points and a few dozen fields already saturate the
+# marginal estimators; raise this when the fields are small or the metric is noisy.
+num_fields: 64
+batch_size: 16
+num_workers: 0
 
-# Phase is meaningless in air, so the phase error is averaged over tissue only:
-# pixels whose target amplitude exceeds mask_threshold * per-slice max. Range [0, 1).
-# null scores every pixel, giving a background-dominated number. The unmasked value
-# is reported alongside either way.
-mask_threshold: 0.05
+# Solver step counts to sweep. The claim this project makes about how few steps a
+# geometry needs is read off this table, so the low end matters more than the high.
+nfe: [1, 2, 4, 8, 16, 32, 64, 100]
 
-# COCO-style manifest at {data_dir}/annotations/v1.0.0/{split}.json.
-# null evaluates every .h5 in data_dir.
-#
-# train.py gates its dataset through the same manifests via dataset.split, so as
-# long as this differs from dataset.split (default 'train') the scored volumes are
-# genuinely held out and the numbers are a generalization result. Setting either
-# to null removes the gate, and no held-out claim can then be made.
-#
-# Ignored when the dataset group declares split: null, which is how a cohort says
-# it ships no manifests at all (fastMRI has no annotations/ directory). Asking for
-# 'test' there could only raise.
-split: test
+# Random directions averaged by the sliced estimator. More is cheaper than more
+# samples and reduces its variance; 256 is where the returns flatten here.
+num_projections: 256
 
-# Falls back to dataset.data_dir when null.
-data_dir: ~
-
-# null evaluates the whole split. When set, slices are strided rather than taken
-# from the front: consecutive slices of one volume are near-duplicates.
-max_samples: ~
-
-batch_size: 4
-num_workers: 4
-
-# Noise is reproducible for a fixed batch_size; changing it re-chunks the RNG stream.
+# Fixed so a reported number can be reproduced: this seeds the prior draw, the
+# projections, the time sample and any subsampling.
 seed: 0
 
 # Checkpoint lookup: outputs/train/{run_name}/**/*.pt, newest by mtime.
-# Falls back to logging.experiment_name when null, same rule as generate.py.
+# Falls back to logging.experiment_name when null.
 run_name: ~
 checkpoint_path: ~
-
-# Undersampling mask for the data consistency (DC) error, which scores k-space
-# agreement on the sampled trajectories only.
-#
-# Empty by default so the whole block is inherited from dataset.mask, and the model
-# is scored under the trajectory it was trained on. Keys set here override the
-# dataset's one at a time, so `evaluate.mask.acceleration=8` moves the operating
-# point while keeping the trained trajectory family. Setting the block to a
-# non-empty literal used to discard dataset.mask wholesale, which silently scored
-# a Poisson-disc model under the Cartesian default.
-#
-#   acceleration    target R; the kept line budget is width // acceleration
-#   type            trajectory family, e.g. cartesian or poisson_disc
-#   center_fraction fraction of lines always kept at the k-space center; when set,
-#                   center lines are truncated to preserve the target R
-#
-# The mask is SIMULATED for single-coil cohorts: SKM-TEA ships fully sampled data
-# and the pipeline loads the reconstructed image, so no acquisition mask exists to
-# load, and the reference k-space is F(ground truth image) rather than raw scanner
-# k-space. DC error there measures agreement with the reference image on the
-# sampled lines, not fidelity to physical measurements. Multi-coil cohorts return
-# their own masked_kspace and sensitivity maps, and DC enforces those directly.
-#
-# One mask is drawn per slice from a deterministic seed, so runs are comparable.
-mask: {}
-
-# Enable DC projection during ODE integration for posterior sampling.
-# When true, measured k-space lines are enforced after each solver step.
-use_dc_projection: true
-
-# Which endpoint the path starts from at t=0. Must match the endpoint the
-# checkpoint was trained under, so it mirrors training.bridge by default and a
-# single `training.bridge=aliased` override moves both scripts at once.
-#
-#   noise    the manifold's prior; t_start controls how much of the target is
-#            handed back to the model before it starts integrating.
-#   aliased  the zero-filled reconstruction of the slice being scored, taken
-#            verbatim as the initial condition. Requires t_start=0.0, since the
-#            ground truth must not enter the start state at all.
-#
-# A checkpoint scored under the wrong endpoint is scored on a starting
-# distribution it never saw in training, which is the mismatch these keys exist
-# to remove; the wrong combination raises rather than reporting a number.
-bridge: ${training.bridge}

@@ -7,3 +7,27 @@
 # Loss   : decoupled amplitude + phase, phase weighted by an amplitude mask
 #          (reads training.loss.amp_loss_type / phase_loss_type / lambda_phase)
 name: cylindrical
+
+# Weight on the angular term of the tangent inner product, which is what a
+# coupling cost measures displacement with. 1.0 is the flat product metric
+# ds^2 = dA^2 + dtheta^2. Note this is not the plane's metric pulled back, which
+# would carry A^2 dtheta^2: dropping that factor is the point of the cylinder,
+# and it leaves the angular term about ten times the amplitude term in scale.
+phase_weight: 1.0
+
+# Standard deviation, in radians, of a wrapped-normal phase prior. null keeps the
+# uniform prior, which is this family's spread -> infinity limit.
+#
+# A uniform phi_0 makes the angular regression target nearly unlearnable: with
+# phi_0 uniform and independent of the data, phi_t = phi_0 + t*u_phi mod 2pi is
+# itself nearly uniform whatever u_phi was. Measured here, the angular loss
+# converges to 1.538 against 1.571 for predicting zero -- 2% of the phase
+# explained -- while the amplitude, which does not wrap, trains to parity with
+# the Euclidean arm.
+phase_spread: null
+
+# Gaussian smoothing sigma, in pixels, applied to the prior's latents. null keeps
+# the prior white. The pointwise law is unchanged; only neighbouring coefficients
+# become dependent, which lowers the prior's effective dimension and is what lets
+# minibatch OT escape concentration of measure at field scale.
+spatial_correlation: null

@@ -16,3 +16,9 @@ name: euclidean
 #   matched   Replays the cylindrical RNG stream, so one seed gives both arms the
 #             identical noise field. Tighter still, at the cost of a cos/sin draw.
 noise_prior: uniform
+
+# Gaussian smoothing sigma, in pixels, applied to the prior's latents. null keeps
+# the prior white. When set, the draw replays the cylindrical manifold's
+# correlated prior and re-expresses it in (Re, Im), so one seed gives both
+# geometries the same smooth noise field. Not defined for noise_prior: gaussian.
+spatial_correlation: null

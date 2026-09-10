@@ -1,1035 +1,520 @@
-"""Reconstruction-style evaluation of a trained flow-matching model, any geometry.
+"""Generative evaluation: does the model reproduce the data distribution?
 
-``generate.py`` samples from pure noise, so it has no ground truth and PSNR/SSIM
-have nothing to compare against. This script scores a reconstruction instead: a
-real slice becomes ``x_1``, is pushed part-way back toward noise through the
-selected manifold's bridge at a configurable ``t_start``, then integrated forward
-to ``t=1`` by the model and compared against the slice it came from.
+This entry point replaces a paired one. The reconstruction path scored a
+prediction against the specific slice it was derived from -- PSNR, SSIM, a phase
+error and a data-consistency term, each meaningful only because the target was
+known. Pure synthesis has no such target: a sample drawn from the prior has no
+reason to match any particular slice, and every paired metric is therefore poor
+*by construction* at ``t = 0``, which is precisely the setting the project now
+cares about. Scoring synthesis needs distributional metrics, and those are what
+this module computes.
 
-The geometry enters only through :class:`~cfm.manifolds.base.Manifold`. The
-cylindrical model and the Euclidean baseline are scored by this same code, with
-the same slices, the same integration schedule, the same metrics and the same
-accumulator, which is what makes the two columns of a comparison table
-comparable. Scoring always happens in the complex domain, where both
-representations agree on what a pixel means.
+What is measured, and why each one is here
+------------------------------------------
+**Sliced 2-Wasserstein on the complex plane.** The headline number. Coefficients
+from generated and reference fields are pooled and compared as points in ``R^2``.
+Sliced rather than exact because the exact assignment's finite-sample floor is
+large enough to swallow the differences worth seeing: measured on this project's
+synthetic target, the exact estimator's floor at 2048 samples is 0.078 while the
+sliced estimator reaches 0.004 at 32768, against a separation of 0.188 between
+genuinely different distributions.
 
-``evaluate.bridge`` selects where ``t=0`` sits, and must name the same endpoint
-the checkpoint was trained under (it defaults to ``${training.bridge}`` so that a
-single override moves both scripts at once):
+**Exact transport on each marginal.** Amplitude on the line and phase on the
+circle, both solved exactly. A model can match a pooled two-dimensional cloud
+while getting one marginal wrong in a way slicing averages away, and the phase
+marginal is the one this project makes claims about.
 
-* ``noise``: the path starts at the manifold's prior, and ``t_start`` sets how
-  much work the model is asked to do.
-* ``aliased``: the path starts at the zero-filled reconstruction of the very
-  slice being scored. There is nothing to interpolate, so integration always runs
-  the full ``[0, 1]`` and ``t_start`` must be ``0.0``.
+**The dependence gap.** The circular-linear correlation of the generated
+coefficients against the reference's. Amplitude-phase dependence is the axis the
+synthetic datasets sweep and the thing a factorised coupling destroys, so a model
+that reproduces both marginals and none of the dependence has to be visible as a
+number rather than as an argument.
 
-Under ``bridge=noise``, ``t_start`` means:
+**The spatial gap.** Lag-one autocorrelation of the amplitude field, generated
+against reference. Every metric above pools coefficients and is therefore blind
+to spatial structure entirely; without this one a model could match the pointwise
+law perfectly and produce noise where the data has fields.
 
-* ``0.0``: the bridge state is pure noise, so this is plain generation. Metrics
-  are poor by construction; an unconditional sample has no reason to match the
-  particular slice it was paired with.
-* ``0.5``: half-noised, the model restores the rest.
-* ``1.0``: the bridge returns the target, so metrics come out near-perfect. Tests
-  the eval plumbing, not the model.
+**Straightness.** The regression residual of the conditional velocity,
+normalised by the displacement it had to explain. Both bridges carry a velocity
+constant along the path, so this is the rectified-flow straightness statistic
+directly rather than the training loss under another name. Computed under the
+coupling the checkpoint was trained with, read from ``training.coupling``.
 
-Scoring a checkpoint under the endpoint it was *not* trained on reintroduces the
-train/inference mismatch these keys exist to remove, so the mismatch is made
-loud rather than silent: an ``aliased`` checkpoint scored at ``t_start=0.5``
-raises instead of quietly reporting a number.
-
-``split`` selects the volumes to score through
-:func:`~cfm.data.splits.load_split_file_names`, the same function ``train.py``
-gates its dataset with. Setting ``dataset.split=train`` and ``evaluate.split=test``
-therefore holds the scored volumes out for real. Both default that way; set either
-to ``null`` only for a directory with no ``annotations/``, and then no held-out
-claim can be made about the numbers.
-
-Everything above :func:`main` is pure (no Hydra, no HDF5, no filesystem except
-the split helpers), so the whole path is unit-testable with a dummy model and
-synthetic tensors.
+All of the above are swept over solver step counts, because the number of
+function evaluations a geometry needs is a claim this project makes and a table
+it has to be able to produce.
 """
 
 from __future__ import annotations
 
-import csv
 import json
-import logging
-import os
-import re
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import hydra
 import torch
 from omegaconf import DictConfig, OmegaConf
-from torch.utils.data import DataLoader, Subset
-from tqdm import tqdm
+from torch.utils.data import DataLoader
 
-from cfm.core.reconstructor import BaseReconstructor
-from cfm.core.solver import BaseODESolver, BaseSDESolver
 from cfm.data import build_dataset, build_geometry_transform
-from cfm.data.splits import load_split_file_names, select_indices
-from cfm.flow import BRIDGE_ENDPOINTS
-from cfm.manifolds import Manifold, build_manifold
-from cfm.utils.config import as_plain_dict as _as_plain_dict
-from cfm.utils.fft import fft2c, ifft2c
-from cfm.utils.inference import (
-    build_model,
-    load_weights,
-    reject_unsupported_sampling_model,
-    resolve_checkpoint,
+from cfm.data.synthetic import circular_linear_correlation
+from cfm.data.transforms import Compose
+from cfm.flow.coupling import BaseCoupling, build_coupling
+from cfm.flow.optimal_transport import (
+    circular_transport_permutation,
+    shortest_angular_diff,
+    sliced_wasserstein2,
+    sorted_transport_permutation,
 )
-from cfm.utils.metrics import (
-    circular_phase_error,
-    data_consistency_error,
-    peak_signal_noise_ratio,
-    structural_similarity,
-)
+from cfm.manifolds import build_manifold
+from cfm.utils.inference import build_model, load_weights, resolve_checkpoint
 
-try:
-    import wandb
+# The circular solver searches n cyclic shifts, so its cost is quadratic. Beyond
+# this the marginal metrics are computed on a random subsample, which is stated
+# in the report rather than done silently.
+_MAX_EXACT_COEFFICIENTS = 8192
 
-    HAS_WANDB = True
-except ImportError:
-    HAS_WANDB = False
+# Slicing costs a sort per projection, so it can afford far more points; this is
+# where its resolution advantage over the exact estimator comes from.
+_MAX_SLICED_COEFFICIENTS = 65536
 
-logger = logging.getLogger(__name__)
+# Guards the induced angular velocity against a literal division by zero; the
+# divergence it is meant to expose happens well above this.
+_ANGULAR_FLOOR = 1e-12
 
 
-# --------------------------------------------------------------------------- #
-# Integration
-# --------------------------------------------------------------------------- #
-def dc_project(
-    x_state: torch.Tensor,
-    manifold: Manifold,
-    y_measured_kspace: torch.Tensor,
-    mask: torch.Tensor,
-    sensitivity_maps: torch.Tensor | None = None,
-) -> torch.Tensor:
-    """Replace measured k-space lines in the current state.
+class _AngularProbe:
+    """Wraps a velocity field and records what the solver actually meets.
+
+    Theorem 3 is a statement about the path, not the endpoint: under a Cartesian
+    field the induced angular velocity
+
+        theta_dot = (x v_y - y v_x) / A^2
+
+    diverges as ``A -> 0``, while on the cylinder the angular velocity *is* a
+    coordinate of the prediction and is bounded by ``pi`` from the range of
+    ``atan2``. Recording both along the same trajectories is what turns that from
+    an argument into a number.
 
     Args:
-        x_state: Current state in the manifold's representation, ``[B, C, H, W]``.
-        manifold: Supplies ``to_complex``/``from_complex`` for the geometry.
-        y_measured_kspace: Measured k-space, centered. ``[B, 1, H, W]`` single-coil,
-            or ``[B, num_coils, H, W]`` when ``sensitivity_maps`` is given.
-        mask: Binary sampling mask, centered, broadcastable to the k-space shape.
-        sensitivity_maps: Optional coil sensitivities ``[B, num_coils, H, W]``. When
-            given, the state is projected onto the coils before the k-space
-            replacement and SENSE-combined back, so the measured multi-coil data is
-            enforced rather than a single-coil stand-in derived from the target.
+        network: The velocity field to wrap.
+        geometry: ``"euclidean"`` to induce the angular velocity, ``"cylindrical"``
+            to read it off the prediction.
+        mid_window: Half-width of the band around ``t = 0.5`` reported separately,
+            which is where a chordal path passes closest to the origin.
+    """
+
+    def __init__(self, network: torch.nn.Module, geometry: str, mid_window: float = 0.1) -> None:
+        self.network = network
+        self.geometry = geometry
+        self.mid_window = mid_window
+        self.min_amplitude: torch.Tensor | None = None
+        self.peak_angular: torch.Tensor | None = None
+        self.peak_angular_mid = 0.0
+
+    def __call__(self, state: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        """Record, then delegate.
+
+        Args:
+            state: State tensor ``[B, C, H, W]``.
+            t: Times ``[B]``.
+
+        Returns:
+            The wrapped field's velocity.
+        """
+        velocity = self.network(state, t)
+        if self.geometry == "euclidean":
+            real, imag = state[:, 0], state[:, 1]
+            squared = (real * real + imag * imag).clamp_min(_ANGULAR_FLOOR)
+            amplitude = squared.sqrt()
+            angular = (real * velocity[:, 1] - imag * velocity[:, 0]) / squared
+        else:
+            amplitude = state[:, 0].clamp_min(0.0)
+            angular = velocity[:, 1]
+
+        magnitude = angular.abs()
+        self.min_amplitude = (
+            amplitude
+            if self.min_amplitude is None
+            else torch.minimum(self.min_amplitude, amplitude)
+        )
+        self.peak_angular = (
+            magnitude if self.peak_angular is None else torch.maximum(self.peak_angular, magnitude)
+        )
+        if abs(float(t.reshape(-1)[0]) - 0.5) <= self.mid_window:
+            self.peak_angular_mid = max(self.peak_angular_mid, float(magnitude.max()))
+        return velocity
+
+
+def _subsample(values: torch.Tensor, limit: int, generator: torch.Generator) -> torch.Tensor:
+    """Take at most ``limit`` entries, uniformly and reproducibly.
+
+    Args:
+        values: Values of shape ``[n]``.
+        limit: Maximum number to keep.
+        generator: RNG, so a reported number can be reproduced.
 
     Returns:
-        The projected state in the manifold's representation.
+        Either ``values`` unchanged or a random subset of size ``limit``.
     """
-    z = manifold.to_complex(x_state)
-    if sensitivity_maps is not None:
-        z_coils = fft2c(sensitivity_maps * z)
-        z_dc_coils = z_coils * (1 - mask) + y_measured_kspace * mask
-        z_dc = (sensitivity_maps.conj() * ifft2c(z_dc_coils)).sum(dim=1, keepdim=True)
-    else:
-        z_k = fft2c(z)
-        z_dc_k = z_k * (1 - mask) + y_measured_kspace * mask
-        z_dc = ifft2c(z_dc_k)
-    return manifold.from_complex(z_dc)
+    if values.numel() <= limit:
+        return values
+    picks = torch.randperm(values.numel(), generator=generator)[:limit]
+    return values[picks]
+
+
+def spatial_lag_one(fields: torch.Tensor) -> float:
+    """Correlation between horizontally adjacent amplitudes, averaged over fields.
+
+    The pooled metrics cannot see spatial structure at all, so this is what
+    separates a model that has learned a field from one that has learned its
+    histogram.
+
+    Args:
+        fields: Complex fields of shape ``[B, 1, H, W]``.
+
+    Returns:
+        The correlation, or ``0.0`` for a degenerate field with no variation.
+
+    Raises:
+        ValueError: If ``fields`` is not a 4D complex tensor with width above 1.
+    """
+    if fields.ndim != 4 or not fields.is_complex():
+        raise ValueError(f"expected complex [B, 1, H, W], got shape {tuple(fields.shape)}")
+    if fields.shape[-1] < 2:
+        raise ValueError("lag-one correlation needs a width of at least two")
+
+    amplitude = fields.abs()
+    left = amplitude[..., :-1].reshape(-1)
+    right = amplitude[..., 1:].reshape(-1)
+    left = left - left.mean()
+    right = right - right.mean()
+    denominator = left.norm() * right.norm()
+    if float(denominator) <= 0.0:
+        return 0.0
+    return float((left * right).sum() / denominator)
+
+
+def distributional_metrics(
+    generated: torch.Tensor,
+    reference: torch.Tensor,
+    num_projections: int,
+    generator: torch.Generator,
+) -> dict[str, float]:
+    """Compare a generated field batch with a reference batch.
+
+    Args:
+        generated: Complex fields of shape ``[B, 1, H, W]``.
+        reference: Complex fields of shape ``[B', 1, H, W]``.
+        num_projections: Directions averaged over by the sliced estimator.
+        generator: RNG for the projections and any subsampling.
+
+    Returns:
+        Metric name to value.
+
+    Raises:
+        ValueError: If either batch is not a complex 4D tensor.
+    """
+    if generated.ndim != 4 or reference.ndim != 4:
+        raise ValueError("both batches must be [B, 1, H, W]")
+    if not (generated.is_complex() and reference.is_complex()):
+        raise ValueError("both batches must be complex")
+
+    flat_generated = generated.reshape(-1)
+    flat_reference = reference.reshape(-1)
+
+    # Slicing needs equal cloud sizes; the smaller side sets the budget.
+    sliced_budget = min(flat_generated.numel(), flat_reference.numel(), _MAX_SLICED_COEFFICIENTS)
+    left = _subsample(flat_generated, sliced_budget, generator)
+    right = _subsample(flat_reference, sliced_budget, generator)
+    sliced = float(
+        sliced_wasserstein2(
+            torch.stack([left.real, left.imag], dim=1),
+            torch.stack([right.real, right.imag], dim=1),
+            num_projections=num_projections,
+            generator=generator,
+        )
+    )
+
+    exact_budget = min(flat_generated.numel(), flat_reference.numel(), _MAX_EXACT_COEFFICIENTS)
+    left = _subsample(flat_generated, exact_budget, generator)
+    right = _subsample(flat_reference, exact_budget, generator)
+
+    amplitude_perm = sorted_transport_permutation(left.abs(), right.abs())
+    amplitude_w2 = float(
+        (left.abs() - right.abs()[amplitude_perm]).square().mean().clamp_min(0.0).sqrt()
+    )
+
+    phase_perm = circular_transport_permutation(left.angle(), right.angle())
+    phase_w2 = float(
+        shortest_angular_diff(left.angle(), right.angle()[phase_perm])
+        .square()
+        .mean()
+        .clamp_min(0.0)
+        .sqrt()
+    )
+
+    generated_dependence = float(circular_linear_correlation(left.abs(), left.angle()))
+    reference_dependence = float(circular_linear_correlation(right.abs(), right.angle()))
+
+    return {
+        "sliced_w2_complex": sliced,
+        "w2_amplitude": amplitude_w2,
+        "w2_phase_circular": phase_w2,
+        "dependence_generated": generated_dependence,
+        "dependence_reference": reference_dependence,
+        "dependence_gap": abs(generated_dependence - reference_dependence),
+        "spatial_lag1_generated": spatial_lag_one(generated),
+        "spatial_lag1_reference": spatial_lag_one(reference),
+        "spatial_lag1_gap": abs(spatial_lag_one(generated) - spatial_lag_one(reference)),
+    }
 
 
 @torch.no_grad()
-def integrate_from_t(
-    model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-    solver: BaseODESolver | BaseSDESolver | Any,
-    x_start: torch.Tensor,
-    t_start: float,
-    manifold: Manifold | None = None,
-    y_measured_kspace: torch.Tensor | None = None,
-    sampling_mask: torch.Tensor | None = None,
-    use_dc_projection: bool = False,
-    sensitivity_maps: torch.Tensor | None = None,
-) -> torch.Tensor:
-    """Integrate the flow from ``t_start`` to ``t=1``, in whatever geometry ``solver`` carries.
+def straightness(
+    model: torch.nn.Module,
+    manifold: Any,
+    data_states: torch.Tensor,
+    device: torch.device,
+    generator: torch.Generator,
+    coupling: BaseCoupling | None = None,
+) -> float:
+    """Regression residual of the conditional velocity, normalised.
 
-    Mirrors :meth:`~cfm.flow.solver.HeunODESolver.sample` (Heun
-    predictor/corrector, Euler on the final step) but starts at an arbitrary
-    ``t_start``, which ``sample`` cannot do because it hardcodes ``t=0``. State
-    updates go through the public ``solver.step``, so a geometry's constraint -
-    or its deliberate absence, in the Euclidean case - is never reimplemented here.
+    Computed under the coupling the model was trained with. A model regressed
+    toward optimal-transport pairs has to be scored against optimal-transport
+    pairs: scoring it against independent ones measures a different regression,
+    and once made an OT arm look exactly as unlearnable as its baseline. A
+    coupling that removes crossings should lower this, and lowering it is the
+    mechanism behind any reduction in solver steps.
 
     Args:
-        model: Callable ``(state [B, C, H, W], time [B]) -> velocity [B, 2, H, W]``.
-        solver: Supplies ``num_steps`` and the geometry's ``step``.
-        x_start: State at ``t_start``, shape ``[B, C, H, W]``.
-        t_start: Absolute start time in ``[0, 1]``. At ``0`` this reproduces
-            ``sample`` bit-for-bit; at ``1`` the interval is empty and the state
-            returns unchanged up to whatever re-projection ``step`` applies.
-        manifold: Optional geometry manifold for data consistency projections.
-        y_measured_kspace: Optional measured k-space for data consistency.
-        sampling_mask: Optional binary sampling mask.
-        use_dc_projection: Whether to apply data consistency projections.
-        sensitivity_maps: Optional coil sensitivities, enabling multi-coil DC.
+        model: The trained velocity field.
+        manifold: The geometry, supplying the prior and the bridge.
+        data_states: Data in the manifold's state representation,
+            ``[B, state_channels, H, W]``.
+        device: Device to compute on.
+        generator: RNG for the prior draw and the time sample. Must live on
+            ``device``: torch refuses a CPU generator for a CUDA draw.
+        coupling: The pairing training used. ``None`` pairs independently.
 
     Returns:
-        The state at ``t=1``, shape ``[B, C, H, W]``.
-
-    Raises:
-        ValueError: If ``t_start`` is outside ``[0, 1]`` or ``num_steps < 1``.
+        ``0`` for a perfectly straight field, ``1`` for one that explains none of
+        the displacement.
     """
-    if not 0.0 <= t_start <= 1.0:
-        raise ValueError(f"t_start must be in [0, 1], got {t_start}")
-    if solver.num_steps < 1:
-        raise ValueError(f"solver.num_steps must be >= 1, got {solver.num_steps}")
+    batch, _, height, width = data_states.shape
+    prior = manifold.sample_noise(batch, height, width, device, generator=generator)
+    times = torch.rand(batch, 1, 1, 1, device=device, generator=generator)
 
-    num_steps = solver.num_steps
-    device = x_start.device
-    b = x_start.shape[0]
-
-    span = 1.0 - t_start
-    dt = span / num_steps
-    x_t = x_start
-
-    for i in range(num_steps):
-        t_val = t_start + span * (i / num_steps)
-        t_next_val = t_start + span * ((i + 1) / num_steps)
-
-        t_tensor = torch.full((b,), t_val, device=device, dtype=torch.float32)
-        t_next_tensor = torch.full((b,), t_next_val, device=device, dtype=torch.float32)
-
-        # Predictor: current vector field.
-        v_t = model(x_t, t_tensor)
-
-        # Final step is Euler only, so the field is never evaluated past t=1.
-        if i == num_steps - 1:
-            x_t = solver.step(x_t, v_t, dt)
-            if (
-                use_dc_projection
-                and manifold is not None
-                and y_measured_kspace is not None
-                and sampling_mask is not None
-            ):
-                x_t = dc_project(x_t, manifold, y_measured_kspace, sampling_mask, sensitivity_maps)
-            return x_t
-
-        # Euler probe, field at the probe, averaged velocity.
-        x_pred = solver.step(x_t, v_t, dt)
-        v_next = model(x_pred, t_next_tensor)
-        v_avg = 0.5 * (v_t + v_next)
-
-        # Corrected step, taken from x_t.
-        x_t = solver.step(x_t, v_avg, dt)
-
-        if (
-            use_dc_projection
-            and manifold is not None
-            and y_measured_kspace is not None
-            and sampling_mask is not None
-        ):
-            x_t = dc_project(x_t, manifold, y_measured_kspace, sampling_mask, sensitivity_maps)
-
-    return x_t
+    if coupling is not None:
+        data_states = coupling(prior, data_states, manifold)
+    state, target = manifold.bridge(prior, data_states, times)
+    residual = (model(state, times.reshape(-1)) - target).square().flatten(1).sum(1)
+    displacement = target.square().flatten(1).sum(1)
+    total = displacement.mean()
+    if float(total) <= 0.0:
+        return 0.0
+    return float(residual.mean() / total)
 
 
-def reconstruct_batch(
-    model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-    manifold: Manifold,
-    solver: BaseODESolver | BaseSDESolver | Any,
-    x_1: torch.Tensor,
-    t_start: float,
-    generator: torch.Generator | None = None,
-    x_alias: torch.Tensor | None = None,
-    sampling_mask: torch.Tensor | None = None,
-    y_measured_kspace: torch.Tensor | None = None,
-    use_dc_projection: bool = False,
-    sensitivity_maps: torch.Tensor | None = None,
-    bridge_endpoint: str = "noise",
-) -> torch.Tensor:
-    """Build the state at ``t_start`` and integrate it forward to ``t=1``.
-
-    How the start state is built depends on which endpoint the checkpoint was
-    trained from:
-
-    * ``bridge_endpoint="noise"``: the target is pushed back along the bridge to
-      ``t_start`` and the model restores the rest. ``t_start`` therefore controls
-      the difficulty, and at ``1.0`` the bridge returns the target unchanged.
-    * ``bridge_endpoint="aliased"``: the start state *is* ``x_alias``, taken
-      verbatim. The measurement is the model's input rather than a perturbation
-      of the answer, so no noise is drawn and ``x_1`` is used only for its shape.
-      This is the only path that leaves the target out of the initial condition,
-      and hence the only one whose numbers are a reconstruction result rather
-      than a partial-restoration result.
+def format_table(rows: Sequence[tuple[int, dict[str, float]]], metrics: Sequence[str]) -> str:
+    """Render the sweep as a fixed-width table.
 
     Args:
-        model: The velocity field, ``(state, time) -> velocity``.
-        manifold: Supplies the noise prior and the bridge.
-        solver: ODE solver supplying ``num_steps`` and ``step``.
-        x_1: Clean target in the manifold's representation, ``[B, C, H, W]``.
-        t_start: Where on the path to start from. Must be ``0.0`` when
-            ``bridge_endpoint="aliased"``.
-        generator: Optional RNG for the noise draw. One seed makes a run
-            repeatable, but it does not by itself pair the two geometries: the
-            Euclidean prior defaults to ``uniform``, which draws the same *law* as
-            the cylindrical prior but not the same sample. Under
-            ``manifold.noise_prior=matched`` one seed does give both arms the same
-            complex noise field, so they are scored on the same perturbation
-            rather than merely the same slice. Unused when the start state is the
-            measurement, which makes that path deterministic.
-        x_alias: Zero-filled reconstruction in the manifold's representation,
-            ``[B, C, H, W]``. Required when ``bridge_endpoint="aliased"``.
-        sampling_mask: Boolean k-space mask, forwarded to the DC projection.
-        y_measured_kspace: Measured k-space, forwarded to the DC projection.
-        use_dc_projection: Re-impose the measured lines after every solver step.
-        sensitivity_maps: Coil sensitivities for multi-coil DC projection.
-        bridge_endpoint: One of :data:`~cfm.flow.BRIDGE_ENDPOINTS`.
+        rows: ``(num_steps, metrics)`` pairs, in sweep order.
+        metrics: Metric names to show, in column order.
 
     Returns:
-        The reconstructed state at ``t=1``, shape ``[B, C, H, W]``.
-
-    Raises:
-        ValueError: If ``bridge_endpoint`` is unknown, or names ``"aliased"``
-            without an ``x_alias`` to start from or at a non-zero ``t_start``.
+        The rendered table.
     """
-    if bridge_endpoint not in BRIDGE_ENDPOINTS:
-        raise ValueError(
-            f"bridge_endpoint must be one of {list(BRIDGE_ENDPOINTS)}, got {bridge_endpoint!r}"
-        )
-
-    if bridge_endpoint == "aliased":
-        if x_alias is None:
-            raise ValueError(
-                "bridge_endpoint='aliased' needs x_alias: the measurement is the "
-                "initial condition, and there is nothing else to start from."
-            )
-        if t_start != 0.0:
-            raise ValueError(
-                "bridge_endpoint='aliased' requires t_start=0.0; the start state is "
-                f"the measurement itself, not a point on a path, got {t_start}."
-            )
-        x_t = x_alias
-    else:
-        b, _, h, w = x_1.shape
-        x_0 = manifold.sample_noise(b, h, w, x_1.device, generator)
-
-        t = torch.full((b, 1, 1, 1), t_start, device=x_1.device, dtype=torch.float32)
-        # target_v is the training signal; only the state matters at eval time.
-        if use_dc_projection and x_alias is not None:
-            x_t, _ = manifold.bridge(x_0, x_alias, t)
-        else:
-            x_t, _ = manifold.bridge(x_0, x_1, t)
-
-    return integrate_from_t(
-        model,
-        solver,
-        x_t,
-        t_start,
-        manifold=manifold if use_dc_projection else None,
-        y_measured_kspace=y_measured_kspace if use_dc_projection else None,
-        sampling_mask=sampling_mask if use_dc_projection else None,
-        use_dc_projection=use_dc_projection,
-        sensitivity_maps=sensitivity_maps if use_dc_projection else None,
-    )
-
-
-def compute_batch_metrics(
-    manifold: Manifold,
-    pred_state: torch.Tensor,
-    target_state: torch.Tensor,
-    mask_threshold: float | None,
-    sampling_mask: torch.Tensor | None = None,
-) -> dict[str, torch.Tensor]:
-    """Score one batch in the complex domain, per sample.
-
-    Both sides go through ``manifold.to_complex`` first. That is what makes the
-    numbers comparable across geometries - a magnitude and a phase mean the same
-    thing whatever coordinates produced them - and it is required anyway, since
-    ``circular_phase_error``'s ``mask_threshold`` derives its mask from a complex
-    target's amplitude.
-
-    The manifold is a required argument rather than a defaulted one on purpose:
-    scoring a Euclidean reconstruction through the cylindrical back-transform
-    would silently produce plausible-looking, wrong numbers.
-
-    The unmasked phase error is reported alongside the masked one: the masked
-    value is the meaningful score (phase is noise in air), the unmasked value
-    shows how much of the image the mask discards.
-
-    Args:
-        manifold: Supplies ``to_complex`` for the geometry both tensors are in.
-        pred_state: Reconstruction, ``[B, C, H, W]`` in the manifold's representation.
-        target_state: Ground truth, same shape and representation.
-        mask_threshold: Fraction of the per-slice max amplitude below which pixels
-            are excluded from the phase error. ``None`` scores every pixel, in
-            which case masked and unmasked coincide.
-        sampling_mask: Optional k-space undersampling mask in centered convention,
-            broadcastable to ``[B, 1, H, W]``. When given, adds the data
-            consistency error: relative k-space residual on the sampled lines.
-
-    Returns:
-        Mapping from metric name to a per-sample tensor of shape ``[B]``.
-    """
-    pred = manifold.to_complex(pred_state)
-    target = manifold.to_complex(target_state)
-
-    metrics = {
-        # data_range=1.0 holds because every manifold's transform normalises the
-        # modulus to [0, 1] (AmplitudeNormalize / EuclideanNormalize); a different
-        # pipeline invalidates it.
-        "psnr_db": peak_signal_noise_ratio(pred, target, data_range=1.0, reduction="none"),
-        "ssim": structural_similarity(pred, target, data_range=1.0, reduction="none"),
-        "phase_error_rad": circular_phase_error(
-            pred, target, mask_threshold=mask_threshold, reduction="none"
-        ),
-    }
-    if mask_threshold is not None:
-        metrics["phase_error_rad_unmasked"] = circular_phase_error(pred, target, reduction="none")
-
-    if sampling_mask is not None:
-        metrics["data_consistency_error"] = data_consistency_error(
-            pred, target, mask=sampling_mask, reduction="none"
-        )
-    return metrics
-
-
-# --------------------------------------------------------------------------- #
-# Config resolution
-# --------------------------------------------------------------------------- #
-def resolve_dc_mask(
-    dataset_cfg: Mapping[str, Any] | Any,
-    eval_cfg: Mapping[str, Any] | Any,
-) -> dict[str, Any]:
-    """Merge ``evaluate.mask`` over ``dataset.mask``, key by key.
-
-    ``dataset.mask`` describes the trajectory the model was trained under, and
-    evaluation should score it under the same one unless explicitly told otherwise.
-    Merging per key rather than picking whichever block is non-empty is the whole
-    point: choosing one wholesale meant a non-empty ``evaluate.mask`` discarded
-    ``dataset.mask.type``, so a Poisson-disc model was silently scored under the
-    Cartesian default that the resolver falls back to when no type is given.
-
-    Args:
-        dataset_cfg: The ``dataset`` config group.
-        eval_cfg: The ``evaluate`` config group.
-
-    Returns:
-        A mask specification with ``acceleration`` always populated, defaulting to
-        ``dataset.acceleration`` when neither mask block sets one.
-    """
-    dataset_plain = _as_plain_dict(dataset_cfg)
-    merged: dict[str, Any] = {
-        **_as_plain_dict(dataset_plain.get("mask")),
-        **_as_plain_dict(_as_plain_dict(eval_cfg).get("mask")),
-    }
-    merged["acceleration"] = int(merged.get("acceleration", dataset_plain.get("acceleration", 4)))
-    return merged
-
-
-def resolve_split(
-    dataset_cfg: Mapping[str, Any] | Any,
-    eval_cfg: Mapping[str, Any] | Any,
-) -> str | None:
-    """Decide which split manifest to score against.
-
-    A dataset group that sets ``split: null`` is declaring that it ships no
-    manifests at all - fastMRI has no ``annotations/`` directory - so there is
-    nothing for ``evaluate.split`` to select and asking for ``'test'`` could only
-    raise. Any other value and ``evaluate.split`` governs, keeping the held-out
-    gate under its own key.
-
-    Args:
-        dataset_cfg: The ``dataset`` config group.
-        eval_cfg: The ``evaluate`` config group.
-
-    Returns:
-        The split name, or ``None`` to score every file in ``data_dir``.
-    """
-    dataset_plain = _as_plain_dict(dataset_cfg)
-    if "split" in dataset_plain and dataset_plain["split"] is None:
-        return None
-    split = _as_plain_dict(eval_cfg).get("split", "test")
-    return None if split is None else str(split)
-
-
-# --------------------------------------------------------------------------- #
-# Accumulation
-# --------------------------------------------------------------------------- #
-@dataclass(frozen=True)
-class MetricSummary:
-    """Outcome of one metric over a whole evaluation run."""
-
-    name: str
-    total: int
-    scored: int
-    nan: int
-    pos_inf: int
-    neg_inf: int
-    mean: float
-    std: float
-    minimum: float
-    maximum: float
-    # Kept apart because they mean opposite things: perfect_ids scored as well as
-    # possible, unscored_ids could not be scored at all. Both sit outside the mean.
-    perfect_ids: tuple[str, ...]
-    unscored_ids: tuple[str, ...]
-
-
-class MetricAccumulator:
-    """Collects per-sample metric values across batches.
-
-    :mod:`cfm.utils.metrics` returns ``NaN`` for a sample it could not score
-    (empty amplitude mask, i.e. an all-air slice) and ``+inf`` for an exact match.
-    Both are information, not noise, and a naive ``cat(...).mean()`` would let one
-    such sample turn the entire run into ``NaN``/``inf``.
-
-    Values are therefore partitioned, never silently filtered: the mean covers the
-    finite samples, and the non-finite ones are counted and named. Dropping them
-    quietly would bias the number; propagating them would destroy it.
-    """
-
-    def __init__(self, name: str) -> None:
-        self.name = name
-        self._chunks: list[torch.Tensor] = []
-        self._ids: list[str] = []
-
-    def update(self, values: torch.Tensor, sample_ids: Sequence[str] | None = None) -> None:
-        """Add one batch of per-sample values.
-
-        Args:
-            values: Per-sample metric values, shape ``[B]``.
-            sample_ids: Optional identifiers, one per value, used to name unscored
-                samples in the summary.
-
-        Raises:
-            ValueError: If ``values`` is not 1-D, or ``sample_ids`` length differs.
-        """
-        if values.dim() != 1:
-            raise ValueError(f"{self.name}: expected per-sample [B], got {tuple(values.shape)}")
-        if sample_ids is not None and len(sample_ids) != values.numel():
-            raise ValueError(
-                f"{self.name}: got {values.numel()} values but {len(sample_ids)} sample_ids"
-            )
-
-        # float64 keeps a long run's mean from drifting; inf/nan survive the cast.
-        self._chunks.append(values.detach().to(torch.float64).cpu())
-        if sample_ids is None:
-            start = len(self._ids)
-            self._ids.extend(f"#{start + i}" for i in range(values.numel()))
-        else:
-            self._ids.extend(sample_ids)
-
-    def values(self) -> torch.Tensor:
-        """All accumulated per-sample values as a single 1-D tensor."""
-        if not self._chunks:
-            return torch.empty(0, dtype=torch.float64)
-        return torch.cat(self._chunks)
-
-    def records(self) -> list[tuple[str, float]]:
-        """Return per-sample metric records.
-
-        Returns:
-            A list of ``(sample_id, value)`` tuples for all accumulated samples.
-        """
-        if not self._chunks:
-            return []
-        v = self.values().tolist()
-        return list(zip(self._ids, v, strict=True))
-
-    def summary(self, max_reported_ids: int = 5) -> MetricSummary:
-        """Partition the accumulated values and reduce the finite ones.
-
-        Args:
-            max_reported_ids: How many unscored sample ids to keep for display.
-
-        Returns:
-            A :class:`MetricSummary`. With nothing scored the statistics are
-            ``NaN``: an unscored run is not a perfect one.
-        """
-        v = self.values()
-        finite = torch.isfinite(v)
-        scored = v[finite]
-
-        # +inf is an exact match, so it is a perfect score rather than a failure;
-        # it stays out of the mean but is reported separately from NaN. -inf is
-        # pathological and groups with the failures.
-        perfect_mask = torch.isposinf(v)
-        unscored_mask = torch.isnan(v) | torch.isneginf(v)
-        perfect = [self._ids[i] for i in perfect_mask.nonzero().flatten().tolist()]
-        bad = [self._ids[i] for i in unscored_mask.nonzero().flatten().tolist()]
-
-        if scored.numel() == 0:
-            mean = std = lo = hi = float("nan")
-        else:
-            mean = float(scored.mean())
-            std = float(scored.std(correction=0))
-            lo = float(scored.min())
-            hi = float(scored.max())
-
-        return MetricSummary(
-            name=self.name,
-            total=int(v.numel()),
-            scored=int(scored.numel()),
-            nan=int(torch.isnan(v).sum()),
-            pos_inf=int(torch.isposinf(v).sum()),
-            neg_inf=int(torch.isneginf(v).sum()),
-            mean=mean,
-            std=std,
-            minimum=lo,
-            maximum=hi,
-            perfect_ids=tuple(perfect[:max_reported_ids]),
-            unscored_ids=tuple(bad[:max_reported_ids]),
-        )
-
-
-def format_summary_table(summaries: Sequence[MetricSummary]) -> str:
-    """Render metric summaries as a fixed-width table.
-
-    Args:
-        summaries: One summary per metric, in display order.
-
-    Returns:
-        The table as a multi-line string, with a legend whenever a sample went
-        unscored.
-    """
-    header = (
-        f"{'metric':<26}{'mean':>10}{'std':>10}{'min':>10}{'max':>10}"
-        f"{'scored':>12}{'nan':>7}{'+inf':>7}"
-    )
-    rule = "-" * len(header)
-    lines = [header, rule]
-
-    any_unscored = False
-    for s in summaries:
-        if s.scored == 0:
-            cells = f"{'n/a':>10}{'n/a':>10}{'n/a':>10}{'n/a':>10}"
-        else:
-            cells = f"{s.mean:>10.4f}{s.std:>10.4f}{s.minimum:>10.4f}{s.maximum:>10.4f}"
-        scored = f"{s.scored}/{s.total}"
-        lines.append(f"{s.name:<26}{cells}{scored:>12}{s.nan:>7}{s.pos_inf:>7}")
-        if s.nan or s.pos_inf or s.neg_inf:
-            any_unscored = True
-
-    lines.append(rule)
-
-    if any_unscored:
-        lines.append("mean/std/min/max are over the 'scored' (finite) samples only.")
-        lines.append("  nan  = could not be scored (empty amplitude mask -> all-air slice)")
-        lines.append("  +inf = exact match; a perfect score excluded from the mean, not a failure")
-        for s in summaries:
-            if s.perfect_ids:
-                lines.append(f"perfect (excluded from mean) {s.name}: {', '.join(s.perfect_ids)}")
-            if s.unscored_ids:
-                lines.append(f"unscored {s.name}: {', '.join(s.unscored_ids)}")
-
-    for s in summaries:
-        if s.scored == 0:
-            lines.append(f"WARNING: {s.name} could not be scored for any sample.")
-
+    header = f"{'steps':>7}" + "".join(f"{name:>24}" for name in metrics)
+    lines = [header, "-" * len(header)]
+    for steps, values in rows:
+        lines.append(f"{steps:>7}" + "".join(f"{values[name]:>24.5f}" for name in metrics))
     return "\n".join(lines)
 
 
-def write_eval_records(
-    output_dir: str | Path,
-    accumulators: Mapping[str, MetricAccumulator],
-    manifold: str = "unknown",
-    model: str = "unknown",
-    split: str | None = "test",
-    seed: int = 0,
-    t_start: float = 0.0,
-) -> Path:
-    """Write individual slice evaluation records to CSV.
+def training_pipeline(dataset_cfg: Any, manifold: Any) -> Compose:
+    """The transform training applies to every field, reproduced for evaluation.
+
+    The reference distribution has to live where the model's samples live.
+    Training hands the model fields that went through the geometry crop and the
+    manifold's representation pipeline, which divides every field by its own peak
+    modulus, so a model that learned the training distribution perfectly
+    generates normalised fields. Scoring those against raw fields penalises the
+    normalisation rather than anything the model got wrong -- on the synthetic
+    target the raw amplitude mean is 0.671 and the normalised one 0.618, a bias
+    that earlier versions of this module carried into every absolute number.
 
     Args:
-        output_dir: Directory to save eval_records.csv.
-        accumulators: Mapping from metric name to MetricAccumulator.
-        manifold: Manifold name.
-        model: Model class name.
-        split: Split name or None.
-        seed: Random seed.
-        t_start: Start time of integration.
+        dataset_cfg: The ``dataset`` config group; ``crop_size`` is read.
+        manifold: The geometry whose representation pipeline training used.
 
     Returns:
-        Path to written eval_records.csv file.
-
-    Raises:
-        ValueError: If duplicate sample_ids collapse the records.
+        A callable mapping a complex field to the manifold state training saw.
     """
-    csv_path = Path(output_dir) / "eval_records.csv"
-    metric_names = list(accumulators.keys())
-
-    # Collate records by sample_id
-    records_by_sample: dict[str, dict[str, float]] = {}
-    for m_name, acc in accumulators.items():
-        for s_id, val in acc.records():
-            if s_id not in records_by_sample:
-                records_by_sample[s_id] = {}
-            records_by_sample[s_id][m_name] = val
-
-    n_expected = max((len(acc.records()) for acc in accumulators.values()), default=0)
-    if len(records_by_sample) != n_expected:
-        raise ValueError(
-            f"{n_expected} scored slices collapsed to {len(records_by_sample)} sample_ids; "
-            "duplicate basenames under data_dir"
-        )
-
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-    with open(csv_path, "w", newline="", encoding="utf-8") as fh:
-        writer = csv.writer(fh)
-        header = [
-            "sample_id",
-            "file",
-            "slice_idx",
-            "manifold",
-            "model",
-            "split",
-            "seed",
-            "t_start",
-        ] + metric_names
-        writer.writerow(header)
-
-        for s_id, m_dict in records_by_sample.items():
-            match = re.match(r"(.*)\[(\d+)\]", s_id)
-            if match:
-                file_name, slice_idx = match.groups()
-            else:
-                file_name, slice_idx = s_id, ""
-
-            row = [
-                s_id,
-                file_name,
-                slice_idx,
-                manifold,
-                model,
-                "" if split is None else split,
-                seed,
-                t_start,
-            ]
-            for m_name in metric_names:
-                row.append(m_dict.get(m_name, float("nan")))
-            writer.writerow(row)
-
-    print(f"Wrote {csv_path}")
-    return csv_path
+    return Compose(
+        [
+            build_geometry_transform(dataset_cfg.get("crop_size"), crop_base=16),
+            manifold.build_transform(crop_base=16),
+        ]
+    )
 
 
-# --------------------------------------------------------------------------- #
-# Hydra entry point
-# --------------------------------------------------------------------------- #
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
 def main(cfg: DictConfig) -> None:
-    """Score a checkpoint by reconstructing held-out slices from a noised state."""
-    eval_cfg = cfg.get("evaluate", {})
-
-    # 1. Validate before any slow work: this script otherwise dies 20 minutes in.
-    t_start = float(eval_cfg.get("t_start", 0.5))
-    num_steps = int(eval_cfg.get("num_steps", 100))
-    mask_threshold = eval_cfg.get("mask_threshold", 0.05)
-    batch_size = int(eval_cfg.get("batch_size", 4))
-    max_samples = eval_cfg.get("max_samples")
-    num_workers = int(eval_cfg.get("num_workers", 4))
-    seed = int(eval_cfg.get("seed", 0))
-    dataset_cfg = cfg.get("dataset", {})
-
-    split = resolve_split(dataset_cfg, eval_cfg)
-    dc_mask_dict = resolve_dc_mask(dataset_cfg, eval_cfg)
-    dc_acceleration = int(dc_mask_dict["acceleration"])
-    dc_center_fraction = dc_mask_dict.get("center_fraction")
-    use_dc_projection = eval_cfg.get("use_dc_projection", False)
-    bridge_endpoint = str(eval_cfg.get("bridge", "noise"))
-
-    if dc_acceleration < 1:
-        raise ValueError(f"evaluate.mask.acceleration must be >= 1, got {dc_acceleration}")
-    if dc_center_fraction is not None:
-        dc_center_fraction = float(dc_center_fraction)
-        if not 0.0 < dc_center_fraction <= 1.0:
-            raise ValueError(
-                f"evaluate.mask.center_fraction must be in (0, 1], got {dc_center_fraction}"
-            )
-        dc_mask_dict["center_fraction"] = dc_center_fraction
-
-    if not 0.0 <= t_start <= 1.0:
-        raise ValueError(f"evaluate.t_start must be in [0, 1], got {t_start}")
-    if bridge_endpoint not in BRIDGE_ENDPOINTS:
-        raise ValueError(
-            f"evaluate.bridge must be one of {list(BRIDGE_ENDPOINTS)}, got {bridge_endpoint!r}. "
-            "It has to name the endpoint the checkpoint was trained from "
-            "(training.bridge), or the model is scored on a starting distribution "
-            "it has never seen."
-        )
-    conditional_bridge = bridge_endpoint == "aliased"
-    if conditional_bridge and t_start != 0.0:
-        raise ValueError(
-            "evaluate.bridge='aliased' requires evaluate.t_start=0.0: the model starts "
-            f"from the measurement, so there is no path to enter part-way, got {t_start}. "
-            "Any other value would mix the ground truth into the initial condition and "
-            "inflate every metric."
-        )
-    if num_steps < 1:
-        raise ValueError(f"evaluate.num_steps must be >= 1, got {num_steps}")
-    if mask_threshold is not None:
-        mask_threshold = float(mask_threshold)
-        if not 0.0 <= mask_threshold < 1.0:
-            raise ValueError(f"evaluate.mask_threshold must be in [0, 1), got {mask_threshold}")
-    if batch_size < 1:
-        raise ValueError(f"evaluate.batch_size must be >= 1, got {batch_size}")
-    if max_samples is not None:
-        max_samples = int(max_samples)
-        if max_samples < 1:
-            raise ValueError(f"evaluate.max_samples must be >= 1, got {max_samples}")
-
-    torch.manual_seed(seed)
+    """Score a checkpoint's samples against the data distribution."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    generator = torch.Generator(device=device)
-    generator.manual_seed(seed)
+    settings = cfg.get("evaluate", {})
+    seed = int(settings.get("seed", 0))
+    # Two generators from one seed: torch requires a generator on the same device
+    # as the tensor it fills, and the metrics run on CPU while the sampling runs
+    # wherever the model does. Splitting them keeps both halves reproducible.
+    device_generator = torch.Generator(device=device).manual_seed(seed)
+    metric_generator = torch.Generator().manual_seed(seed)
 
-    precision = cfg.get("training", {}).get("matmul_precision", "highest")
-    torch.set_float32_matmul_precision(precision)
-    print(f"Starting evaluation on: {device}")
+    print(OmegaConf.to_yaml(cfg))
+    print(f"Evaluating generation on: {device}")
 
-    # 2. Geometry. Must match the one the checkpoint was trained under; a mismatch
-    # surfaces immediately as a state-dict shape error on init_conv rather than as
-    # quietly wrong metrics.
     manifold = build_manifold(cfg).to(device)
-
-    # 3. Model and checkpoint. Not compiled: one-shot eval pays the compile cost
-    # for nothing. load_weights also puts the model in eval mode.
-    reject_unsupported_sampling_model(cfg)
-
-    orig_cwd = hydra.utils.get_original_cwd()
-    run_name = eval_cfg.get("run_name") or cfg.get("logging", {}).get("experiment_name")
     model = build_model(
         cfg,
         device,
         in_channels=manifold.state_channels,
         out_channels=manifold.velocity_channels,
     )
+    load_weights(model, resolve_checkpoint(cfg, "evaluate", hydra.utils.get_original_cwd()), device)
+    model.eval()
 
-    explicit_checkpoint = eval_cfg.get("checkpoint_path") or cfg.get("reconstruct", {}).get(
-        "checkpoint_path"
-    )
-    if run_name == "SKIP":
-        print("Skipping checkpoint loading (run_name='SKIP'). Evaluating untrained model.")
-        logger.info("Skipping checkpoint loading due to run_name='SKIP'")
-        model.eval()
-        checkpoint_path = "untrained_model (SKIP)"
-    elif explicit_checkpoint:
-        checkpoint_path = explicit_checkpoint
-        if not os.path.isabs(checkpoint_path):
-            checkpoint_path = os.path.join(orig_cwd, checkpoint_path)
-        logger.info("Loading checkpoint from explicit path: %s", checkpoint_path)
-        load_weights(model, checkpoint_path, device)
-    else:
-        checkpoint_path = resolve_checkpoint(cfg, "evaluate", orig_cwd)
-        load_weights(model, checkpoint_path, device)
+    dataset_cfg = cfg.get("dataset", {})
+    dataset = build_dataset(dataset_cfg, transform=training_pipeline(dataset_cfg, manifold))
 
-    # 4. Data. Reconstruction mode normalises the target to a peak modulus of 1
-    # itself, which is what keeps data_range=1.0 valid; the pipeline handed to the
-    # dataset is therefore shape-only, and doubles as the crop the sensitivity maps
-    # are matched to for multi-coil cohorts.
-    data_dir = eval_cfg.get("data_dir") or dataset_cfg.get(
-        "data_dir", "data/skm-tea-mini/v1-release"
-    )
-    if not os.path.isabs(data_dir):
-        data_dir = os.path.join(orig_cwd, data_dir)
-
-    geometry = build_geometry_transform(dataset_cfg.get("crop_size"), crop_base=16)
-
-    # The dataset opens every .h5 under data_dir to count slices before split
-    # filtering is possible, so a corrupt file aborts the run even when it is not
-    # in the chosen split. Intentional: swallowing a corrupt-data error here is how
-    # you end up reporting metrics on half a dataset.
-    dataset = build_dataset(
-        dataset_cfg,
-        data_dir=data_dir,
-        mode="reconstruction",
-        acceleration=dc_acceleration,
-        mask=dc_mask_dict,
-        pre_transform=geometry,
-    )
-    file_names = load_split_file_names(data_dir, split)
-    indices = select_indices(dataset.slice_map, file_names, max_samples)
-    sample_ids = [
-        f"{os.path.basename(path)}[{slice_idx}]"
-        for path, slice_idx in (dataset.slice_map[i] for i in indices)
-    ]
-
-    num_files = len({os.path.basename(dataset.slice_map[i][0]) for i in indices})
-    print(
-        f"Split {split!r}: {num_files} file(s), "
-        f"{len(indices)} of {len(dataset.slice_map)} slices selected"
-    )
-
+    num_fields = int(settings.get("num_fields", 64))
+    batch_size = int(settings.get("batch_size", 16))
     loader = DataLoader(
-        Subset(dataset, indices),
+        dataset,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=num_workers,
-        pin_memory=torch.cuda.is_available(),
-        drop_last=False,
+        num_workers=int(settings.get("num_workers", 0)),
     )
 
-    # 5. Optional W&B, same import guard as train.py.
-    use_wandb = cfg.get("logging", {}).get("use_wandb", False)
-    output_dir = cfg.get("paths", {}).get("output_dir", ".")
-    os.makedirs(output_dir, exist_ok=True)
+    state_batches: list[torch.Tensor] = []
+    collected = 0
+    for batch in loader:
+        state_batches.append(batch)
+        collected += batch.shape[0]
+        if collected >= num_fields:
+            break
+    if not state_batches:
+        raise ValueError("dataset yielded no samples to evaluate against")
 
-    if use_wandb and HAS_WANDB:
-        print("Weights & Biases logging enabled.")
-        config_dict = cast(dict[str, Any], OmegaConf.to_container(cfg, resolve=True))
-        wandb.init(
-            project=cfg.get("logging", {}).get("project_name", "Cylindrical-Flow-Matching"),
-            name=f"eval_{manifold.name}_{run_name}_t{t_start}",
-            dir=output_dir,
-            config=config_dict,
-        )
-    else:
-        use_wandb = False
-        print("Local logging only.")
+    # Straightness needs the data in the manifold's representation and the
+    # distributional metrics need it complex; both come from the same fields, in
+    # the domain training used, so the two numbers describe one batch.
+    data_states = torch.cat(state_batches, dim=0)[:num_fields].to(device)
+    reference = manifold.to_complex(data_states).cpu()
+    _, _, height, width = data_states.shape
+    print(f"Reference: {data_states.shape[0]} fields of {height}x{width}, in the training domain")
 
-    # 6. Evaluation loop.
-    solver = manifold.make_solver(num_steps)
-    accumulators: dict[str, MetricAccumulator] = {}
-
-    span = 1.0 - t_start
-    print(
-        f"Reconstructing from t_start={t_start} (span {span:.3f} over {num_steps} steps "
-        f"-> dt {span / num_steps:.6f})"
-    )
-    if conditional_bridge:
-        print("Bridge 'aliased': start state is the zero-filled reconstruction, no noise drawn.")
-    else:
-        print("Bridge 'noise': start state is the target pushed back along the prior bridge.")
-
-    # shuffle=False and drop_last=False keep this position aligned with sample_ids.
-    position = 0
-
-    with torch.no_grad():
-        for batch in tqdm(loader, desc="Evaluating"):
-            target_complex = batch["target"].to(device)
-            x_1 = manifold.from_complex(target_complex)
-            sampling_mask = batch["mask"].to(device)
-            batch_ids = sample_ids[position : position + x_1.shape[0]]
-            position += x_1.shape[0]
-
-            if "masked_kspace" in batch and "sensitivity_maps" in batch:
-                y_kspace = batch["masked_kspace"].to(device)
-                sens_maps = batch["sensitivity_maps"].to(device)
-            else:
-                y_kspace = fft2c(target_complex) * sampling_mask
-                sens_maps = None
-
-            if isinstance(model, BaseReconstructor):
-                kwargs = {}
-                if "num_low_frequencies" in batch:
-                    kwargs["num_low_frequencies"] = batch["num_low_frequencies"]
-                pred_complex = model.reconstruct(y_kspace, sampling_mask, sens_maps, **kwargs)
-                pred = manifold.from_complex(pred_complex)
-            elif conditional_bridge or (use_dc_projection and t_start < 1.0):
-                # The zero-filled reconstruction: the DC projection's anchor under
-                # bridge=noise, and the entire initial condition under bridge=aliased.
-                x_alias = batch["input"].to(device)
-                x_alias_manifold = manifold.from_complex(x_alias)
-
-                pred = reconstruct_batch(
-                    model,
-                    manifold,
-                    solver,
-                    x_1,
-                    t_start,
-                    generator,
-                    x_alias=x_alias_manifold,
-                    sampling_mask=sampling_mask,
-                    y_measured_kspace=y_kspace,
-                    use_dc_projection=use_dc_projection,
-                    sensitivity_maps=sens_maps,
-                    bridge_endpoint=bridge_endpoint,
-                )
-            else:
-                pred = reconstruct_batch(model, manifold, solver, x_1, t_start, generator)
-
-            batch_metrics = compute_batch_metrics(
-                manifold, pred, x_1, mask_threshold, sampling_mask
-            )
-
-            for name, values in batch_metrics.items():
-                if name not in accumulators:
-                    accumulators[name] = MetricAccumulator(name)
-                accumulators[name].update(values, batch_ids)
-
-    # 7. Report.
-    summaries = [acc.summary() for acc in accumulators.values()]
-
-    print()
-    print("=" * 88)
-    print("Reconstruction evaluation")
-    print(f"  manifold   : {manifold.name}")
-    print(f"  checkpoint : {checkpoint_path}")
-    print(f"  split      : {split}   ({num_files} file(s), {len(indices)} slices)")
-    print(f"  t_start    : {t_start:.3f}   num_steps: {num_steps}")
-    print(f"  bridge     : {bridge_endpoint}")
-    print(f"  mask thr.  : {mask_threshold}")
-    if dc_center_fraction is not None:
-        print(
-            f"  dc mask    : R={dc_acceleration}, center_fraction={dc_center_fraction} (simulated)"
-        )
-    else:
-        print(f"  dc mask    : R={dc_acceleration} (simulated)")
-    print(f"  batch/dev  : {batch_size} on {device}   seed: {seed}")
-    print("=" * 88)
-    print(format_summary_table(summaries))
-    print("=" * 88)
-
-    metrics_path = os.path.join(output_dir, "metrics.json")
-    with open(metrics_path, "w", encoding="utf-8") as fh:
-        json.dump(
-            {
-                # Recorded so a metrics.json can never be mistaken for the other
-                # arm of the comparison once it is out of its output directory.
-                "manifold": manifold.name,
-                "checkpoint": checkpoint_path,
-                "split": split,
-                "num_slices": len(indices),
-                "t_start": t_start,
-                "bridge": bridge_endpoint,
-                "num_steps": num_steps,
-                "mask_threshold": mask_threshold,
-                "seed": seed,
-                "metrics": [asdict(s) for s in summaries],
-            },
-            fh,
-            indent=2,
-        )
-    print(f"Wrote {metrics_path}")
-
-    # Export eval_records.csv
-    write_eval_records(
-        output_dir,
-        accumulators,
-        manifold=manifold.name,
-        model=model.__class__.__name__ if model else "Unknown",
-        split=split,
-        seed=seed,
-        t_start=t_start,
+    coupling_name = str(cfg.get("training", {}).get("coupling", "independent"))
+    straightness_value = straightness(
+        model, manifold, data_states, device, device_generator, build_coupling(coupling_name)
     )
 
-    if use_wandb:
-        log_dict: dict[str, float | int | str] = {
-            "eval/manifold": manifold.name,
-            "eval/t_start": t_start,
-            "eval/bridge": bridge_endpoint,
-            "eval/num_steps": num_steps,
-            "eval/num_samples": len(indices),
-            "eval/split": str(split),
+    nfe: Sequence[int] = [int(n) for n in settings.get("nfe", [1, 2, 4, 8, 16, 32, 64, 100])]
+    projections = int(settings.get("num_projections", 256))
+
+    rows: list[tuple[int, dict[str, float]]] = []
+    probes: dict[int, dict[str, float]] = {}
+    for steps in nfe:
+        solver = manifold.make_solver(steps)
+        generated_batches = []
+        remaining = reference.shape[0]
+        probe = _AngularProbe(model, manifold.name)
+        while remaining > 0:
+            size = min(batch_size, remaining)
+            prior = manifold.sample_noise(size, height, width, device, generator=device_generator)
+            with torch.no_grad():
+                generated_batches.append(manifold.to_complex(solver.sample(probe, prior)).cpu())
+            remaining -= size
+        assert probe.peak_angular is not None and probe.min_amplitude is not None
+        probes[steps] = {
+            "peak_angular_velocity_median": float(probe.peak_angular.median()),
+            "peak_angular_velocity_max": float(probe.peak_angular.max()),
+            "peak_angular_velocity_near_t_half": probe.peak_angular_mid,
+            "min_amplitude_mean": float(probe.min_amplitude.mean()),
+            "min_amplitude_min": float(probe.min_amplitude.min()),
         }
-        for s in summaries:
-            # Partitioned statistics only, never the raw mean: one NaN/inf sample
-            # would have poisoned it.
-            log_dict[f"eval/{s.name}_mean"] = s.mean
-            log_dict[f"eval/{s.name}_std"] = s.std
-            log_dict[f"eval/{s.name}_min"] = s.minimum
-            log_dict[f"eval/{s.name}_max"] = s.maximum
-            log_dict[f"eval/{s.name}_scored"] = s.scored
-            log_dict[f"eval/{s.name}_nan"] = s.nan
-            log_dict[f"eval/{s.name}_inf"] = s.pos_inf
-        wandb.log(log_dict)
-        wandb.finish()
+        generated = torch.cat(generated_batches, dim=0)
+        rows.append(
+            (steps, distributional_metrics(generated, reference, projections, metric_generator))
+        )
+        print(f"  steps={steps:<4} sliced_w2={rows[-1][1]['sliced_w2_complex']:.5f}")
+
+    headline = [
+        "sliced_w2_complex",
+        "w2_amplitude",
+        "w2_phase_circular",
+        "dependence_gap",
+        "spatial_lag1_gap",
+    ]
+    print("\n" + "=" * 120)
+    print("GENERATIVE EVALUATION")
+    print("=" * 120)
+    print(format_table(rows, headline))
+    print("-" * 120)
+    print(f"straightness ({coupling_name} pairing): {straightness_value:.5f}")
+    print(
+        f"dependence: reference {rows[0][1]['dependence_reference']:.4f}, "
+        f"generated {rows[0][1]['dependence_generated']:.4f} at {nfe[0]} step(s)"
+    )
+    print(
+        f"spatial lag-1: reference {rows[0][1]['spatial_lag1_reference']:.4f}, "
+        f"generated {rows[0][1]['spatial_lag1_generated']:.4f} at {nfe[0]} step(s)"
+    )
+    print("\n" + "-" * 120)
+    print(
+        "ANGULAR VELOCITY ALONG THE PATH   (cylinder is bounded by pi = 3.1416; the plane is not)"
+    )
+    print(f"{'steps':>7}{'NFE':>7}{'median':>12}{'max':>12}{'near t=0.5':>14}{'min |z|':>10}")
+    for steps in nfe:
+        p = probes[steps]
+        print(
+            f"{steps:>7}{2 * steps - 1:>7}"
+            f"{p['peak_angular_velocity_median']:>14.4f}{p['peak_angular_velocity_max']:>12.4f}"
+            f"{p['peak_angular_velocity_near_t_half']:>18.4f}{p['min_amplitude_min']:>10.5f}"
+        )
+
+    output_dir = Path(cfg.get("paths", {}).get("output_dir", "."))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "manifold": manifold.name,
+        "model": type(model).__name__,
+        "dataset": dataset_cfg.get("name"),
+        "num_fields": reference.shape[0],
+        "field_shape": [height, width],
+        "seed": seed,
+        "num_projections": projections,
+        "reference_domain": "training transform",
+        "straightness": straightness_value,
+        "straightness_pairing": coupling_name,
+        "solver": "heun",
+        "note_on_nfe": (
+            "The production solver is Heun, a two-evaluation predictor-corrector, "
+            "and the last step skips the corrector. Function evaluations are "
+            "therefore 2 * num_steps - 1, not num_steps: 1, 3, 7, 15, 199 for "
+            "num_steps 1, 2, 4, 8, 100."
+        ),
+        "sweep": [
+            {"num_steps": steps, "nfe": 2 * steps - 1, **values, **probes[steps]}
+            for steps, values in rows
+        ],
+    }
+    destination = output_dir / "metrics.json"
+    destination.write_text(json.dumps(payload, indent=2))
+    print(f"\nWrote {destination}")
 
 
 if __name__ == "__main__":

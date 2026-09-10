@@ -69,12 +69,16 @@ def build_manifold(cfg: DictConfig) -> BaseManifold:
                 lambda_phase=loss_cfg.get("lambda_phase", 1.0),
                 lambda_hf=lambda_hf,
                 hf_boost_factor=hf_boost_factor,
+                phase_weight=manifold_cfg.get("phase_weight", 1.0),
+                phase_spread=manifold_cfg.get("phase_spread", None),
+                spatial_correlation=manifold_cfg.get("spatial_correlation", None),
             )
 
         case "euclidean":
             manifold = MANIFOLDS.build(
                 "euclidean",
                 noise_prior=manifold_cfg.get("noise_prior", "uniform"),
+                spatial_correlation=manifold_cfg.get("spatial_correlation", None),
                 loss_type=loss_cfg.get("vel_loss_type", "l1"),
                 lambda_hf=lambda_hf,
                 hf_boost_factor=hf_boost_factor,

@@ -14,13 +14,14 @@ from cfm.data.dataset import SKMTEADataset
 from cfm.data.espirit import compute_espirit_maps, ensure_espirit_maps, process_h5_file
 from cfm.data.fastmri import FastMRIDataset
 from cfm.data.hdf5_manager import WorkerHDF5Manager
-from cfm.data.torch_espirit import calibrate_fastmri_file_torch, compute_espirit_torch
 from cfm.data.masks import (
     BaseMaskGenerator,
     CartesianMaskGenerator,
     PoissonDiscMaskGenerator,
 )
 from cfm.data.splits import load_split_file_names, select_indices
+from cfm.data.torch_espirit import calibrate_fastmri_file_torch, compute_espirit_torch
+from cfm.data.toy_dataset import CylinderToyFieldDataset, CylinderToyIIDDataset
 from cfm.data.transforms import (
     AmplitudeNormalize,
     CenterCropModulo,
@@ -92,12 +93,17 @@ def build_dataset(
     # Resolved to plain containers up front so the dataset constructors never see a
     # DictConfig and stay usable from tests and scripts with no Hydra in the picture.
     options: dict[str, Any] = as_plain_dict(dataset_cfg)
-    options.update({key: value for key, value in overrides.items() if value is not None})
 
     name = str(options.pop("name", DEFAULT_DATASET))
     dataset_cls = DATASETS.get(name)
-
     accepted = set(inspect.signature(dataset_cls).parameters) - {"self"}
+
+    # Only the *config* is validated. An unknown key there is a user typo and
+    # should fail loudly. The overrides are the entry point's own plumbing --
+    # transforms, a data directory, a slice count -- assembled the same way for
+    # every dataset, so a dataset that has no use for one is not an error; a
+    # synthetic sampler has no data_dir and needs none. Validating those too would
+    # make adding a dataset mean editing every caller.
     unknown = sorted(set(options) - accepted - _ENTRY_POINT_KEYS)
     if unknown:
         raise TypeError(
@@ -105,6 +111,7 @@ def build_dataset(
             f"{', '.join(unknown)}. Accepted keys: {', '.join(sorted(accepted))}."
         )
 
+    options.update({key: value for key, value in overrides.items() if value is not None})
     kwargs = {key: value for key, value in options.items() if key in accepted}
     return cast(BaseComplexDataset, dataset_cls(**kwargs))
 
@@ -120,6 +127,8 @@ __all__ = [
     "ComplexToCylinderTransform",
     "ComplexToEuclideanTransform",
     "Compose",
+    "CylinderToyFieldDataset",
+    "CylinderToyIIDDataset",
     "EuclideanNormalize",
     "FastMRIDataset",
     "SKMTEADataset",

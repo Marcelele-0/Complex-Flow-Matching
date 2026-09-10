@@ -26,6 +26,7 @@ from cfm.data.transforms import (
 from cfm.flow.euclidean_bridge import LinearFlowBridge
 from cfm.flow.euclidean_math import EuclideanVelocityLoss
 from cfm.flow.euclidean_solver import EuclideanODESolver
+from cfm.manifolds.cylindrical import sample_cylindrical_noise_correlated
 from cfm.utils.complex_ops import euclidean_to_complex
 
 # "uniform" first: it is the default, being the only one that is both free of
@@ -142,6 +143,12 @@ class EuclideanManifold(BaseManifold):
         lambda_hf: Weight on the high-frequency k-space penalty. ``0.0`` disables it.
         hf_boost_factor: Radial slope of that penalty.
 
+        spatial_correlation: Gaussian smoothing sigma, in pixels, applied to the
+            prior's latents. ``None`` keeps the prior white. When set, the draw
+            replays :func:`~cfm.manifolds.cylindrical.sample_cylindrical_noise_correlated`
+            and re-expresses it in ``(Re, Im)``, so one seed gives both geometries
+            the *same* smooth field and the prior cannot be a confound.
+
     Raises:
         ValueError: If ``noise_prior`` is not one of :data:`NOISE_PRIORS`.
     """
@@ -156,13 +163,28 @@ class EuclideanManifold(BaseManifold):
         loss_type: str = "l1",
         lambda_hf: float = 0.0,
         hf_boost_factor: float = 4.0,
+        spatial_correlation: float | None = None,
     ) -> None:
         if noise_prior not in NOISE_PRIORS:
             raise ValueError(
                 f"noise_prior must be one of {sorted(NOISE_PRIORS)}, got {noise_prior!r}"
             )
 
+        if spatial_correlation is not None and spatial_correlation <= 0.0:
+            raise ValueError(
+                f"spatial_correlation must be positive or null, got {spatial_correlation}"
+            )
+        if spatial_correlation is not None and noise_prior == "gaussian":
+            raise ValueError(
+                "spatial_correlation reproduces the cylindrical prior's law with spatial "
+                "dependence added; it is not defined for noise_prior='gaussian', whose "
+                "support is not the unit disc. Use noise_prior='uniform' or 'matched'."
+            )
+
         self.noise_prior = noise_prior
+        self.spatial_correlation = (
+            None if spatial_correlation is None else float(spatial_correlation)
+        )
         self._bridge = LinearFlowBridge()
         self._loss = EuclideanVelocityLoss(
             loss_type=loss_type,
@@ -228,6 +250,12 @@ class EuclideanManifold(BaseManifold):
         device: torch.device,
         generator: torch.Generator | None = None,
     ) -> torch.Tensor:
+        if self.spatial_correlation is not None:
+            state = sample_cylindrical_noise_correlated(
+                batch, height, width, device, self.spatial_correlation, None, generator
+            )
+            amplitude, cosine, sine = state[:, 0:1], state[:, 1:2], state[:, 2:3]
+            return torch.cat([amplitude * cosine, amplitude * sine], dim=1)
         if self.noise_prior == "matched":
             return sample_matched_noise(batch, height, width, device, generator)
         if self.noise_prior == "gaussian":

@@ -1,0 +1,21 @@
+# A pointwise velocity field: one MLP evaluated at every coefficient, with no
+# spatial mixing at all.
+#
+# This is the right model for a field whose coefficients are independent, and the
+# control that makes a U-Net result on a structured field readable: if the U-Net
+# does no better than this, it is not using the structure it was given.
+name: "mlp"
+
+# Hidden width and number of hidden layers. The trunk sees the manifold's own
+# state -- (m, cos phi, sin phi) or (Re, Im) -- exactly as the U-Nets do.
+base_channels: 128
+depth: 3
+
+# Feed both geometries the identical (re, im, m, cos, sin) encoding instead of
+# their own state. Off here, to match the rest of the package; see mlp_gate.yaml
+# for the variant that turns it on.
+shared_encoding: false
+
+# 0 appends the raw scalar time. A positive even number uses a sinusoidal
+# embedding of that width instead, as the U-Nets do.
+time_embedding_dim: 0

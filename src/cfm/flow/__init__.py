@@ -16,4 +16,10 @@ from __future__ import annotations
 # noised target, which is why both scripts read the same vocabulary.
 BRIDGE_ENDPOINTS = ("noise", "aliased")
 
-__all__ = ["BRIDGE_ENDPOINTS"]
+__all__ = [
+    "BaseCoupling",
+    "IndependentCoupling",
+    "OptimalTransportCoupling",
+    "build_coupling",
+    "BRIDGE_ENDPOINTS",
+]
