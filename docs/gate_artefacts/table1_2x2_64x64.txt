@@ -1,0 +1,12 @@
+Table 1: geometry x coupling, cylinder_toy_iid rho 0.5, 64x64, mlp_gate, 40 epochs, 2 seeds
+Reference: training domain (every field divided by its own peak modulus, as training sees it).
+Solver Heun, NFE = 2k - 1. Straightness scored under each checkpoint's own coupling.
+
+euclidean   independent seed0 k1:sw=0.3169/ph=0.9518/amp=0.3589/lag=0.0056 k2:sw=0.0981/ph=0.1209/amp=0.1317/lag=0.0042 k4:sw=0.0417/ph=0.0422/amp=0.0670/lag=0.0049 k8:sw=0.0384/ph=0.0485/amp=0.0662/lag=0.0013 k100:sw=0.0427/ph=0.0670/amp=0.0728/lag=0.0034 straight=0.7576(independent)
+euclidean   independent seed1 k1:sw=0.3021/ph=0.8047/amp=0.3512/lag=0.0052 k2:sw=0.0996/ph=0.0916/amp=0.1321/lag=0.0038 k4:sw=0.0414/ph=0.0640/amp=0.0737/lag=0.0008 k8:sw=0.0389/ph=0.0439/amp=0.0739/lag=0.0023 k100:sw=0.0405/ph=0.0479/amp=0.0768/lag=0.0028 straight=0.7415(independent)
+euclidean   ot          seed0 k1:sw=0.3267/ph=1.0035/amp=0.3660/lag=0.0057 k2:sw=0.0954/ph=0.1144/amp=0.1284/lag=0.0043 k4:sw=0.0412/ph=0.0417/amp=0.0661/lag=0.0050 k8:sw=0.0381/ph=0.0474/amp=0.0658/lag=0.0013 k100:sw=0.0425/ph=0.0654/amp=0.0724/lag=0.0035 straight=0.7664(ot)
+euclidean   ot          seed1 k1:sw=0.3141/ph=0.8628/amp=0.3625/lag=0.0050 k2:sw=0.0969/ph=0.0842/amp=0.1289/lag=0.0039 k4:sw=0.0409/ph=0.0641/amp=0.0728/lag=0.0008 k8:sw=0.0383/ph=0.0431/amp=0.0730/lag=0.0023 k100:sw=0.0399/ph=0.0478/amp=0.0758/lag=0.0028 straight=0.7500(ot)
+cylindrical independent seed0 k1:sw=0.1732/ph=0.4255/amp=0.2271/lag=0.0010 k2:sw=0.1708/ph=0.4220/amp=0.1281/lag=0.0046 k4:sw=0.1469/ph=0.3509/amp=0.1062/lag=0.0038 k8:sw=0.1327/ph=0.3512/amp=0.1052/lag=0.0057 k100:sw=0.1364/ph=0.3427/amp=0.1081/lag=0.0061 straight=0.9656(independent)
+cylindrical independent seed1 k1:sw=0.1586/ph=0.4252/amp=0.2182/lag=0.0061 k2:sw=0.1608/ph=0.3913/amp=0.1246/lag=0.0027 k4:sw=0.1472/ph=0.3651/amp=0.1112/lag=0.0039 k8:sw=0.1356/ph=0.3643/amp=0.1107/lag=0.0004 k100:sw=0.1328/ph=0.3469/amp=0.1110/lag=0.0033 straight=0.9745(independent)
+cylindrical ot          seed0 k1:sw=0.1679/ph=0.4069/amp=0.2171/lag=0.0006 k2:sw=0.1645/ph=0.4043/amp=0.1263/lag=0.0046 k4:sw=0.1416/ph=0.3393/amp=0.1058/lag=0.0038 k8:sw=0.1276/ph=0.3363/amp=0.1049/lag=0.0058 k100:sw=0.1313/ph=0.3302/amp=0.1078/lag=0.0062 straight=0.9639(ot)
+cylindrical ot          seed1 k1:sw=0.1534/ph=0.4073/amp=0.2127/lag=0.0065 k2:sw=0.1551/ph=0.3744/amp=0.1218/lag=0.0028 k4:sw=0.1423/ph=0.3524/amp=0.1095/lag=0.0039 k8:sw=0.1311/ph=0.3530/amp=0.1093/lag=0.0005 k100:sw=0.1285/ph=0.3355/amp=0.1096/lag=0.0032 straight=0.9740(ot)

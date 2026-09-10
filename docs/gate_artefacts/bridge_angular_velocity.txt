@@ -1,0 +1,32 @@
+====================================================================================================
+ANGULAR VELOCITY OF THE BRIDGES   no network, exact closed form for the Cartesian chord
+====================================================================================================
+closed form vs 20001-point grid, median relative gap: 4.78e-10  (grid never exceeds it)
+pairs: 1,000,000 | target coupling rho = 0.5 | OT batch 256
+
+1. PEAK |d arg(x_t)/dt| ALONG THE PATH
+arm                               median         q90         q99       q99.9           max     > pi
+----------------------------------------------------------------------------------------------------
+Cartesian / independent            2.814      15.534     157.386    1565.655     1186634.2   46.0%
+Cartesian / minibatch OT           0.314       1.023       3.180      26.716       85002.0    1.0%
+Cylindrical / independent          1.570       2.828       3.110       3.138           3.1    0.0%
+
+2. AT t = 0.5, WHERE A CHORD PASSES CLOSEST TO THE ORIGIN ON AVERAGE
+arm                               median         q90         q99       q99.9           max
+----------------------------------------------------------------------------------------------------
+Cartesian / independent            1.154       4.117      14.039      45.345        3036.2
+Cartesian / minibatch OT           0.219       0.602       1.658       4.754         133.0
+Cylindrical / independent          1.570       2.828       3.110       3.138           3.1
+
+3. THE TAIL   Hill index on the top 1%; 1 means P(peak > s) ~ c/s and an infinite mean
+  Cartesian / independent      tail index = 1.006
+  Cartesian / minibatch OT     tail index = 1.106
+  Cylindrical                  bounded by pi: no tail at all
+
+4. THE SAMPLE MAXIMUM IS A STATEMENT ABOUT SAMPLE SIZE, NOT GEOMETRY
+  first     1,000 pairs: max =          885.4
+  first    10,000 pairs: max =        20350.4
+  first   100,000 pairs: max =        79512.0
+  first 1,000,000 pairs: max =      1186634.2
+  With a tail index near one the maximum grows roughly linearly in the sample count,
+  which is why two seeds of the trained probe read 23,870 and 62,605.
