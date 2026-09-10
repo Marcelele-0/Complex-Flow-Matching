@@ -31,15 +31,12 @@ Every draw is seeded through an explicit `torch.Generator`, so a rerun at the
 same `--seed` reproduces the tables exactly. No new dependencies: `scipy` and
 `matplotlib` were already declared in `pyproject.toml`.
 
-**Integration status, stated plainly.** The toy is *not* registered in the
-`DATASETS` registry, has no Hydra config, and is not reachable from
-`cfm.train` or `cfm.evaluate`. It is an analytic sampler
-(`src/cfm/data/synthetic.py`) driven directly by the two gate scripts, and Gate
-B trains its own small MLP (`ToyVelocityField`) rather than the project's image
-models. The bridges and ODE solvers *are* the production ones, driven at
-`H = W = 1`, so the geometry under test is the shipped geometry -- but the
-surrounding pipeline is not. Making the toy a first-class dataset would need it
-to emit `[B, C, H, W]` fields rather than scalars; see "Open" below.
+**Integration status.** The two gate scripts drive the analytic sampler
+(`src/cfm/data/synthetic.py`) directly, and Gate B trains its own small MLP
+(`ToyVelocityField`) with the production bridges and ODE solvers at `H = W = 1`.
+Everything from section 3 on goes through the production pipeline instead: the
+toy is registered as the datasets `cylinder_toy_iid` and `cylinder_toy_field`
+(`conf/dataset/`), trained with `cfm.train` and scored with `cfm.evaluate`.
 
 ---
 
@@ -530,6 +527,13 @@ are not bitwise deterministic, so a retrained model matches to within the seed
 spread quoted beside each result, not to the digit. The gate scripts and the
 network-free scripts do not go through `cfm.evaluate` and were never affected by
 its two defects.
+
+**The arXiv v1 paper** has one wrapper per table in `scripts/paper/` (index in the
+README, "Reproducing the paper"), and the evaluations its Tables 2 and 3 were
+written from are archived in `docs/paper_results/unet_eval_metrics.json`, so
+`uv run python scripts/paper/paper_tables.py --archive` prints them without
+retraining. The table below is the full research log; its "Table 1" is the MLP 2x2
+of an earlier plan, not the paper's Table 1 (which is the bridge table).
 
 | result | command | artefact | section |
 | --- | --- | --- | --- |
