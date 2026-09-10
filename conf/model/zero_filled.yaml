@@ -1,6 +1,0 @@
-# Zero-filled reconstruction: the adjoint IFFT of the acquired lines, with the
-# unacquired ones left at zero. Carries no parameters and needs no checkpoint, so
-# it is scored with `evaluate.run_name=SKIP`. It is the lower bound of the
-# baseline hierarchy: any learned reconstructor that does not clear it is not
-# reconstructing anything.
-name: "zero_filled"

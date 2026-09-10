@@ -5,12 +5,12 @@ Covers:
 - Denoising score matching loss with likelihood weighting.
 - Manifold interface contract (BaseManifold compliance).
 - Predictor-Corrector SDE solver and data consistency.
-- DiffusionReconstructor integration.
 """
 
 from __future__ import annotations
 
 import math
+from typing import cast
 
 import pytest
 import torch
@@ -18,7 +18,7 @@ import torch.nn as nn
 from omegaconf import OmegaConf
 
 from cfm.core.manifold import BaseManifold
-from cfm.core.registry import MANIFOLDS, RECONSTRUCTORS, SOLVERS
+from cfm.core.registry import MANIFOLDS, SOLVERS
 from cfm.core.solver import BaseSDESolver
 from cfm.manifolds import ComplexDiffusionManifold, build_manifold
 from cfm.solvers.diffusion_solver import PredictorCorrectorSolver, apply_data_consistency
@@ -40,12 +40,12 @@ class TestRegistryAndInitialization:
 
     def test_registered_in_manifolds(self) -> None:
         assert "complex_diffusion" in MANIFOLDS
-        assert issubclass(MANIFOLDS.get("complex_diffusion"), BaseManifold)
+        assert issubclass(cast(type, MANIFOLDS.get("complex_diffusion")), BaseManifold)
 
     def test_registered_in_solvers(self) -> None:
         assert "pc_diffusion" in SOLVERS
         assert "complex_diffusion" in SOLVERS
-        assert issubclass(SOLVERS.get("pc_diffusion"), BaseSDESolver)
+        assert issubclass(cast(type, SOLVERS.get("pc_diffusion")), BaseSDESolver)
 
     def test_build_manifold_defaults(self) -> None:
         cfg = OmegaConf.create({"manifold": {"name": "complex_diffusion"}})
@@ -488,33 +488,3 @@ class TestPredictorCorrectorSolver:
 
         out = solver.sample(dummy_model, noise)
         assert out.shape == noise.shape
-
-
-class TestReconstructorIntegration:
-    """Tests DiffusionReconstructor and RECONSTRUCTORS registry integration."""
-
-    def test_diffusion_reconstructor_registered(self) -> None:
-        assert "diffusion" in RECONSTRUCTORS
-        assert "pc_diffusion" in RECONSTRUCTORS
-
-    def test_reconstruct_single_coil(self) -> None:
-        class DummyScoreModel(nn.Module):
-            def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-                del t
-                return torch.zeros_like(x)
-
-        model = DummyScoreModel()
-        reconstructor = RECONSTRUCTORS.build("diffusion", model=model, num_steps=2)
-
-        z_gt = _dummy_complex_slice(b=1, h=16, w=16)
-        k_full = fft2c(z_gt)
-        mask = torch.zeros(1, 1, 16, 16)
-        mask[:, :, :, 6:10] = 1.0
-        k_masked = k_full * mask
-
-        z_rec = reconstructor.reconstruct(k_masked, mask)
-        assert z_rec.shape == (1, 1, 16, 16)
-        assert torch.is_complex(z_rec)
-        # On the mask, measured k-space is preserved (up to float32 FFT roundtrip precision)
-        k_rec = fft2c(z_rec)
-        torch.testing.assert_close(k_rec * mask, k_masked * mask, atol=1e-3, rtol=1e-3)

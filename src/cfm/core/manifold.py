@@ -81,6 +81,21 @@ class BaseManifold(ABC):
             Target velocity field [B, velocity_channels, H, W].
         """
 
+    @property
+    def tangent_weights(self) -> torch.Tensor:
+        """Per-channel weights of the tangent inner product, shape ``[velocity_channels]``.
+
+        A geometry whose tangent coordinates carry different physical scales needs
+        to say so, because anything that measures a displacement -- a coupling
+        cost above all -- otherwise implicitly declares them commensurate. The
+        cylinder is exactly such a geometry: ``u_phi`` spans ``[-pi, pi]`` while
+        ``u_m`` is ``O(1)``, so an unweighted sum is a modelling choice rather
+        than a neutral default.
+
+        Defaults to ones, which is the flat product metric.
+        """
+        return torch.ones(self.velocity_channels)
+
     @abstractmethod
     def metric_tensor(self, x: torch.Tensor) -> torch.Tensor:
         """Riemannian metric tensor g(x) at point x.

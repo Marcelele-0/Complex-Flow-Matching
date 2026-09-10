@@ -33,6 +33,7 @@ from cfm.data import build_dataset, build_geometry_transform
 from cfm.data.splits import load_split_file_names, select_indices
 from cfm.data.transforms import Compose
 from cfm.flow import BRIDGE_ENDPOINTS
+from cfm.flow.coupling import build_coupling
 from cfm.manifolds import build_manifold
 from cfm.utils.checkpoint import load_training_state, save_training_state, state_path
 from cfm.utils.distributed import (
@@ -165,6 +166,27 @@ def main(cfg: DictConfig) -> None:
             f"single-slice only, but dataset.num_slices={num_slices}. Set "
             "dataset.num_slices=1, or train the 2.5D model with training.bridge=noise."
         )
+
+    # --- Coupling ---
+    # Which prior sample is paired with which datum. The default reproduces plain
+    # flow matching; an optimal-transport coupling removes the crossings that make
+    # the regression target an average of conflicting velocities.
+    coupling_name = str(cfg.get("training", {}).get("coupling", "independent"))
+    coupling = build_coupling(coupling_name)
+    reorders = coupling_name not in ("independent", "none")
+    if reorders and conditional_bridge:
+        raise ValueError(
+            f"training.coupling={coupling_name!r} reorders the data batch, but "
+            "training.bridge='aliased' fixes each pairing by construction: the alias "
+            "belongs to its own target. Use training.bridge=noise."
+        )
+    if reorders and num_slices > 1:
+        raise ValueError(
+            f"training.coupling={coupling_name!r} pairs whole samples, but "
+            f"dataset.num_slices={num_slices} spreads one sample across a window. "
+            "Set dataset.num_slices=1."
+        )
+    print_main(f"Coupling: {coupling_name}")
 
     # The manifold owns the transform either way, so x_1 arrives in whatever
     # representation the selected geometry trains on and everything downstream is
@@ -461,8 +483,18 @@ def main(cfg: DictConfig) -> None:
             t_flat = t_model.repeat_interleave(s) if is_window else t_model
             t_bridge = t_flat.view(flat, 1, 1, 1)
 
-            # --- Bridge: Interpolation and target velocity ---
+            # --- Coupling: re-pair the batch before the bridge sees it ---
+            # x_1 is rebound too, because x_1_sup below feeds the loss mask and
+            # would otherwise be the un-permuted batch: the endpoint the bridge
+            # integrates towards and the endpoint the loss weights by have to be
+            # the same sample. Guarded to the unwindowed, unconditional case at
+            # startup, so this is a plain rebind rather than a reshape.
             x_1_flat = x_1.reshape(flat, c, h, w) if is_window else x_1
+            if reorders:
+                x_1_flat = coupling(x_0, x_1_flat, manifold)
+                x_1 = x_1_flat
+
+            # --- Bridge: Interpolation and target velocity ---
             x_t, target_v = manifold.bridge(x_0, x_1_flat, t_bridge)
 
             if is_window:

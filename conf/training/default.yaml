@@ -74,6 +74,15 @@ compile: true
 # One loss block serves both geometries. Each manifold reads the keys that apply
 # to it and ignores the rest, so `training.loss.*` overrides keep working
 # unchanged across the manifold switch.
+# Which prior sample is paired with which datum before the bridge runs.
+#   independent  Whatever the dataloader drew together. Plain flow matching, and
+#                the baseline every coupling claim is measured against.
+#   ot           Exact minibatch optimal transport in the manifold's own metric,
+#                one joint assignment over the batch. Requires bridge=noise and
+#                num_slices=1; see cfm.flow.coupling for why no factorised
+#                variant is offered.
+coupling: "independent"
+
 loss:
   # --- cylindrical only ---
   amp_loss_type: "l1"

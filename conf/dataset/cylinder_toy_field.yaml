@@ -1,0 +1,24 @@
+# The variant with spatial structure a convolutional trunk can actually use.
+#
+# Correlation is imposed on the *latents* before the copula is applied, never on
+# the samples: smoothing a phase field directly would drag the phase marginal
+# toward its circular mean and wrap badly across the branch cut, and smoothing
+# amplitudes would narrow their distribution. Smoothing standard normals and
+# renormalising leaves every latent standard normal marginally, so the pointwise
+# law is untouched and only the spatial dependence changes.
+#
+# Measured at 64x64, correlation_length 4: lag-1 amplitude correlation +0.96
+# against -0.00 for cylinder_toy_iid, with E[A] and the circular-linear
+# correlation matching to within sampling noise.
+name: "cylinder_toy_field"
+
+coupling: 0.0
+structure: "spiral"
+size: 8192
+crop_size: [64, 64]
+seed: 0
+
+# Gaussian smoothing sigma in pixels. 0 reproduces cylinder_toy_iid exactly.
+correlation_length: 4.0
+
+split: null

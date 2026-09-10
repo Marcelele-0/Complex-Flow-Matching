@@ -1,0 +1,32 @@
+# The control variant: every coefficient of every field drawn independently.
+#
+# There is no spatial information here, so a convolutional trunk has nothing to
+# exploit and should not beat model=mlp. Run this before believing any
+# architecture result on cylinder_toy_field: if the U-Net wins here too, the
+# difference is capacity or optimisation, not structure.
+#
+# Pointwise, this is exactly cylinder_toy_field with correlation_length=0 -- the
+# amplitude marginal, the phase marginal and the dependence between them are
+# identical -- so the pair isolates spatial structure and nothing else.
+name: "cylinder_toy_iid"
+
+# Amplitude-phase dependence, the axis the synthetic gates sweep. 0 makes the two
+# independent, which is the only regime where a coupling that factorises across
+# them is exact; 1 makes amplitude a deterministic function of phase.
+coupling: 0.0
+
+# "spiral" is comonotone in the angle and jumps at the branch cut; "cardioid" is
+# periodic through cos(theta), has no cut, and is the closer analogue of the
+# conjugate symmetry real-image k-space carries.
+structure: "spiral"
+
+# Samples per epoch. The distribution is analytic, so this is a budget rather
+# than a cohort size and nothing is held out by it -- see evaluate.seed.
+size: 8192
+
+crop_size: [64, 64]
+seed: 0
+
+# Sample i is drawn from seed + i, so there are no files, no manifests and
+# nothing to gate. A held-out claim here means "a different seed".
+split: null

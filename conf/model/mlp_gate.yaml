@@ -1,0 +1,17 @@
+# The velocity field the synthetic gates train, reachable from the ordinary entry
+# points.
+#
+# Identical to mlp.yaml except for shared_encoding, which is the confound control
+# the gates depend on: both geometries receive the same five-channel encoding of
+# the same point, so a measured difference between them cannot be a difference in
+# what the network was allowed to see. The parameter count is then identical
+# across geometries too, which it is not under the per-geometry state.
+#
+# Use with dataset=cylinder_toy_iid to reproduce scripts/coupling_gate_b.py
+# through cfm.train rather than through the script's own loop.
+name: "mlp"
+
+base_channels: 128
+depth: 3
+shared_encoding: true
+time_embedding_dim: 0

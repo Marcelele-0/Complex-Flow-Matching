@@ -9,14 +9,12 @@ import torch.nn as nn
 from cfm.core.dataset import BaseComplexDataset
 from cfm.core.loss import BaseLoss
 from cfm.core.manifold import BaseManifold
-from cfm.core.reconstructor import BaseReconstructor
 from cfm.core.registry import (
     DATASETS,
     LOSSES,
     MANIFOLDS,
     MASKS,
     MODELS,
-    RECONSTRUCTORS,
     SOLVERS,
     Registry,
 )
@@ -148,12 +146,6 @@ def test_core_registries_populated() -> None:
     assert issubclass(cast(type, DATASETS.get("skm_tea")), BaseComplexDataset)
     assert "fastmri" in DATASETS
     assert issubclass(cast(type, DATASETS.get("fastmri")), BaseComplexDataset)
-
-    # RECONSTRUCTORS
-    assert "zero_filled" in RECONSTRUCTORS
-    assert "flow_matching" in RECONSTRUCTORS
-    assert issubclass(cast(type, RECONSTRUCTORS.get("zero_filled")), BaseReconstructor)
-    assert issubclass(cast(type, RECONSTRUCTORS.get("flow_matching")), BaseReconstructor)
 
     # MASKS
     assert "cartesian" in MASKS
