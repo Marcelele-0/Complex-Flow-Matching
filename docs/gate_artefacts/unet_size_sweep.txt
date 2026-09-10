@@ -1,0 +1,77 @@
+U-Net size sweep: 24 of 24 evaluations available (white prior)
+
+sliced_w2_complex  (mean over available seeds; k = solver steps, NFE = 2k - 1)
+field  geometry     coupling       n      k=1      k=2      k=4      k=8    k=100
+16x16  cylindrical  independent    2    0.160    0.179    0.181    0.148    0.150
+16x16  cylindrical  ot             2    0.102    0.100    0.104    0.106    0.074
+16x16  euclidean    independent    2    0.421    0.367    0.223    0.093    0.059
+16x16  euclidean    ot             2    0.185    0.170    0.118    0.070    0.061
+32x32  cylindrical  independent    2    0.167    0.176    0.188    0.172    0.181
+32x32  cylindrical  ot             2    0.120    0.114    0.131    0.100    0.124
+32x32  euclidean    independent    2    0.431    0.362    0.254    0.107    0.073
+32x32  euclidean    ot             2    0.320    0.258    0.192    0.073    0.051
+64x64  cylindrical  independent    2    0.135    0.237    0.204    0.138    0.088
+64x64  cylindrical  ot             2    0.120    0.172    0.163    0.113    0.069
+64x64  euclidean    independent    2    0.414    0.368    0.287    0.141    0.048
+64x64  euclidean    ot             2    0.368    0.327    0.257    0.121    0.038
+
+w2_phase_circular  (mean over available seeds; k = solver steps, NFE = 2k - 1)
+field  geometry     coupling       n      k=1      k=2      k=4      k=8    k=100
+16x16  cylindrical  independent    2    0.316    0.390    0.426    0.308    0.350
+16x16  cylindrical  ot             2    0.171    0.143    0.219    0.186    0.129
+16x16  euclidean    independent    2    1.011    0.802    0.380    0.210    0.112
+16x16  euclidean    ot             2    0.170    0.183    0.143    0.114    0.113
+32x32  cylindrical  independent    2    0.426    0.487    0.532    0.452    0.451
+32x32  cylindrical  ot             2    0.300    0.294    0.358    0.260    0.304
+32x32  euclidean    independent    2    1.287    0.910    0.501    0.179    0.193
+32x32  euclidean    ot             2    0.633    0.377    0.257    0.083    0.150
+64x64  cylindrical  independent    2    0.362    0.631    0.577    0.440    0.226
+64x64  cylindrical  ot             2    0.322    0.432    0.451    0.361    0.173
+64x64  euclidean    independent    2    1.294    0.965    0.553    0.214    0.076
+64x64  euclidean    ot             2    0.990    0.643    0.321    0.105    0.087
+
+w2_amplitude  (mean over available seeds; k = solver steps, NFE = 2k - 1)
+field  geometry     coupling       n      k=1      k=2      k=4      k=8    k=100
+16x16  cylindrical  independent    2    0.212    0.213    0.182    0.169    0.118
+16x16  cylindrical  ot             2    0.168    0.174    0.145    0.139    0.090
+16x16  euclidean    independent    2    0.471    0.399    0.290    0.079    0.048
+16x16  euclidean    ot             2    0.251    0.247    0.189    0.100    0.038
+32x32  cylindrical  independent    2    0.174    0.179    0.172    0.133    0.118
+32x32  cylindrical  ot             2    0.126    0.122    0.110    0.075    0.075
+32x32  euclidean    independent    2    0.463    0.394    0.331    0.157    0.032
+32x32  euclidean    ot             2    0.404    0.351    0.286    0.128    0.046
+64x64  cylindrical  independent    2    0.170    0.198    0.176    0.125    0.040
+64x64  cylindrical  ot             2    0.149    0.165    0.149    0.101    0.022
+64x64  euclidean    independent    2    0.446    0.425    0.376    0.203    0.064
+64x64  euclidean    ot             2    0.435    0.417    0.360    0.194    0.062
+
+CYLINDER + OT against the best Cartesian arm, sliced W2 per seed
+  16x16 k=1    cylinder OT [0.092, 0.112]  best Cartesian [0.182, 0.189]  -> cylinder
+  16x16 k=2    cylinder OT [0.111, 0.088]  best Cartesian [0.168, 0.173]  -> cylinder
+  16x16 k=4    cylinder OT [0.111, 0.096]  best Cartesian [0.12, 0.116]  -> cylinder
+  16x16 k=8    cylinder OT [0.07, 0.143]  best Cartesian [0.078, 0.062]  -> overlap
+  16x16 k=100  cylinder OT [0.064, 0.085]  best Cartesian [0.075, 0.042]  -> overlap
+  32x32 k=1    cylinder OT [0.118, 0.121]  best Cartesian [0.319, 0.32]  -> cylinder
+  32x32 k=2    cylinder OT [0.144, 0.084]  best Cartesian [0.256, 0.261]  -> cylinder
+  32x32 k=4    cylinder OT [0.153, 0.11]  best Cartesian [0.186, 0.198]  -> cylinder
+  32x32 k=8    cylinder OT [0.096, 0.105]  best Cartesian [0.079, 0.066]  -> Cartesian
+  32x32 k=100  cylinder OT [0.114, 0.134]  best Cartesian [0.046, 0.055]  -> Cartesian
+  64x64 k=1    cylinder OT [0.119, 0.121]  best Cartesian [0.368, 0.367]  -> cylinder
+  64x64 k=2    cylinder OT [0.175, 0.168]  best Cartesian [0.319, 0.336]  -> cylinder
+  64x64 k=4    cylinder OT [0.163, 0.164]  best Cartesian [0.255, 0.259]  -> cylinder
+  64x64 k=8    cylinder OT [0.094, 0.133]  best Cartesian [0.134, 0.109]  -> overlap
+  64x64 k=100  cylinder OT [0.067, 0.071]  best Cartesian [0.039, 0.038]  -> Cartesian
+
+STRAIGHTNESS under each checkpoint's own coupling, spatial lag-1 at k = 100
+  16x16  cylindrical  independent  straight 0.132  lag1 0.973 (data 0.950)
+  16x16  cylindrical  ot           straight 0.098  lag1 0.975 (data 0.950)
+  16x16  euclidean    independent  straight 0.139  lag1 0.956 (data 0.950)
+  16x16  euclidean    ot           straight 0.091  lag1 0.955 (data 0.950)
+  32x32  cylindrical  independent  straight 0.172  lag1 0.967 (data 0.956)
+  32x32  cylindrical  ot           straight 0.140  lag1 0.966 (data 0.956)
+  32x32  euclidean    independent  straight 0.152  lag1 0.962 (data 0.956)
+  32x32  euclidean    ot           straight 0.142  lag1 0.962 (data 0.956)
+  64x64  cylindrical  independent  straight 0.142  lag1 0.966 (data 0.956)
+  64x64  cylindrical  ot           straight 0.135  lag1 0.967 (data 0.956)
+  64x64  euclidean    independent  straight 0.128  lag1 0.964 (data 0.956)
+  64x64  euclidean    ot           straight 0.126  lag1 0.964 (data 0.956)

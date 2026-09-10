@@ -543,4 +543,49 @@ its two defects.
 | Phase prior | `bash scripts/sweeps/phase_prior.sh LOGDIR` | `phase_prior_sweep.txt` | 6 |
 | Smooth prior, MLP | `bash scripts/sweeps/smooth_prior.sh LOGDIR` | `smooth_prior_sweep.txt` | 3, 5 |
 | U-Net, 64x64 | `bash scripts/sweeps/unet_prior.sh LOGDIR` then `uv run python scripts/sweeps/analyse_unet.py` | `unet_prior_sweep.txt` | 5 |
-| U-Net, 32x32 and 16x16 | `bash scripts/sweeps/unet_size.sh LOGDIR` | pending | -- |
+| U-Net, 32x32 and 16x16 | `bash scripts/sweeps/unet_size.sh LOGDIR` then `uv run python scripts/sweeps/analyse_unet_size.py` | `unet_size_sweep.txt` | 8 |
+
+---
+
+## 8. U-Net against field size
+
+White prior, `c_unet`, `cylinder_toy_field` with correlation length 4 pixels at
+every size, rho = 0.5, two seeds. 16x16 and 32x32 from
+`scripts/sweeps/unet_size.sh`, 64x64 from the white-prior arm of
+`unet_prior.sh`; tables from `scripts/sweeps/analyse_unet_size.py`,
+`gate_artefacts/unet_size_sweep.txt`. Sliced W2, cylinder with OT against the
+Cartesian arm with OT (the better Cartesian arm at every entry that decides):
+
+| field | arm | k=1 | k=2 | k=4 | k=8 | k=100 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 16x16 | cylindrical OT | **0.102** | **0.100** | **0.104** | 0.106 | 0.074 |
+| 16x16 | Cartesian OT | 0.185 | 0.170 | 0.118 | 0.070 | 0.061 |
+| 32x32 | cylindrical OT | **0.120** | **0.114** | **0.131** | 0.100 | 0.124 |
+| 32x32 | Cartesian OT | 0.320 | 0.258 | 0.192 | 0.073 | **0.051** |
+| 64x64 | cylindrical OT | **0.120** | **0.172** | **0.163** | 0.113 | 0.069 |
+| 64x64 | Cartesian OT | 0.368 | 0.327 | 0.257 | 0.121 | **0.038** |
+
+Bold marks a win with separated seeds. At k=8 the seeds overlap at 16x16 and
+64x64 and the plane wins at 32x32; at k=100 they overlap at 16x16 and the plane
+wins at 32x32 and 64x64.
+
+- **The few-step win holds at every size.** Cylinder with OT beats the best
+  Cartesian arm at k = 1, 2 and 4 at 16x16, 32x32 and 64x64, seeds separated.
+- **The asymptote closes only at the smallest field.** A tie at 16x16 (0.074 vs
+  0.061, overlapping seeds); the plane is ahead at 32x32 and 64x64.
+- **Not a monotone trend.** The cylinder's asymptote at 32x32 (0.124) is worse
+  than at both 16x16 (0.074) and 64x64 (0.069). One favourable size is not a
+  trend in size.
+- **OT buys most on small fields.** Cartesian at k=1: 0.421 -> 0.185 with OT at
+  16x16, 0.414 -> 0.368 at 64x64. Cylinder at k=100: 0.150 -> 0.074 at 16x16.
+  Consistent with section 6: a smaller sample leaves minibatch OT more room.
+- **The phase gap narrows on small fields.** Circular W2 on phase at k=100,
+  cylinder OT against Cartesian OT: 0.129 vs 0.113 at 16x16, 0.173 vs 0.087 at
+  64x64.
+
+What it says about modelling patches as samples: at 16x16 the cylinder with OT
+wins every step count up to four and ties the asymptote, which is the case for
+training on 16x16 patches with OT at patch dimension. Two things stand between
+that and a claim. Generating a whole image then requires the patches to be
+assembled without seams, which is untested; and the 32x32 point does not follow
+the 16x16 one, so a patch size cannot yet be chosen from a trend.
