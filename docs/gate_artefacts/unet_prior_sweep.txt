@@ -1,0 +1,66 @@
+U-Net sweep: 16 of 16 evaluations available
+
+sliced_w2_complex  (mean over available seeds; k = solver steps, NFE = 2k - 1)
+prior  geometry     coupling       n      k=1      k=2      k=4      k=8    k=100
+4      euclidean    independent    2    0.345    0.301    0.276    0.244    0.196
+4      euclidean    ot             2    0.304    0.296    0.274    0.251    0.189
+4      cylindrical  independent    2    0.141    0.153    0.174    0.158    0.128
+4      cylindrical  ot             2    0.126    0.137    0.139    0.115    0.092
+white  euclidean    independent    2    0.414    0.368    0.287    0.141    0.048
+white  euclidean    ot             2    0.368    0.327    0.257    0.121    0.038
+white  cylindrical  independent    2    0.135    0.237    0.204    0.138    0.088
+white  cylindrical  ot             2    0.120    0.172    0.163    0.113    0.069
+
+w2_phase_circular  (mean over available seeds; k = solver steps, NFE = 2k - 1)
+prior  geometry     coupling       n      k=1      k=2      k=4      k=8    k=100
+4      euclidean    independent    2    0.882    0.753    0.747    0.680    0.474
+4      euclidean    ot             2    0.637    0.631    0.654    0.589    0.381
+4      cylindrical  independent    2    0.346    0.455    0.528    0.481    0.438
+4      cylindrical  ot             2    0.289    0.401    0.421    0.349    0.304
+white  euclidean    independent    2    1.294    0.965    0.553    0.214    0.076
+white  euclidean    ot             2    0.990    0.643    0.321    0.105    0.087
+white  cylindrical  independent    2    0.362    0.631    0.577    0.440    0.226
+white  cylindrical  ot             2    0.322    0.432    0.451    0.361    0.173
+
+w2_amplitude  (mean over available seeds; k = solver steps, NFE = 2k - 1)
+prior  geometry     coupling       n      k=1      k=2      k=4      k=8    k=100
+4      euclidean    independent    2    0.416    0.371    0.325    0.284    0.243
+4      euclidean    ot             2    0.387    0.398    0.357    0.316    0.244
+4      cylindrical  independent    2    0.175    0.090    0.057    0.053    0.041
+4      cylindrical  ot             2    0.160    0.069    0.052    0.058    0.064
+white  euclidean    independent    2    0.446    0.425    0.376    0.203    0.064
+white  euclidean    ot             2    0.435    0.417    0.360    0.194    0.062
+white  cylindrical  independent    2    0.170    0.198    0.176    0.125    0.040
+white  cylindrical  ot             2    0.149    0.165    0.149    0.101    0.022
+
+spatial_lag1_gap  (mean over available seeds; k = solver steps, NFE = 2k - 1)
+prior  geometry     coupling       n      k=1      k=2      k=4      k=8    k=100
+4      euclidean    independent    2    0.083    0.071    0.079    0.075    0.050
+4      euclidean    ot             2    0.063    0.067    0.062    0.059    0.038
+4      cylindrical  independent    2    0.086    0.017    0.009    0.013    0.013
+4      cylindrical  ot             2    0.038    0.035    0.020    0.025    0.021
+white  euclidean    independent    2    0.113    0.041    0.008    0.004    0.008
+white  euclidean    ot             2    0.025    0.014    0.004    0.005    0.008
+white  cylindrical  independent    2    0.012    0.006    0.005    0.007    0.010
+white  cylindrical  ot             2    0.006    0.005    0.008    0.009    0.011
+
+PER SEED, sliced W2 and phase W2 at k = 1, 2, 4
+  4     euclidean   independent k1: sw [0.344, 0.345] ph [0.875, 0.89]  k2: sw [0.297, 0.305] ph [0.826, 0.681]  k4: sw [0.269, 0.283] ph [0.77, 0.723]
+  4     euclidean   ot          k1: sw [0.306, 0.302] ph [0.66, 0.615]  k2: sw [0.283, 0.309] ph [0.695, 0.568]  k4: sw [0.259, 0.289] ph [0.681, 0.628]
+  4     cylindrical independent k1: sw [0.13, 0.151] ph [0.31, 0.383]  k2: sw [0.156, 0.151] ph [0.504, 0.405]  k4: sw [0.186, 0.161] ph [0.587, 0.469]
+  4     cylindrical ot          k1: sw [0.121, 0.13] ph [0.27, 0.308]  k2: sw [0.155, 0.119] ph [0.473, 0.33]  k4: sw [0.162, 0.117] ph [0.481, 0.361]
+  white euclidean   independent k1: sw [0.415, 0.413] ph [1.298, 1.29]  k2: sw [0.359, 0.376] ph [0.963, 0.967]  k4: sw [0.282, 0.292] ph [0.546, 0.561]
+  white euclidean   ot          k1: sw [0.368, 0.367] ph [0.994, 0.986]  k2: sw [0.319, 0.336] ph [0.716, 0.571]  k4: sw [0.255, 0.259] ph [0.386, 0.256]
+  white cylindrical independent k1: sw [0.133, 0.137] ph [0.35, 0.374]  k2: sw [0.254, 0.22] ph [0.687, 0.576]  k4: sw [0.212, 0.196] ph [0.594, 0.56]
+  white cylindrical ot          k1: sw [0.119, 0.121] ph [0.316, 0.327]  k2: sw [0.175, 0.168] ph [0.448, 0.416]  k4: sw [0.163, 0.164] ph [0.453, 0.448]
+
+STRAIGHTNESS under each checkpoint's own coupling, and spatial structure at k = 100
+prior  geometry     coupling       straight            per seed  lag1 generated  lag1 data
+4      euclidean    independent       0.065  ['0.061', '0.070']           0.906      0.956
+4      euclidean    ot                0.071  ['0.067', '0.075']           0.918      0.956
+4      cylindrical  independent       0.060  ['0.054', '0.066']           0.943      0.956
+4      cylindrical  ot                0.070  ['0.065', '0.076']           0.935      0.956
+white  euclidean    independent       0.128  ['0.136', '0.120']           0.964      0.956
+white  euclidean    ot                0.126  ['0.135', '0.118']           0.964      0.956
+white  cylindrical  independent       0.142  ['0.159', '0.126']           0.966      0.956
+white  cylindrical  ot                0.135  ['0.151', '0.119']           0.967      0.956
