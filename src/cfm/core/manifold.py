@@ -8,7 +8,7 @@ from typing import Any
 
 import torch
 
-from cfm.core.solver import BaseODESolver, BaseSDESolver
+from cfm.core.solver import BaseODESolver
 
 
 class BaseManifold(ABC):
@@ -168,8 +168,8 @@ class BaseManifold(ABC):
         """
 
     @abstractmethod
-    def make_solver(self, num_steps: int) -> BaseODESolver | BaseSDESolver:
-        """Construct the ODE or SDE solver for this manifold geometry."""
+    def make_solver(self, num_steps: int) -> BaseODESolver:
+        """Construct the ODE solver for this manifold geometry."""
 
     @abstractmethod
     def to_complex(self, state: torch.Tensor) -> torch.Tensor:

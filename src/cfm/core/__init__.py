@@ -14,7 +14,7 @@ from cfm.core.registry import (
     SOLVERS,
     Registry,
 )
-from cfm.core.solver import BaseODESolver, BaseSDESolver
+from cfm.core.solver import BaseODESolver
 
 __all__ = [
     "Registry",
@@ -26,7 +26,6 @@ __all__ = [
     "MASKS",
     "BaseManifold",
     "BaseODESolver",
-    "BaseSDESolver",
     "BaseLoss",
     "CylindricalLoss",
     "EuclideanLoss",

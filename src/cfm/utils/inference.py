@@ -1,6 +1,6 @@
 """Model construction and checkpoint loading shared by the inference entry points.
 
-``generate.py`` and ``evaluate.py`` both need to build the configured architecture
+``evaluate.py`` both need to build the configured architecture
 and load a trained checkpoint. Keeping that in one place means a new architecture
 is registered once in :func:`build_model` rather than in every entry point, and it
 makes the logic unit-testable without standing up a Hydra ``main()``.

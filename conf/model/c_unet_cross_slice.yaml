@@ -6,8 +6,8 @@
 # train.py fails fast if this is not set.
 #
 # Sampling is NOT wired yet: the model emits a center-only velocity, which the ODE
-# solver cannot use to advance a multi-slice state. generate.py and evaluate.py
-# raise NotImplementedError for this model.
+# solver cannot use to advance a multi-slice state. evaluate.py
+# raises NotImplementedError for this model.
 #
 # Memory: the encoder runs on batch_size * num_slices images, so expect to roughly
 # halve batch_size relative to c_unet_attention at num_slices=3. Measure rather

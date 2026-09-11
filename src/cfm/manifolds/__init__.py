@@ -11,13 +11,11 @@ from omegaconf import DictConfig
 from cfm.core.manifold import BaseManifold
 from cfm.core.registry import MANIFOLDS
 from cfm.manifolds.base import Manifold
-from cfm.manifolds.complex_diffusion import ComplexDiffusionManifold
 from cfm.manifolds.cylindrical import CylindricalManifold
 from cfm.manifolds.euclidean import EuclideanManifold
 
 __all__ = [
     "BaseManifold",
-    "ComplexDiffusionManifold",
     "CylindricalManifold",
     "EuclideanManifold",
     "Manifold",
@@ -83,18 +81,6 @@ def build_manifold(cfg: DictConfig) -> BaseManifold:
                 loss_type=loss_cfg.get("vel_loss_type", "l1"),
                 lambda_hf=lambda_hf,
                 hf_boost_factor=hf_boost_factor,
-            )
-
-        case "complex_diffusion":
-            manifold = MANIFOLDS.build(
-                "complex_diffusion",
-                sigma_min=manifold_cfg.get("sigma_min", 0.01),
-                sigma_max=manifold_cfg.get("sigma_max", 378.0),
-                eps=manifold_cfg.get("eps", 1e-5),
-                likelihood_weighting=manifold_cfg.get("likelihood_weighting", True),
-                snr=manifold_cfg.get("snr", 0.16),
-                corrector_steps=manifold_cfg.get("corrector_steps", 1),
-                num_steps=manifold_cfg.get("num_steps", 50),
             )
 
         case _:

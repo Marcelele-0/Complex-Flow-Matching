@@ -141,7 +141,7 @@ def test_unwrap_model_strips_compile_alone() -> None:
 
 
 def test_wrapped_state_dict_keys_match_the_bare_model(single_rank_group) -> None:
-    # This is the property generate.py and evaluate.py depend on: a checkpoint from
+    # This is the property evaluate.py depends on: a checkpoint from
     # an eight-GPU compiled run has to load into a bare, uncompiled model.
     model = TinyNet()
     wrapped = FakeCompiled(DistributedDataParallel(model))

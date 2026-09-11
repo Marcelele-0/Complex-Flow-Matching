@@ -15,10 +15,10 @@ cylindrical metric**. The paper measures, on synthetic complex fields with a kno
 ground truth:
 
 - the heavy tail (index ~1) of the Cartesian bridges' angular velocity, network-free;
-- few-step generation (k <= 4 Heun steps) where CyFM beats the best Cartesian arm at
-  16x16, 32x32 and 64x64, while the Cartesian geometry is better at convergence on the
-  larger fields;
-- joint cylindrical OT lowering CyFM's few-step error by 11-44% at every resolution,
+- few-step generation (k <= 8 Heun steps) where CyFM beats the best Cartesian arm at
+  16x16, 32x32 and 64x64 with all five seeds separated, with no significant difference
+  at convergence;
+- joint cylindrical OT lowering CyFM's few-step error by 3-60% at every resolution,
   although its transport-cost saving collapses to 3% at 64x64;
 - the *Factorized Coupling Trap*: coupling per coordinate or per patch keeps every
   marginal exact and destroys the joint distribution.
@@ -38,65 +38,47 @@ No dataset download is needed: every result is on synthetic data generated on th
 
 ## Reproducing the paper
 
-One script per result. Each script's header states the exact configuration and the
-numbers it should print.
+Every result of the paper is a Hydra experiment config in `conf/experiment/` (index:
+`conf/experiment/README.md`) whose `paper:` block says how to reproduce it: the
+network-free results as commands, the U-Net tables as grids of runs. The U-Net table
+configs include their training protocol, so `+experiment=table2_unet64` also trains a
+single cell by hand. `scripts/paper/reproduce.py` runs them; a run whose evaluation
+already exists is skipped, so a sweep resumes after an interruption and runs shared
+between tables are made once.
 
-| paper result | command | runtime |
+| what | command | runtime |
 | --- | --- | --- |
-| Table 1 -- bridge angular velocity | `bash scripts/paper/table1_bridges.sh` | ~15 s |
-| Table 2 -- U-Net, 64x64, 2 geometries x 2 couplings | `bash scripts/paper/table2_unet64.sh LOGDIR` | ~2.7 h |
-| Table 3 -- U-Net at 16x16 and 32x32 (+ the 64x64 runs) | `bash scripts/paper/table3_unet_sizes.sh LOGDIR` | ~40 min |
-| Table 4 and Sec. 5.4 -- Factorized Coupling Trap, patch seams | `bash scripts/paper/table4_factorized.sh` | ~4 min |
-| Sec. 5.3 -- OT cost saving against field size (86% -> 3%) | `bash scripts/paper/ot_cost_vs_dimension.sh` | ~10 s |
-| Tables 2-3 and the per-seed claims of Sec. 5, printed | `uv run python scripts/paper/paper_tables.py` | seconds |
+| every result, in paper order | `uv run python scripts/paper/reproduce.py --all` | ~20 h |
+| one result, e.g. Table 2 | `uv run python scripts/paper/reproduce.py table2_unet64` | ~7 h |
+| a quick check: one seed at 16x16 | `uv run python scripts/paper/reproduce.py table3_unet_scaling --seeds 0 --sides 16 --tag quick_` | ~15 min |
+| what would run | `uv run python scripts/paper/reproduce.py --all --dry-run` | seconds |
 
-`paper_tables.py` prints Tables 2 and 3 plus the statements that rest on per-seed
-evidence: cylinder + OT against the best Cartesian arm at every size and step count,
-OT against independent pairing on the cylinder (11-44%, seeds separated in 7 of 9
-cells), OT on the Cartesian arm at 16x16 (0.421 -> 0.185), and the straightness of every
-64x64 arm.
+The U-Net tables use the objective fixed by the loss ablation (`ablation_loss32`,
+`docs/notes/COUPLING_NOTES.md` section 9): the squared velocity error in both
+geometries, with an unweighted phase term on the cylinder, and 5 seeds.
 
-**Without retraining.** The evaluations the paper was written from are archived in
-`docs/reproduce/paper_results/unet_eval_metrics.json`:
+**Without retraining.** Every number in the U-Net tables is archived in
+`docs/reproduce/paper_results/`, each with the exact Hydra overrides of its run
+(details in that directory's README):
 
 ```bash
-uv run python scripts/paper/paper_tables.py --archive
+uv run pytest tests/test_paper_results.py tests/test_experiments.py  # archives == specs
+uv run python scripts/paper/paper_tables.py --archive --seeds 0 1 2 3 4 \
+    --archive-file docs/reproduce/paper_results/unet_eval_metrics_l2u.json
+uv run python scripts/paper/loss_protocols.py --archive   # both loss protocols, p-values
+uv run python scripts/paper/latex_tables.py               # the LaTeX the paper includes
 ```
 
-**The v2 tables (matched loss, 5 seeds).** Tables 2 and 3 of the revised paper and
-its appendix table retrain the same grid with the loss fixed after the ablation of
-`docs/notes/COUPLING_NOTES.md` section 9: L2 in both geometries, with an unweighted phase
-term on the cylinder, and 5 seeds. The protocol is `conf/experiment/paper_unet.yaml`
-(L1 variants: `paper_unet_l1`, `paper_unet_v1loss`); runs, archives and their
-provenance are described in `docs/reproduce/paper_results/README.md`.
+The arXiv v1 tables (L1 with an amplitude-weighted phase term, 2 seeds) remain
+readable with `uv run python scripts/paper/paper_tables.py --archive`.
 
-| v2 result | command | runtime |
-| --- | --- | --- |
-| Tables 2-3, matched loss (60 runs) | `bash scripts/paper/tables23_v2.sh` | ~9 h |
-| appendix table, the L1 arms (60 runs) | `LOSS_MODE=l1u bash scripts/paper/tables23_v2.sh` and `LOSS_MODE=l1w ...` | ~4.5 h each |
-| one run | `LOSS_MODE=l2u bash scripts/paper/run_arm.sh NAME SIDE GEOMETRY COUPLING SEED` | ~20 min at 64x64 |
-| the loss ablation that fixed the protocol | `bash scripts/paper/ablation_loss32.sh LOGDIR` | ~1 h |
-| both loss protocols, with p-values | `uv run python scripts/paper/loss_protocols.py --archive` | seconds |
-| the LaTeX of Tables 2, 3 and the appendix table | `uv run python scripts/paper/latex_tables.py` | seconds |
-| archive integrity and config provenance | `uv run pytest tests/test_paper_results.py` | ~10 s |
-
-**Determinism.** The network-free scripts (Tables 1 and 4, Sec. 5.3) are seeded through
+**Determinism.** The network-free results (Tables 1 and 4, Sec. 5.3) are seeded through
 explicit generators and reprint the paper's numbers exactly. Training is seeded, but GPU
 kernels are not bitwise deterministic, so a retrained model matches within the seed
 spread rather than to the digit; re-evaluating a fixed checkpoint is exact.
 
-**Quick end-to-end check** (minutes, not the paper's numbers). The `smoke_` prefix keeps
-the short runs from shadowing real ones:
-
-```bash
-PREFIX=smoke_ EPOCHS=1 SIZE=128 FIELDS=8 SEEDS=0 SIDES=16 \
-    bash scripts/paper/table3_unet_sizes.sh /tmp/cyfm_smoke
-```
-
-The full research log behind the paper -- including the gates, sweeps and negative
-results that did not make it in -- is `docs/notes/COUPLING_NOTES.md`, with raw
-console output in `docs/reproduce/gate_artefacts/` and its own reproduction index in
-section 7.
+The research log behind the paper -- the gates, sweeps and negative results that did
+not make it in -- is `docs/notes/COUPLING_NOTES.md`.
 
 ## Running your own experiment
 
@@ -146,13 +128,12 @@ src/cfm/
 │   └── fastmri.py, ...    # real-data loaders (not used in the paper; see below)
 └── utils/random_fields.py # spectral smoothing that keeps every entry N(0, 1)
 
-scripts/paper/             # one script per paper result (above)
-scripts/sweeps/            # the exploratory sweeps behind docs/notes/COUPLING_NOTES.md
-scripts/*.py               # network-free gates and probes the paper scripts call
-conf/                      # Hydra configs; conf/experiment/ holds the paper protocol
-docs/reproduce/            # what the paper is reproduced from: archived evaluations and
-                           #   their provenance, generated LaTeX tables, raw gate output
-docs/notes/                # research log (COUPLING_NOTES.md) and geometry notes
+conf/experiment/           # the paper's experiments and training protocols (above)
+conf/                      # the other Hydra configs: datasets, manifolds, models, training
+scripts/paper/             # reproduce.py and the table / statistics printers
+scripts/*.py               # the network-free probes the experiments call
+docs/reproduce/            # archived evaluations with provenance, generated LaTeX tables
+docs/notes/                # the research log (COUPLING_NOTES.md)
 ```
 
 ## Not part of the paper
@@ -160,12 +141,8 @@ docs/notes/                # research log (COUPLING_NOTES.md) and geometry notes
 - **fastMRI / SKM-TEA.** `conf/dataset/fastmri_*.yaml` and the loaders are kept for the
   next version (real-data evaluation). They are not exercised by the paper and have not
   been re-validated since the move from reconstruction to generation.
-- **`cfmri-suite --eval`** and `schedule_runs.sh` predate that move; `--eval` calls the
-  removed reconstruction evaluator and the VarNet baseline, so it does not run on this
-  branch. DDP (`torchrun`) and the cluster wrappers in `scripts/slurm/` and
-  `scripts/launch_slurm.sh` did not change with it, but were not re-run for the paper:
+- **DDP (`torchrun`)** is supported by `cfm.train` but was not re-run for the paper:
   every paper result is a single-GPU run.
-- `manifold=complex_diffusion` is a variance-exploding SDE baseline, not evaluated here.
 
 ## Development
 
