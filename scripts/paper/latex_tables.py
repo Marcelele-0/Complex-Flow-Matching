@@ -1,7 +1,7 @@
 """Write the LaTeX of Tables 2 and 3 and the appendix loss table from the archives.
 
 The paper includes these files with ``\\input``, so every number in the tables is
-read from ``docs/paper_results/`` rather than typed by hand:
+read from ``docs/reproduce/paper_results/`` rather than typed by hand:
 
 * ``table2_unet64.tex`` -- 64x64, both geometries x both couplings, matched loss;
 * ``table3_unet_scaling.tex`` -- 16/32/64, Cartesian OT and the cylinder with and
@@ -15,7 +15,7 @@ cells) are computed here as well, with the tests of ``loss_protocols.py``.
 
 Usage::
 
-    uv run python scripts/paper/latex_tables.py --out docs/paper_results/latex
+    uv run python scripts/paper/latex_tables.py --out docs/reproduce/paper_results/latex
 """
 
 from __future__ import annotations
@@ -276,7 +276,7 @@ def main() -> None:
     parser.add_argument(
         "--out",
         type=pathlib.Path,
-        default=ROOT / "docs" / "paper_results" / "latex",
+        default=ROOT / "docs" / "reproduce" / "paper_results" / "latex",
         help="Directory for the .tex files.",
     )
     args = parser.parse_args()

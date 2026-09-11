@@ -16,7 +16,7 @@
 #   evaluate.nfe=[1,2,4,8,100]
 #
 # Loss variants: paper_unet_l1 (L1, unweighted phase) and paper_unet_v1loss
-# (L1, amplitude-weighted phase: the arXiv v1 objective). docs/paper_results/
+# (L1, amplitude-weighted phase: the arXiv v1 objective). docs/reproduce/paper_results/
 # README.md maps each archived evaluation to the experiment that produced it.
 defaults:
   - override /dataset: cylinder_toy_field

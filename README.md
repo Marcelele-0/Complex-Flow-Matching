@@ -57,7 +57,7 @@ cells), OT on the Cartesian arm at 16x16 (0.421 -> 0.185), and the straightness 
 64x64 arm.
 
 **Without retraining.** The evaluations the paper was written from are archived in
-`docs/paper_results/unet_eval_metrics.json`:
+`docs/reproduce/paper_results/unet_eval_metrics.json`:
 
 ```bash
 uv run python scripts/paper/paper_tables.py --archive
@@ -65,10 +65,10 @@ uv run python scripts/paper/paper_tables.py --archive
 
 **The v2 tables (matched loss, 5 seeds).** Tables 2 and 3 of the revised paper and
 its appendix table retrain the same grid with the loss fixed after the ablation of
-`docs/COUPLING_NOTES.md` section 9: L2 in both geometries, with an unweighted phase
+`docs/notes/COUPLING_NOTES.md` section 9: L2 in both geometries, with an unweighted phase
 term on the cylinder, and 5 seeds. The protocol is `conf/experiment/paper_unet.yaml`
 (L1 variants: `paper_unet_l1`, `paper_unet_v1loss`); runs, archives and their
-provenance are described in `docs/paper_results/README.md`.
+provenance are described in `docs/reproduce/paper_results/README.md`.
 
 | v2 result | command | runtime |
 | --- | --- | --- |
@@ -93,8 +93,9 @@ PREFIX=smoke_ EPOCHS=1 SIZE=128 FIELDS=8 SEEDS=0 SIDES=16 \
 ```
 
 The full research log behind the paper -- including the gates, sweeps and negative
-results that did not make it in -- is `docs/COUPLING_NOTES.md`, with raw console output
-in `docs/gate_artefacts/` and its own reproduction index in section 7.
+results that did not make it in -- is `docs/notes/COUPLING_NOTES.md`, with raw
+console output in `docs/reproduce/gate_artefacts/` and its own reproduction index in
+section 7.
 
 ## Running your own experiment
 
@@ -145,11 +146,14 @@ src/cfm/
 └── utils/random_fields.py # spectral smoothing that keeps every entry N(0, 1)
 
 scripts/paper/             # one script per paper result (above)
-scripts/sweeps/            # the exploratory sweeps behind docs/COUPLING_NOTES.md
+scripts/wcss/              # the v2 job array and the one-arm runner (WCSS, H100)
+scripts/sweeps/            # the exploratory sweeps behind docs/notes/COUPLING_NOTES.md
 scripts/*.py               # network-free gates and probes the paper scripts call
-conf/                      # Hydra configs
-docs/COUPLING_NOTES.md     # research log, docs/gate_artefacts/ raw outputs
-docs/paper_results/        # archived evaluations behind Tables 2 and 3
+conf/                      # Hydra configs; conf/experiment/ holds the paper protocol
+docs/reproduce/            # what the paper is reproduced from: archived evaluations and
+                           #   their provenance, generated LaTeX tables, raw gate output,
+                           #   the PLGrid runbook
+docs/notes/                # research log (COUPLING_NOTES.md) and geometry notes
 ```
 
 ## Not part of the paper
@@ -160,8 +164,9 @@ docs/paper_results/        # archived evaluations behind Tables 2 and 3
 - **`cfmri-suite --eval`** and `schedule_runs.sh` predate that move; `--eval` calls the
   removed reconstruction evaluator and the VarNet baseline, so it does not run on this
   branch. DDP (`torchrun`) and the PLGrid Slurm wrappers (`scripts/launch_slurm.sh`,
-  runbook in `docs/plgrid/SKILL.md`) did not change with it, but were not re-run for the
-  paper: every paper result is single-GPU.
+  runbook in `docs/reproduce/plgrid/SKILL.md`) did not change with it, but were not
+  re-run for the paper: every paper result is single-GPU (the v2 grid ran one H100 per
+  task on WCSS).
 - `manifold=complex_diffusion` is a variance-exploding SDE baseline, not evaluated here.
 
 ## Development

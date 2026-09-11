@@ -1,6 +1,6 @@
 """Integrity of the archived evaluations behind Tables 2-3 and the appendix table.
 
-Every entry of the three v2 archives in ``docs/paper_results/`` carries the Hydra
+Every entry of the three v2 archives in ``docs/reproduce/paper_results/`` carries the Hydra
 overrides its training run was launched with. These tests check that each archive
 holds the full grid with the expected metadata, and -- the reproducibility claim --
 that composing the recorded overrides gives exactly the configuration of the
@@ -20,7 +20,7 @@ from hydra import compose, initialize_config_dir
 from omegaconf import OmegaConf
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-RESULTS = ROOT / "docs" / "paper_results"
+RESULTS = ROOT / "docs" / "reproduce" / "paper_results"
 CONF = ROOT / "conf"
 
 SIDES = (16, 32, 64)

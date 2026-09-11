@@ -4,9 +4,10 @@ Working notes for the paper: what is proved, what is measured, what is asserted,
 and how each number was produced. Every figure quoted here is reproducible from
 the commands given; nothing is carried over from memory.
 
-Written 2026-09-08. Supersedes the framing in `GATE_63_PLAN.md`, which measured
-reconstruction against a zero-filled floor; that document stays as the record of
-how the current position was reached.
+Written 2026-09-08. Supersedes the framing of the former `docs/GATE_63_PLAN.md`,
+which measured reconstruction against a zero-filled floor; that plan was removed
+from the tree on 2026-09-11 and remains in the git history (`git log --
+docs/GATE_63_PLAN.md`) as the record of how the current position was reached.
 
 ---
 
