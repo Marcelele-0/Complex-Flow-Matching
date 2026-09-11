@@ -1,0 +1,38 @@
+# @package _global_
+# Appendix table -- both geometries under both losses.
+#
+# Adds the L1 arms to the Table 3 grid: the cylinder with L1 and an unweighted phase
+# term (paper_unet_l1) and the Cartesian geometry with L1 (paper_unet_v1loss, which
+# for the Cartesian arm equals paper_unet_l1 and is what the archived runs were
+# launched with). The matched-loss arm is listed so the table stands alone; its runs
+# are skipped if Tables 2 and 3 made them. Archived results:
+# docs/reproduce/paper_results/unet_eval_metrics_{l2u,l1u_cylindrical,l1w_cartesian}.json.
+#
+#   uv run python scripts/paper/reproduce.py tableA_loss_protocols
+#   uv run python scripts/paper/reproduce.py tableA_loss_protocols --seeds 0 --sides 16
+defaults:
+  - paper_unet
+  - _self_
+
+paper:
+  name: Appendix table -- both geometries under both losses
+  section: Appendix table (Section 5.3, best loss per geometry)
+  runtime: ~3 min per 16x16 or 32x32 run, ~20 min per 64x64 run; 120 runs with Table 3's
+  kind: unet_grid
+  sides: [16, 32, 64]
+  seeds: [0, 1, 2, 3, 4]
+  arms:
+    - experiment: paper_unet
+      prefix: l2u_
+      geometries: [euclidean, cylindrical]
+      couplings: [independent, ot]
+    - experiment: paper_unet_l1
+      prefix: l1u_
+      geometries: [cylindrical]
+      couplings: [independent, ot]
+    - experiment: paper_unet_v1loss
+      prefix: l1w_
+      geometries: [euclidean]
+      couplings: [independent, ot]
+  report:
+    - [scripts/paper/loss_protocols.py, --tag, "{tag}", --seeds, "{seeds}", --sides, "{sides}"]

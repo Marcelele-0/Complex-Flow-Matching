@@ -1,0 +1,11 @@
+# @package _global_
+# paper_unet with the squared velocity error and, on the cylinder, the phase term
+# weighted by the clean amplitude A_1 / mean(A_1). Only the loss ablation uses it
+# (conf/experiment/ablation_loss32.yaml): it separates the effect of the weighting
+# from that of L1 versus L2.
+defaults:
+  - paper_unet
+
+training:
+  loss:
+    phase_amplitude_weighting: true

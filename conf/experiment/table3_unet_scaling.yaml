@@ -1,0 +1,28 @@
+# @package _global_
+# Table 3 -- dimensionality scaling at 16x16, 32x32 and 64x64.
+#
+# The Table 2 protocol at three field sizes; the 64x64 runs are Table 2's and are
+# skipped if they exist. The Cartesian independent arm is run too, because the
+# per-seed checks compare against the better Cartesian coupling. Archived result:
+# docs/reproduce/paper_results/unet_eval_metrics_l2u.json.
+#
+#   uv run python scripts/paper/reproduce.py table3_unet_scaling
+#   uv run python scripts/paper/reproduce.py table3_unet_scaling --seeds 0 --sides 16
+defaults:
+  - paper_unet
+  - _self_
+
+paper:
+  name: Table 3 -- dimensionality scaling
+  section: Table 3 (Section 5.3)
+  runtime: ~3 min per 16x16 or 32x32 run, ~20 min per 64x64 run; 60 runs
+  kind: unet_grid
+  sides: [16, 32, 64]
+  seeds: [0, 1, 2, 3, 4]
+  arms:
+    - experiment: paper_unet
+      prefix: l2u_
+      geometries: [euclidean, cylindrical]
+      couplings: [independent, ot]
+  report:
+    - [scripts/paper/paper_tables.py, --prefix, "{tag}l2u_", --seeds, "{seeds}"]

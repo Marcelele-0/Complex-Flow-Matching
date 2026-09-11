@@ -1,0 +1,55 @@
+# @package _global_
+# Loss ablation at 32x32 -- the experiment that fixed the paper's objective.
+#
+# The cylinder under {L1, L2} x {amplitude-weighted, unweighted} phase term and the
+# Cartesian geometry under {L1, L2}, all with joint OT, 3 seeds. 32x32 is where the
+# v1 asymptote gap was largest. The report prints every arm and the pairwise
+# comparisons with a per-seed separation verdict (docs/notes/COUPLING_NOTES.md,
+# section 9, has the numbers).
+#
+#   uv run python scripts/paper/reproduce.py ablation_loss32
+#   uv run python scripts/paper/reproduce.py ablation_loss32 --seeds 0
+defaults:
+  - paper_unet
+  - _self_
+
+paper:
+  name: Loss ablation, 32x32
+  section: Section 4 (the training objective) and Appendix
+  runtime: ~3 min per run on an RTX 4070 Ti SUPER; 18 runs
+  kind: unet_grid
+  sides: [32]
+  seeds: [0, 1, 2]
+  arms:
+    - experiment: paper_unet_v1loss
+      prefix: abl_
+      name: "{prefix}{geometry}_l1_weighted_{side}_s{seed}"
+      geometries: [cylindrical]
+      couplings: [ot]
+    - experiment: paper_unet_l1
+      prefix: abl_
+      name: "{prefix}{geometry}_l1_unweighted_{side}_s{seed}"
+      geometries: [cylindrical]
+      couplings: [ot]
+    - experiment: paper_unet_l2w
+      prefix: abl_
+      name: "{prefix}{geometry}_l2_weighted_{side}_s{seed}"
+      geometries: [cylindrical]
+      couplings: [ot]
+    - experiment: paper_unet
+      prefix: abl_
+      name: "{prefix}{geometry}_l2_unweighted_{side}_s{seed}"
+      geometries: [cylindrical]
+      couplings: [ot]
+    - experiment: paper_unet_l1
+      prefix: abl_
+      name: "{prefix}{geometry}_l1_{side}_s{seed}"
+      geometries: [euclidean]
+      couplings: [ot]
+    - experiment: paper_unet
+      prefix: abl_
+      name: "{prefix}{geometry}_l2_{side}_s{seed}"
+      geometries: [euclidean]
+      couplings: [ot]
+  report:
+    - [scripts/paper/ablation_tables.py, --prefix, "{tag}", --side, "32"]
