@@ -8,6 +8,8 @@
 #   l2u  (default) the fair loss: L2 in both geometries, unweighted phase term
 #        (see scripts/paper/ablation_loss32.sh)
 #   l1w  the arXiv v1 loss: L1 in both geometries, amplitude-weighted phase term
+#   l1u  L1 in both geometries, unweighted phase term -- the cylinder's
+#        counterpart of Cartesian L1, which has no phase weighting to remove
 #
 # Expects scripts/wcss/env.sh to have been sourced (cwd = checkout, uv on PATH).
 set -u
@@ -24,7 +26,8 @@ LOSS_MODE="${LOSS_MODE:-l2u}"
 case "$LOSS_MODE" in
   l2u) L=l2; W=false ;;
   l1w) L=l1; W=true ;;
-  *) echo "unknown LOSS_MODE=$LOSS_MODE (expected l2u or l1w)"; exit 2 ;;
+  l1u) L=l1; W=false ;;
+  *) echo "unknown LOSS_MODE=$LOSS_MODE (expected l2u, l1w or l1u)"; exit 2 ;;
 esac
 LOSS=(
   training.loss.amp_loss_type="$L"
