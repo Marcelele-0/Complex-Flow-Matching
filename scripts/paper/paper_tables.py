@@ -301,7 +301,7 @@ def main() -> None:
         type=int,
         nargs="+",
         default=list(SEEDS),
-        help="Seeds to read (the archive has 0 1; the WCSS l2u_ runs have 0 1 2).",
+        help="Seeds to read (the v1 archive has 0 1, the v2 archives 0 1 2 3 4).",
     )
     parser.add_argument(
         "--archive-file",

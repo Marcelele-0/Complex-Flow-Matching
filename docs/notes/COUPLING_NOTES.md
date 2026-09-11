@@ -549,11 +549,11 @@ of an earlier plan, not the paper's Table 1 (which is the bridge table).
 | U-Net, 64x64 | `bash scripts/sweeps/unet_prior.sh LOGDIR` then `uv run python scripts/sweeps/analyse_unet.py` | `unet_prior_sweep.txt` | 5 |
 | U-Net, 32x32 and 16x16 | `bash scripts/sweeps/unet_size.sh LOGDIR` then `uv run python scripts/sweeps/analyse_unet_size.py` | `unet_size_sweep.txt` | 8 |
 | Loss ablation, 32x32 | `bash scripts/paper/ablation_loss32.sh LOGDIR` then `uv run python scripts/paper/ablation_tables.py` | console | 9 |
-| v2 grid, both losses, 5 seeds | `sbatch scripts/wcss/paper_tables_l2u.sbatch` (variants in its header) | `docs/reproduce/paper_results/unet_eval_metrics_{l2u,l1u_cylindrical,l1w_cartesian}.json` | 9 |
+| v2 grid, both losses, 5 seeds | `bash scripts/paper/tables23_v2.sh` (`LOSS_MODE=l1u` / `l1w` for the L1 arms) | `docs/reproduce/paper_results/unet_eval_metrics_{l2u,l1u_cylindrical,l1w_cartesian}.json` | 9 |
 | Loss protocols, statistics | `uv run python scripts/paper/loss_protocols.py --archive` | console | 9 |
 
 **The v2 paper** reads its U-Net tables from the three archives above; their
-protocol, Slurm jobs and per-run provenance are in `docs/reproduce/paper_results/README.md`.
+protocol and per-run provenance are in `docs/reproduce/paper_results/README.md`.
 
 ---
 
@@ -636,7 +636,7 @@ of the loss.
 ### The v2 grid, 5 seeds, both losses
 
 `docs/reproduce/paper_results/`, printed by `scripts/paper/loss_protocols.py --archive`.
-Every geometry x coupling x {L1, L2} x {16, 32, 64} x 5 seeds, on WCSS. Two
+Every geometry x coupling x {L1, L2} x {16, 32, 64} x 5 seeds, one H100 per run. Two
 comparisons, with exact two-sided Mann-Whitney p (the minimum with 5 vs 5 is
 0.008, reached exactly when the seeds separate):
 

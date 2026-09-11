@@ -2,7 +2,7 @@
 # One arm of Tables 2/3, train then evaluate. Everything except the loss is
 # identical to scripts/paper/table2_unet64.sh and table3_unet_sizes.sh.
 #
-#   LOSS_MODE=l2u bash scripts/wcss/run_arm.sh NAME SIDE MANIFOLD COUPLING SEED [EPOCHS]
+#   LOSS_MODE=l2u bash scripts/paper/run_arm.sh NAME SIDE MANIFOLD COUPLING SEED [EPOCHS]
 #
 # LOSS_MODE:
 #   l2u  (default) the fair loss: L2 in both geometries, unweighted phase term
@@ -11,8 +11,9 @@
 #   l1u  L1 in both geometries, unweighted phase term -- the cylinder's
 #        counterpart of Cartesian L1, which has no phase weighting to remove
 #
-# Expects scripts/wcss/env.sh to have been sourced (cwd = checkout, uv on PATH).
+# Runs from the repository root through uv; nothing cluster-specific is assumed.
 set -u
+cd "$(dirname "$0")/../.."
 NAME="$1"
 SIDE="$2"
 M="$3"

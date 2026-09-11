@@ -8,11 +8,11 @@ description: Run Complex Flow Matching training on PLGrid GPU clusters, especial
 This is a discovery stub, not the runbook. The runbook is vendor-neutral and lives in
 the repository proper so that humans and every agent brand read the same copy:
 
-**Read [`docs/reproduce/plgrid/SKILL.md`](../../../docs/reproduce/plgrid/SKILL.md) in full now**, then the
+**Read [`scripts/slurm/runbook/SKILL.md`](../../../scripts/slurm/runbook/SKILL.md) in full now**, then the
 reference it routes you to.
 
 Do not act on PLGrid from this file alone - the operating rules, the Athena-only
 scope warning and the storage discipline are all in that document.
 
 To wire the same runbook into Codex, Cursor, Copilot or Gemini, see
-[`docs/reproduce/plgrid/INSTALL.md`](../../../docs/reproduce/plgrid/INSTALL.md).
+[`scripts/slurm/runbook/INSTALL.md`](../../../scripts/slurm/runbook/INSTALL.md).
