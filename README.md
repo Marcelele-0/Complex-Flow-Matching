@@ -72,8 +72,9 @@ provenance are described in `docs/reproduce/paper_results/README.md`.
 
 | v2 result | command | runtime |
 | --- | --- | --- |
-| Tables 2-3 and the appendix table, all 120 runs | `sbatch scripts/wcss/paper_tables_l2u.sbatch` (variants in its header) | ~15 min on WCSS |
-| one run, locally | `LOSS_MODE=l2u bash scripts/wcss/run_arm.sh NAME SIDE GEOMETRY COUPLING SEED` | ~20 min at 64x64 |
+| Tables 2-3, matched loss (60 runs) | `bash scripts/paper/tables23_v2.sh` | ~9 h |
+| appendix table, the L1 arms (60 runs) | `LOSS_MODE=l1u bash scripts/paper/tables23_v2.sh` and `LOSS_MODE=l1w ...` | ~4.5 h each |
+| one run | `LOSS_MODE=l2u bash scripts/paper/run_arm.sh NAME SIDE GEOMETRY COUPLING SEED` | ~20 min at 64x64 |
 | the loss ablation that fixed the protocol | `bash scripts/paper/ablation_loss32.sh LOGDIR` | ~1 h |
 | both loss protocols, with p-values | `uv run python scripts/paper/loss_protocols.py --archive` | seconds |
 | the LaTeX of Tables 2, 3 and the appendix table | `uv run python scripts/paper/latex_tables.py` | seconds |
@@ -146,13 +147,11 @@ src/cfm/
 └── utils/random_fields.py # spectral smoothing that keeps every entry N(0, 1)
 
 scripts/paper/             # one script per paper result (above)
-scripts/wcss/              # the v2 job array and the one-arm runner (WCSS, H100)
 scripts/sweeps/            # the exploratory sweeps behind docs/notes/COUPLING_NOTES.md
 scripts/*.py               # network-free gates and probes the paper scripts call
 conf/                      # Hydra configs; conf/experiment/ holds the paper protocol
 docs/reproduce/            # what the paper is reproduced from: archived evaluations and
-                           #   their provenance, generated LaTeX tables, raw gate output,
-                           #   the PLGrid runbook
+                           #   their provenance, generated LaTeX tables, raw gate output
 docs/notes/                # research log (COUPLING_NOTES.md) and geometry notes
 ```
 
@@ -163,10 +162,9 @@ docs/notes/                # research log (COUPLING_NOTES.md) and geometry notes
   been re-validated since the move from reconstruction to generation.
 - **`cfmri-suite --eval`** and `schedule_runs.sh` predate that move; `--eval` calls the
   removed reconstruction evaluator and the VarNet baseline, so it does not run on this
-  branch. DDP (`torchrun`) and the PLGrid Slurm wrappers (`scripts/launch_slurm.sh`,
-  runbook in `docs/reproduce/plgrid/SKILL.md`) did not change with it, but were not
-  re-run for the paper: every paper result is single-GPU (the v2 grid ran one H100 per
-  task on WCSS).
+  branch. DDP (`torchrun`) and the cluster wrappers in `scripts/slurm/` and
+  `scripts/launch_slurm.sh` did not change with it, but were not re-run for the paper:
+  every paper result is a single-GPU run.
 - `manifold=complex_diffusion` is a variance-exploding SDE baseline, not evaluated here.
 
 ## Development

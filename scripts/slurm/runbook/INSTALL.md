@@ -21,7 +21,7 @@ Per-user, outside the repository:
 ```bash
 skills_dir="${CODEX_HOME:-$HOME/.codex}/skills"
 mkdir -p "$skills_dir"
-ln -s "$PWD/docs/reproduce/plgrid" "$skills_dir/plgrid-run"
+ln -s "$PWD/scripts/slurm/runbook" "$skills_dir/plgrid-run"
 ```
 
 The destination must not already exist. Restart Codex or refresh skill discovery
@@ -30,11 +30,11 @@ afterwards.
 ## Cursor
 
 Add a rule file under `.cursor/rules/` whose body is one line pointing at
-`docs/reproduce/plgrid/SKILL.md`.
+`scripts/slurm/runbook/SKILL.md`.
 
 ## GitHub Copilot
 
-Reference `docs/reproduce/plgrid/SKILL.md` from `.github/copilot-instructions.md`.
+Reference `scripts/slurm/runbook/SKILL.md` from `.github/copilot-instructions.md`.
 
 ## Gemini CLI and the `AGENTS.md` convention
 
@@ -42,9 +42,9 @@ Both read a file at the repository root - `GEMINI.md` and `AGENTS.md` respective
 Note that this repository's `.gitignore` currently treats both as private local
 context, so a committed `AGENTS.md` would need that entry removed first. Until then,
 Gemini users should add their own local `GEMINI.md` line pointing at
-`docs/reproduce/plgrid/SKILL.md`.
+`scripts/slurm/runbook/SKILL.md`.
 
 ## Anything else
 
-Point the tool at `docs/reproduce/plgrid/SKILL.md`. That file routes to the three references
+Point the tool at `scripts/slurm/runbook/SKILL.md`. That file routes to the three references
 and states the operating rules; it is the only entry point.

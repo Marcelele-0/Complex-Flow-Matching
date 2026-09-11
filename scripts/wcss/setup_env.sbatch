@@ -33,7 +33,7 @@ if [ "$code" -ne 0 ]; then exit "$code"; fi
 uv run --no-sync python -c "import torch; print('torch', torch.__version__, 'cuda', torch.version.cuda, 'available', torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 
 t1=$(date +%s)
-bash scripts/wcss/run_arm.sh timing_un_cylindrical_ot_64 64 cylindrical ot 0 2
+bash scripts/paper/run_arm.sh timing_un_cylindrical_ot_64 64 cylindrical ot 0 2
 code=$?
 echo "timing_exit=$code seconds_2_epochs_plus_eval=$(( $(date +%s) - t1 ))"
 exit "$code"

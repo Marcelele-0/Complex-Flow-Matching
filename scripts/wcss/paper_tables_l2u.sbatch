@@ -63,4 +63,4 @@ else
 fi
 
 echo "task=$SLURM_ARRAY_TASK_ID host=$(hostname) name=$NAME loss=$LOSS_MODE"
-bash scripts/wcss/run_arm.sh "$NAME" "$SIDE" "$M" "$C" "$SEED" 40
+bash scripts/paper/run_arm.sh "$NAME" "$SIDE" "$M" "$C" "$SEED" 40
