@@ -548,6 +548,12 @@ of an earlier plan, not the paper's Table 1 (which is the bridge table).
 | Smooth prior, MLP | `bash scripts/sweeps/smooth_prior.sh LOGDIR` | `smooth_prior_sweep.txt` | 3, 5 |
 | U-Net, 64x64 | `bash scripts/sweeps/unet_prior.sh LOGDIR` then `uv run python scripts/sweeps/analyse_unet.py` | `unet_prior_sweep.txt` | 5 |
 | U-Net, 32x32 and 16x16 | `bash scripts/sweeps/unet_size.sh LOGDIR` then `uv run python scripts/sweeps/analyse_unet_size.py` | `unet_size_sweep.txt` | 8 |
+| Loss ablation, 32x32 | `bash scripts/paper/ablation_loss32.sh LOGDIR` then `uv run python scripts/paper/ablation_tables.py` | console | 9 |
+| v2 grid, both losses, 5 seeds | `sbatch scripts/wcss/paper_tables_l2u.sbatch` (variants in its header) | `paper_results/unet_eval_metrics_{l2u,l1u_cylindrical,l1w_cartesian}.json` | 9 |
+| Loss protocols, statistics | `uv run python scripts/paper/loss_protocols.py --archive` | console | 9 |
+
+**The v2 paper** reads its U-Net tables from the three archives above; their
+protocol, Slurm jobs and per-run provenance are in `docs/paper_results/README.md`.
 
 ---
 
@@ -593,3 +599,64 @@ training on 16x16 patches with OT at patch dimension. Two things stand between
 that and a claim. Generating a whole image then requires the patches to be
 assembled without seams, which is untested; and the 32x32 point does not follow
 the 16x16 one, so a patch size cannot yet be chosen from a trend.
+
+---
+
+## 9. The loss, not the geometry, set the asymptote
+
+Measured 2026-09-11. Until then every cylindrical U-Net was trained with L1 and a
+phase term weighted by the clean amplitude `A_1 / mean(A_1)`, and every Cartesian
+one with plain L1. Two properties of that objective break the flow-matching fixed
+point: L1 regresses the conditional median of the target rather than its mean, and
+a weight that depends on `x_1` makes the phase channel regress a reweighted
+statistic that the amplitude channel does not. The flag
+`training.loss.phase_amplitude_weighting` (default `true`, the old behaviour) turns
+the weight off.
+
+### Ablation, 32x32, 3 seeds, joint OT
+
+`scripts/paper/ablation_loss32.sh`, local RTX 4070 Ti SUPER. Sliced W2, mean over
+seeds; the weighted L1 rows reproduce the v1 archive (0.121 against 0.114 / 0.134).
+
+| arm | k=1 | k=4 | k=100 | phase W2, k=100 |
+| --- | --- | --- | --- | --- |
+| cylinder, L1, weighted (v1) | 0.123 | 0.140 | 0.121 | 0.307 |
+| cylinder, L1, unweighted | 0.093 | 0.083 | 0.074 | 0.168 |
+| cylinder, L2, weighted | 0.111 | 0.089 | 0.063 | 0.205 |
+| cylinder, L2, unweighted | 0.114 | 0.064 | 0.038 | 0.098 |
+| Cartesian, L1 | 0.319 | 0.196 | 0.051 | 0.138 |
+| Cartesian, L2 | 0.341 | 0.206 | 0.033 | 0.095 |
+
+Removing the weight helps at every k (at k=100, -39% sliced and -45% phase,
+seeds separated). With L2 and no weight the cylinder ties the Cartesian arm at
+k=100 and its error becomes monotone in k; the v1 statements "the plane is ahead
+at convergence" and "the cylindrical error is not monotone in k" were properties
+of the loss.
+
+### The v2 grid, 5 seeds, both losses
+
+`docs/paper_results/`, printed by `scripts/paper/loss_protocols.py --archive`.
+Every geometry x coupling x {L1, L2} x {16, 32, 64} x 5 seeds, on WCSS. Two
+comparisons, with exact two-sided Mann-Whitney p (the minimum with 5 vs 5 is
+0.008, reached exactly when the seeds separate):
+
+- **Matched loss** (L2 in both, the paper's Tables 2 and 3): cylinder + OT beats
+  the better Cartesian coupling at every k <= 8 at all three sizes with separated
+  seeds (12 of 12 cells); at k=100 no difference is significant (64x64: 0.040 vs
+  0.046, p = 0.15).
+- **Best loss per geometry** (each picks its lowest mean from {L1, L2} x
+  {independent, OT}): the same, except 16x16 at k=8 (p = 0.15); at k=100, 64x64,
+  0.035 (cylinder L1, OT) against 0.032 (Cartesian L1, OT), p = 0.69.
+- **OT against independent pairing on the cylinder** (matched loss, k <= 4):
+  3-60% lower error, seeds separated in 6 of 9 cells.
+
+### What it does not show
+
+- The components split. At 64x64 the cylinder is ahead on amplitude W2 at every
+  k, but the plane is ahead on circular phase W2 at k=8 (32x32 and 64x64, seeds
+  separated) and at k=100 against Cartesian L1 (0.063 vs 0.114, p = 0.008).
+- A tie at k=100 is a non-significant difference with 5 seeds, not an
+  equivalence; the 95% interval at 64x64 still allows the cylinder to be up to
+  about 0.017 worse.
+- The best-loss protocol selects on the evaluation itself; it flatters both
+  geometries equally and is a robustness check, not the headline.

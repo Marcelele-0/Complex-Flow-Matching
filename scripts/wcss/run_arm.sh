@@ -21,41 +21,30 @@ SEED="$5"
 EPOCHS="${6:-40}"
 LOSS_MODE="${LOSS_MODE:-l2u}"
 
-# Cylindrical keys are ignored by the Euclidean manifold and vice versa, so one
-# list serves both geometries.
+# Everything but geometry, coupling, size and seed lives in conf/experiment/.
+# The archived runs were launched with the equivalent explicit overrides;
+# tests/test_paper_results.py checks that both compose to the same config.
 case "$LOSS_MODE" in
-  l2u) L=l2; W=false ;;
-  l1w) L=l1; W=true ;;
-  l1u) L=l1; W=false ;;
-  *) echo "unknown LOSS_MODE=$LOSS_MODE (expected l2u, l1w or l1u)"; exit 2 ;;
+  l2u) EXPERIMENT=paper_unet ;;
+  l1u) EXPERIMENT=paper_unet_l1 ;;
+  l1w) EXPERIMENT=paper_unet_v1loss ;;
+  *) echo "unknown LOSS_MODE=$LOSS_MODE (expected l2u, l1u or l1w)"; exit 2 ;;
 esac
-LOSS=(
-  training.loss.amp_loss_type="$L"
-  training.loss.phase_loss_type="$L"
-  training.loss.phase_amplitude_weighting="$W"
-  training.loss.vel_loss_type="$L"
-)
 COMMON=(
-  dataset=cylinder_toy_field model=c_unet manifold="$M"
-  manifold.spatial_correlation=null
-  training.bridge=noise training.coupling="$C"
-  dataset.crop_size="[$SIDE,$SIDE]" dataset.coupling=0.5
+  +experiment="$EXPERIMENT" manifold="$M" training.coupling="$C"
+  dataset.crop_size="[$SIDE,$SIDE]"
 )
 
-echo "[$(date '+%H:%M:%S')] train $NAME"
-uv run --no-sync python -m cfm.train "${COMMON[@]}" "${LOSS[@]}" \
-  training.epochs="$EPOCHS" training.batch_size=64 \
-  training.grad_clip=null training.compile=false training.seed="$SEED" \
-  dataset.size=8192 \
-  logging.use_wandb=false logging.experiment_name="$NAME"
+echo "[$(date '+%H:%M:%S')] train $NAME ($EXPERIMENT)"
+uv run --no-sync python -m cfm.train "${COMMON[@]}" \
+  training.epochs="$EPOCHS" training.seed="$SEED" logging.experiment_name="$NAME"
 code=$?
 if [ "$code" -ne 0 ]; then echo "FAILED train $NAME exit=$code"; exit "$code"; fi
 
 echo "[$(date '+%H:%M:%S')] evaluate $NAME"
-uv run --no-sync python -m cfm.evaluate "${COMMON[@]}" "${LOSS[@]}" \
+uv run --no-sync python -m cfm.evaluate "${COMMON[@]}" \
   evaluate.run_name="$NAME" evaluate.num_fields=64 evaluate.seed="$SEED" \
-  evaluate.nfe='[1,2,4,8,100]' \
-  logging.use_wandb=false logging.experiment_name="${NAME}_eval"
+  evaluate.nfe='[1,2,4,8,100]' logging.experiment_name="${NAME}_eval"
 code=$?
 if [ "$code" -ne 0 ]; then echo "FAILED evaluate $NAME exit=$code"; exit "$code"; fi
 echo "[$(date '+%H:%M:%S')] done $NAME"

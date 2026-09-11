@@ -1,0 +1,14 @@
+# @package _global_
+# paper_unet with the absolute velocity error in both geometries; the cylinder's
+# phase term stays unweighted, which makes it the counterpart of Cartesian L1
+# (the Cartesian loss has no phase weighting to remove). Used for the
+# best-loss-per-geometry comparison (Appendix table, archives *_l1u_cylindrical
+# and *_l1w_cartesian).
+defaults:
+  - paper_unet
+
+training:
+  loss:
+    amp_loss_type: l1
+    phase_loss_type: l1
+    vel_loss_type: l1

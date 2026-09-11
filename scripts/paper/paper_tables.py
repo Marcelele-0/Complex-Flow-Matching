@@ -38,8 +38,11 @@ import pathlib
 import statistics
 from typing import Any
 
+from omegaconf import OmegaConf
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 EVALUATIONS = ROOT / "outputs" / "evaluate"
+TRAININGS = ROOT / "outputs" / "train"
 ARCHIVE = ROOT / "docs" / "paper_results" / "unet_eval_metrics.json"
 
 SIZES = (16, 32, 64)
@@ -215,11 +218,60 @@ def print_checks(runs: Runs) -> None:
                 print(f"  {LABELS[geometry]:<12} {coupling:<12} {statistics.fmean(values):.3f}")
 
 
+def provenance(name: str, prefix: str) -> dict[str, Any]:
+    """Hydra overrides of one evaluation and of the training run it evaluated.
+
+    Args:
+        name: Unprefixed evaluation name, e.g. ``un_cylindrical_ot_scnull_s0_eval``.
+        prefix: Run-name prefix the evaluation and its training run were written with.
+
+    Returns:
+        ``evaluate_run`` / ``evaluate_overrides`` from the newest evaluation directory
+        (the one :func:`load_outputs` reads the metrics from) and ``train_run`` /
+        ``train_overrides`` from the newest training directory of the same run; a key
+        is absent when its directory is not present locally.
+    """
+    record: dict[str, Any] = {}
+    evaluations = sorted(EVALUATIONS.glob(f"{prefix}{name}/*/metrics.json"))
+    if evaluations:
+        run_dir = evaluations[-1].parent
+        record["evaluate_run"] = run_dir.name
+        record["evaluate_overrides"] = read_overrides(run_dir / ".hydra" / "overrides.yaml")
+    trainings = sorted(TRAININGS.glob(f"{prefix}{name.removesuffix('_eval')}/*/.hydra"))
+    if trainings:
+        record["train_run"] = trainings[-1].parent.name
+        record["train_overrides"] = read_overrides(trainings[-1] / "overrides.yaml")
+    return record
+
+
+def read_overrides(path: pathlib.Path) -> list[str]:
+    """The ``key=value`` override strings Hydra saved for one run.
+
+    Args:
+        path: A run's ``.hydra/overrides.yaml``.
+
+    Returns:
+        The overrides in the order they were given on the command line.
+    """
+    overrides = OmegaConf.to_container(OmegaConf.load(path))
+    assert isinstance(overrides, list), f"{path} is not a list of overrides"
+    return [str(item) for item in overrides]
+
+
 def export(prefix: str, path: pathlib.Path = ARCHIVE, partial: bool = False) -> None:
     """Freeze the current evaluations as the archive the paper cites.
 
-    ``partial`` allows a grid with arms missing, for a supplementary archive
-    that holds one geometry only (e.g. the Cartesian arm under a second loss).
+    Each entry is the evaluation's ``metrics.json`` plus a ``provenance`` record
+    (see :func:`provenance`), so an archive states how every number was produced.
+
+    Args:
+        prefix: Run-name prefix of the evaluations to export (stripped in the archive).
+        path: Archive file to write.
+        partial: Allow arms of the grid to be missing, for a supplementary archive that
+            holds one geometry only (e.g. the Cartesian arm under a second loss).
+
+    Raises:
+        SystemExit: If arms are missing and ``partial`` is false, or nothing matched.
     """
     runs = load_outputs(prefix)
     missing = [name for name in all_names() if name not in runs]
@@ -227,6 +279,8 @@ def export(prefix: str, path: pathlib.Path = ARCHIVE, partial: bool = False) -> 
         raise SystemExit(f"Refusing to export an incomplete archive; missing: {missing}")
     if not runs:
         raise SystemExit(f"No evaluations found for prefix {prefix!r}")
+    for name, run in runs.items():
+        run["provenance"] = provenance(name, prefix)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(runs, indent=1, sort_keys=True) + "\n")
     print(f"Wrote {len(runs)} evaluations to {display(path)}")
