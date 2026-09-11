@@ -82,9 +82,14 @@ def load_outputs(prefix: str) -> Runs:
     return runs
 
 
-def load_archive() -> Runs:
+def display(path: pathlib.Path) -> str:
+    """``path`` relative to the repository when it lies inside it, else absolute."""
+    return str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else str(path)
+
+
+def load_archive(path: pathlib.Path = ARCHIVE) -> Runs:
     """The evaluations the paper's tables were written from."""
-    runs: Runs = json.loads(ARCHIVE.read_text())
+    runs: Runs = json.loads(path.read_text())
     return runs
 
 
@@ -210,15 +215,21 @@ def print_checks(runs: Runs) -> None:
                 print(f"  {LABELS[geometry]:<12} {coupling:<12} {statistics.fmean(values):.3f}")
 
 
-def export(prefix: str) -> None:
-    """Freeze the current evaluations as the archive the paper cites."""
+def export(prefix: str, path: pathlib.Path = ARCHIVE, partial: bool = False) -> None:
+    """Freeze the current evaluations as the archive the paper cites.
+
+    ``partial`` allows a grid with arms missing, for a supplementary archive
+    that holds one geometry only (e.g. the Cartesian arm under a second loss).
+    """
     runs = load_outputs(prefix)
     missing = [name for name in all_names() if name not in runs]
-    if missing:
+    if missing and not partial:
         raise SystemExit(f"Refusing to export an incomplete archive; missing: {missing}")
-    ARCHIVE.parent.mkdir(parents=True, exist_ok=True)
-    ARCHIVE.write_text(json.dumps(runs, indent=1, sort_keys=True) + "\n")
-    print(f"Wrote {len(runs)} evaluations to {ARCHIVE.relative_to(ROOT)}")
+    if not runs:
+        raise SystemExit(f"No evaluations found for prefix {prefix!r}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(runs, indent=1, sort_keys=True) + "\n")
+    print(f"Wrote {len(runs)} evaluations to {display(path)}")
 
 
 def main() -> None:
@@ -238,15 +249,27 @@ def main() -> None:
         default=list(SEEDS),
         help="Seeds to read (the archive has 0 1; the WCSS l2u_ runs have 0 1 2).",
     )
+    parser.add_argument(
+        "--archive-file",
+        type=pathlib.Path,
+        default=ARCHIVE,
+        help="Archive to read (--archive) or write (--export); default: the v1 archive.",
+    )
+    parser.add_argument(
+        "--partial",
+        action="store_true",
+        help="With --export, allow arms to be missing (one-geometry archives).",
+    )
     args = parser.parse_args()
     SEEDS = tuple(args.seeds)
+    archive_file = args.archive_file.resolve()
 
     if args.export:
-        export(args.prefix)
+        export(args.prefix, archive_file, args.partial)
         return
 
-    runs = load_archive() if args.archive else load_outputs(args.prefix)
-    origin = ARCHIVE.relative_to(ROOT) if args.archive else EVALUATIONS.relative_to(ROOT)
+    runs = load_archive(archive_file) if args.archive else load_outputs(args.prefix)
+    origin = display(archive_file) if args.archive else display(EVALUATIONS)
     print(f"Source: {origin}  ({len(runs)} of {len(all_names())} evaluations present)")
     print_table2(runs)
     print_table3(runs)

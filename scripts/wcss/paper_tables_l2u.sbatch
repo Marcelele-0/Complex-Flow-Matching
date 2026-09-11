@@ -17,6 +17,9 @@
 #   Cartesian with the v1 loss at 64x64, 5 seeds (10 tasks):
 #     sbatch --array=0-9 --export=ALL,SIDES=64,GEOMS=euclidean,LOSS_MODE=l1w,PREFIX=l1w_,SEEDS="0 1 2 3 4" \
 #       scripts/wcss/paper_tables_l2u.sbatch
+#   the cylinder with L1 and an unweighted phase term, all sizes, 5 seeds (30 tasks):
+#     sbatch --array=0-29 --export=ALL,GEOMS=cylindrical,LOSS_MODE=l1u,PREFIX=l1u_,SEEDS="0 1 2 3 4" \
+#       scripts/wcss/paper_tables_l2u.sbatch
 #SBATCH --job-name=cyfm-l2u
 #SBATCH --partition=lem-gpu-short
 #SBATCH --nodes=1
