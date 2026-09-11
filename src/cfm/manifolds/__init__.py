@@ -72,6 +72,7 @@ def build_manifold(cfg: DictConfig) -> BaseManifold:
                 phase_weight=manifold_cfg.get("phase_weight", 1.0),
                 phase_spread=manifold_cfg.get("phase_spread", None),
                 spatial_correlation=manifold_cfg.get("spatial_correlation", None),
+                phase_amplitude_weighting=loss_cfg.get("phase_amplitude_weighting", True),
             )
 
         case "euclidean":

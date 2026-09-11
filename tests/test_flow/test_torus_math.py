@@ -110,6 +110,32 @@ def test_phase_loss_cosine() -> None:
     assert torch.isclose(l_cos_pi, torch.tensor(2.0), atol=1e-6)
 
 
+def test_phase_amplitude_weighting_toggle() -> None:
+    """A phase error at a zero-amplitude pixel counts only when weighting is off.
+
+    Two pixels with clean amplitudes 0 and 1, phase error 1.0 at the dark one:
+    weighted -> 0.0 (weight 0), unweighted -> 0.5 (mean over two pixels), which
+    must equal the loss computed without ``target_x1`` at all.
+    """
+    pred = torch.zeros(1, 2, 1, 2)
+    target = torch.zeros(1, 2, 1, 2)
+    pred[0, 1, 0, 0] = 1.0  # phase error at the dark pixel only
+
+    target_x1 = torch.zeros(1, 3, 1, 2)
+    target_x1[0, 0, 0, 1] = 1.0  # amplitude: dark pixel 0, bright pixel 1
+
+    weighted = DecoupledCylindricalLoss(phase_amplitude_weighting=True)
+    unweighted = DecoupledCylindricalLoss(phase_amplitude_weighting=False)
+
+    _, _, l_phi_on, _ = weighted(pred, target, target_x1)
+    _, _, l_phi_off, _ = unweighted(pred, target, target_x1)
+    _, _, l_phi_no_x1, _ = unweighted(pred, target)
+
+    assert torch.isclose(l_phi_on, torch.tensor(0.0), atol=1e-6)
+    assert torch.isclose(l_phi_off, torch.tensor(0.5), atol=1e-6)
+    assert torch.isclose(l_phi_off, l_phi_no_x1)
+
+
 def test_hf_loss_disabled_and_enabled() -> None:
     """loss_hf must be zero when lambda_hf=0 and positive on a nonzero error otherwise."""
     pred = torch.ones(1, 2, 8, 8)

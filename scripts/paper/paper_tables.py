@@ -223,6 +223,7 @@ def export(prefix: str) -> None:
 
 def main() -> None:
     """Print both tables and the per-seed checks from one source."""
+    global SEEDS
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--archive", action="store_true", help="Read the shipped archive.")
@@ -230,7 +231,15 @@ def main() -> None:
     parser.add_argument(
         "--prefix", default="", help="Run-name prefix used by the table scripts (PREFIX)."
     )
+    parser.add_argument(
+        "--seeds",
+        type=int,
+        nargs="+",
+        default=list(SEEDS),
+        help="Seeds to read (the archive has 0 1; the WCSS l2u_ runs have 0 1 2).",
+    )
     args = parser.parse_args()
+    SEEDS = tuple(args.seeds)
 
     if args.export:
         export(args.prefix)

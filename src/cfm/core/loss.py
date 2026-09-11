@@ -55,6 +55,7 @@ class CylindricalLoss(BaseLoss):
         lambda_phase: float = 1.0,
         lambda_hf: float = 0.0,
         hf_boost_factor: float = 4.0,
+        phase_amplitude_weighting: bool = True,
     ) -> None:
         super().__init__()
         from cfm.flow.torus_math import DecoupledCylindricalLoss
@@ -65,6 +66,7 @@ class CylindricalLoss(BaseLoss):
             lambda_phase=lambda_phase,
             lambda_hf=lambda_hf,
             hf_boost_factor=hf_boost_factor,
+            phase_amplitude_weighting=phase_amplitude_weighting,
         )
 
     def forward(

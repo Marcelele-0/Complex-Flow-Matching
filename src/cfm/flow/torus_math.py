@@ -20,6 +20,12 @@ class DecoupledCylindricalLoss(nn.Module):
         lambda_phase: Weight on phase velocity loss term.
         lambda_hf: High-frequency spectral penalty weight.
         hf_boost_factor: Radial slope of high-frequency weighting.
+        phase_amplitude_weighting: Weight the phase error by the clean amplitude
+            ``A_1 / mean(A_1)`` when ``target_x1`` is given. ``False`` makes the
+            phase term an unweighted regression like the amplitude term, whose
+            minimiser is then a function of ``(x_t, t)`` alone -- the weight
+            depends on ``x_1``, so with it on the phase channel regresses a
+            reweighted conditional statistic that the amplitude channel does not.
     """
 
     def __init__(
@@ -29,6 +35,7 @@ class DecoupledCylindricalLoss(nn.Module):
         lambda_phase: float = 1.0,
         lambda_hf: float = 0.0,
         hf_boost_factor: float = 4.0,
+        phase_amplitude_weighting: bool = True,
     ) -> None:
         super().__init__()
         if amp_loss_type not in VALID_AMP_LOSSES:
@@ -45,6 +52,7 @@ class DecoupledCylindricalLoss(nn.Module):
         self.lambda_phase = lambda_phase
         self.lambda_hf = lambda_hf
         self.hf_boost_factor = hf_boost_factor
+        self.phase_amplitude_weighting = phase_amplitude_weighting
 
         self.amp_loss_fn = (
             nn.L1Loss(reduction="mean") if amp_loss_type == "l1" else nn.MSELoss(reduction="mean")
@@ -89,7 +97,7 @@ class DecoupledCylindricalLoss(nn.Module):
         else:
             raw_phase_err = self.phase_loss_fn(pred_v[:, 1:2], target_v[:, 1:2])
 
-        if target_x1 is not None:
+        if target_x1 is not None and self.phase_amplitude_weighting:
             mask = target_x1[:, 0:1].detach().abs()
             mask = mask / (mask.mean() + 1e-8)
             loss_phi = (raw_phase_err * mask).mean()

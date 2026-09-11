@@ -88,6 +88,11 @@ loss:
   amp_loss_type: "l1"
   phase_loss_type: "l1"
   lambda_phase: 1.0
+  # Weight the phase error by the clean amplitude A_1 / mean(A_1). The Euclidean
+  # arm has no counterpart, and the weight depends on x_1, so the phase channel
+  # regresses a reweighted conditional statistic the amplitude channel does not.
+  # false is the unweighted loss, kept as a one-flag ablation.
+  phase_amplitude_weighting: true
 
   # --- euclidean only ---
   # Velocity loss over (v_re, v_im). "l1" matches the cylindrical method, so
