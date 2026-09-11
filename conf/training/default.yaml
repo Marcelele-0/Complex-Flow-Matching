@@ -34,12 +34,12 @@ bridge: "noise"
 
 # Continue from paths.state_dir/last.pt when that file exists, instead of starting at
 # epoch 0. Off by default because it makes a rerun under an existing experiment_name
-# silently continue rather than restart - the SLURM scripts turn it on, since there a
-# restart is the scheduler's decision rather than the user's.
+# silently continue rather than restart - turn it on for jobs a cluster scheduler may
+# requeue, since there a restart is the scheduler's decision rather than the user's.
 auto_resume: false
 
 # Path the training loop watches for a "wrap up now" flag, checked at the end of each
-# epoch. scripts/slurm/train_ddp.sbatch sets it and touches the file when Slurm warns
+# epoch. A batch script sets it and touches the file when the scheduler warns
 # that the wall clock is close, so the run saves its resume state and exits instead of
 # being killed mid-epoch. A signal cannot do this job: it does not survive the relay
 # through srun, uv and the torchrun agent. null outside a batch job.

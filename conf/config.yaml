@@ -6,6 +6,5 @@ defaults:
   - logging: default
   - model: c_unet_attention
   - training: default
-  - generate: default
   - evaluate: default
   - _self_

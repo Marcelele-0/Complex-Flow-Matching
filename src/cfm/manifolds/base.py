@@ -1,6 +1,6 @@
 """The interface every geometry implements, and the only thing the entry points know.
 
-``train.py``, ``generate.py`` and ``evaluate.py`` are written against
+``train.py`` and ``evaluate.py`` are written against
 :class:`Manifold` and nothing else. Everything that is *not* a member below -
 the dataset, the U-Net trunk, the optimizer, the Heun schedule, the metrics, the
 accumulator, the checkpoint plumbing - is therefore shared by construction and

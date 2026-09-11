@@ -129,7 +129,7 @@ def any_across_ranks(flag: bool, device: torch.device) -> bool:
 def unwrap_model(model: torch.nn.Module) -> torch.nn.Module:
     """Strip ``DistributedDataParallel`` and ``torch.compile`` wrappers, in any order.
 
-    Checkpoints have to hold the bare module's keys: ``generate.py`` and
+    Checkpoints have to hold the bare module's keys: ``evaluate.py``,
     ``evaluate.py`` load them into a model that is neither compiled nor wrapped, and
     a stored ``module.``/``_orig_mod.`` prefix would make that fail.
     """

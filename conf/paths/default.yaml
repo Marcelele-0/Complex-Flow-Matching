@@ -8,9 +8,9 @@ checkpoint_dir: ${paths.output_dir}/checkpoints
 #
 # Also deliberately outside outputs/train/: resolve_checkpoint() globs that tree for
 # the newest .pt, and `last.pt` is a payload dict rather than a bare state dict, so
-# generate.py and evaluate.py would fail on it.
+# evaluate.py would fail on it.
 #
 # Keyed by experiment_name, which is already this repo's run identity (it names the
-# Hydra run dir, the W&B run and generate/evaluate's run_name). Two concurrent runs
+# Hydra run dir, the W&B run and evaluate's run_name). Two concurrent runs
 # under one experiment_name would fight over the file - give them different names.
 state_dir: outputs/state/${logging.experiment_name}
