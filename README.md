@@ -63,6 +63,22 @@ cells), OT on the Cartesian arm at 16x16 (0.421 -> 0.185), and the straightness 
 uv run python scripts/paper/paper_tables.py --archive
 ```
 
+**The v2 tables (matched loss, 5 seeds).** Tables 2 and 3 of the revised paper and
+its appendix table retrain the same grid with the loss fixed after the ablation of
+`docs/COUPLING_NOTES.md` section 9: L2 in both geometries, with an unweighted phase
+term on the cylinder, and 5 seeds. The protocol is `conf/experiment/paper_unet.yaml`
+(L1 variants: `paper_unet_l1`, `paper_unet_v1loss`); runs, archives and their
+provenance are described in `docs/paper_results/README.md`.
+
+| v2 result | command | runtime |
+| --- | --- | --- |
+| Tables 2-3 and the appendix table, all 120 runs | `sbatch scripts/wcss/paper_tables_l2u.sbatch` (variants in its header) | ~15 min on WCSS |
+| one run, locally | `LOSS_MODE=l2u bash scripts/wcss/run_arm.sh NAME SIDE GEOMETRY COUPLING SEED` | ~20 min at 64x64 |
+| the loss ablation that fixed the protocol | `bash scripts/paper/ablation_loss32.sh LOGDIR` | ~1 h |
+| both loss protocols, with p-values | `uv run python scripts/paper/loss_protocols.py --archive` | seconds |
+| the LaTeX of Tables 2, 3 and the appendix table | `uv run python scripts/paper/latex_tables.py` | seconds |
+| archive integrity and config provenance | `uv run pytest tests/test_paper_results.py` | ~10 s |
+
 **Determinism.** The network-free scripts (Tables 1 and 4, Sec. 5.3) are seeded through
 explicit generators and reprint the paper's numbers exactly. Training is seeded, but GPU
 kernels are not bitwise deterministic, so a retrained model matches within the seed

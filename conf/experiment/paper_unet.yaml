@@ -1,0 +1,45 @@
+# @package _global_
+# The U-Net experiment behind Tables 2 and 3 (arXiv v2 protocol).
+#
+# Synthetic complex fields (copula target, rho 0.5, correlation length 4), the
+# c_unet, 40 epochs, white uniform prior, and the matched loss: squared velocity
+# error in both geometries, with an unweighted phase term on the cylinder.
+# Geometry, coupling, field size and seed are chosen on the command line, e.g.
+#
+#   uv run python -m cfm.train +experiment=paper_unet \
+#       manifold=cylindrical training.coupling=ot \
+#       dataset.crop_size=[64,64] training.seed=0 \
+#       logging.experiment_name=l2u_un_cylindrical_ot_scnull_s0
+#
+# and evaluated with the same experiment and
+#   evaluate.run_name=<name> evaluate.num_fields=64 evaluate.seed=<seed>
+#   evaluate.nfe=[1,2,4,8,100]
+#
+# Loss variants: paper_unet_l1 (L1, unweighted phase) and paper_unet_v1loss
+# (L1, amplitude-weighted phase: the arXiv v1 objective). docs/paper_results/
+# README.md maps each archived evaluation to the experiment that produced it.
+defaults:
+  - override /dataset: cylinder_toy_field
+  - override /model: c_unet
+
+dataset:
+  size: 8192
+  coupling: 0.5
+
+manifold:
+  spatial_correlation: null
+
+training:
+  bridge: noise
+  epochs: 40
+  batch_size: 64
+  grad_clip: null
+  compile: false
+  loss:
+    amp_loss_type: l2
+    phase_loss_type: l2
+    phase_amplitude_weighting: false
+    vel_loss_type: l2
+
+logging:
+  use_wandb: false
