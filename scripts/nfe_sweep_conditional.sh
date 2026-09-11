@@ -10,7 +10,7 @@
 # single coarse Euler step does.
 #
 # Use scripts/nfe_sweep_unconditional.sh for the question about integration.
-# See docs/GEOMETRY_NOTES.md section 4.
+# See docs/notes/GEOMETRY_NOTES.md section 4.
 set -u
 cd /home/marcel/Programming/papers/cfm
 LOG_DIR="$1"; mkdir -p "$LOG_DIR"

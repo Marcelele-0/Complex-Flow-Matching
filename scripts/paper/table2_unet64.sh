@@ -9,7 +9,7 @@
 # k = 1, 2, 4, 8, 100 Heun steps on 64 fields. About 20 minutes per run on an RTX 4070
 # Ti SUPER, ~2.7 h in total. Then prints the table with scripts/paper/paper_tables.py.
 #
-# Run names match the archived evaluations (docs/paper_results/unet_eval_metrics.json),
+# Run names match the archived evaluations (docs/reproduce/paper_results/unet_eval_metrics.json),
 # so `paper_tables.py --archive` prints the paper's numbers for comparison. Retraining
 # is seeded but GPU kernels are not bitwise deterministic: expect agreement within the
 # seed spread, not to the digit. Re-evaluating a fixed checkpoint is exact.

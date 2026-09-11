@@ -82,7 +82,7 @@ uv run pytest tests/test_paper_results.py
 
 # print Tables 2-3 and the per-seed checks from an archive
 uv run python scripts/paper/paper_tables.py --archive \
-    --archive-file docs/paper_results/unet_eval_metrics_l2u.json --seeds 0 1 2 3 4
+    --archive-file docs/reproduce/paper_results/unet_eval_metrics_l2u.json --seeds 0 1 2 3 4
 
 # both loss protocols with bootstrap intervals and exact Mann-Whitney p
 uv run python scripts/paper/loss_protocols.py --archive [--metric w2_phase_circular]

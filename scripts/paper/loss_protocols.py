@@ -16,7 +16,7 @@ seeds per arm the smallest attainable p is 2/252 = 0.008, reached exactly when
 the seeds separate.
 
 Sources: ``outputs/evaluate`` by run-name prefix (default), or with
-``--archive`` the three archives in ``docs/paper_results/``.
+``--archive`` the three archives in ``docs/reproduce/paper_results/``.
 
 Usage::
 
@@ -37,7 +37,7 @@ from scipy.stats import mannwhitneyu
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 EVALUATIONS = ROOT / "outputs" / "evaluate"
-RESULTS = ROOT / "docs" / "paper_results"
+RESULTS = ROOT / "docs" / "reproduce" / "paper_results"
 
 SIDES = (16, 32, 64)
 STEPS = (1, 2, 4, 8, 100)
@@ -153,7 +153,9 @@ def print_protocol(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--archive", action="store_true", help="Read docs/paper_results/.")
+    parser.add_argument(
+        "--archive", action="store_true", help="Read docs/reproduce/paper_results/."
+    )
     parser.add_argument("--metric", choices=METRICS, default=METRICS[0])
     parser.add_argument("--bootstrap-seed", type=int, default=0)
     args = parser.parse_args()

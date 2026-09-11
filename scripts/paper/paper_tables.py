@@ -19,7 +19,7 @@ Two sources:
 
 * ``outputs/evaluate`` (default): the newest ``metrics.json`` of each run, i.e.
   whatever you trained yourself;
-* ``--archive``: ``docs/paper_results/unet_eval_metrics.json``, the evaluations
+* ``--archive``: ``docs/reproduce/paper_results/unet_eval_metrics.json``, the evaluations
   the paper was written from, shipped so the tables can be checked without
   retraining. ``--export`` rewrites it from ``outputs/evaluate``.
 
@@ -43,7 +43,7 @@ from omegaconf import OmegaConf
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 EVALUATIONS = ROOT / "outputs" / "evaluate"
 TRAININGS = ROOT / "outputs" / "train"
-ARCHIVE = ROOT / "docs" / "paper_results" / "unet_eval_metrics.json"
+ARCHIVE = ROOT / "docs" / "reproduce" / "paper_results" / "unet_eval_metrics.json"
 
 SIZES = (16, 32, 64)
 STEPS = (1, 2, 4, 8, 100)
