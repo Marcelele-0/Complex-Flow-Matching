@@ -192,6 +192,8 @@ class CylindricalManifold(BaseManifold):
         spatial_correlation: Gaussian smoothing sigma, in pixels, applied to the
             prior's latents. ``None`` keeps the prior white. The pointwise law is
             unchanged either way; see :func:`sample_cylindrical_noise_correlated`.
+        phase_amplitude_weighting: Weight the phase error by the clean amplitude.
+            See :class:`cfm.flow.torus_math.DecoupledCylindricalLoss`.
     """
 
     name = "cylindrical"
@@ -208,6 +210,7 @@ class CylindricalManifold(BaseManifold):
         phase_weight: float = 1.0,
         phase_spread: float | None = None,
         spatial_correlation: float | None = None,
+        phase_amplitude_weighting: bool = True,
     ) -> None:
         if phase_weight < 0.0:
             raise ValueError(f"phase_weight must be non-negative, got {phase_weight}")
@@ -229,6 +232,7 @@ class CylindricalManifold(BaseManifold):
             lambda_phase=lambda_phase,
             lambda_hf=lambda_hf,
             hf_boost_factor=hf_boost_factor,
+            phase_amplitude_weighting=phase_amplitude_weighting,
         )
 
     @property

@@ -86,6 +86,22 @@ class TestRegistry:
         assert manifold.noise_prior == "gaussian"
         assert manifold._loss.loss_type == "mse"
 
+    def test_cylindrical_reads_phase_amplitude_weighting(self) -> None:
+        default = build_manifold(OmegaConf.create({"manifold": {"name": "cylindrical"}}))
+        off = build_manifold(
+            OmegaConf.create(
+                {
+                    "manifold": {"name": "cylindrical"},
+                    "training": {"loss": {"phase_amplitude_weighting": False}},
+                }
+            )
+        )
+
+        assert isinstance(default, CylindricalManifold)
+        assert isinstance(off, CylindricalManifold)
+        assert default._loss.phase_amplitude_weighting is True
+        assert off._loss.phase_amplitude_weighting is False
+
     def test_unknown_noise_prior_raises(self) -> None:
         with pytest.raises(ValueError, match="noise_prior must be one of"):
             EuclideanManifold(noise_prior="cauchy")
