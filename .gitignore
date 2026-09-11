@@ -73,3 +73,9 @@ PROJECT_MEMORY.md
 complex_diffusion_reference/
 anonymous_submission_build/
 *.zip
+
+# Claude Code specification
+CLAUDE.md
+
+# Local Overleaf git clone (holds the paper sources and an access token in its .git/config)
+overleaf_cache/
