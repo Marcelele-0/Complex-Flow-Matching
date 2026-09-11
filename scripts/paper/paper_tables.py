@@ -1,7 +1,7 @@
 """Print Tables 2 and 3 of the paper, and the per-seed checks quoted in its text.
 
-Table 2 is the 64x64 comparison (``scripts/paper/table2_unet64.sh``); Table 3
-adds 16x16 and 32x32 (``scripts/paper/table3_unet_sizes.sh``) and reuses the
+Table 2 is the 64x64 comparison (``conf/experiment/table2_unet64.yaml``); Table 3
+adds 16x16 and 32x32 (``conf/experiment/table3_unet_scaling.yaml``) and reuses the
 64x64 runs. Every cell is the mean over seeds of the sliced W2 between generated
 and reference complex values after k solver steps (Heun, NFE = 2k - 1).
 
@@ -9,9 +9,9 @@ Besides the tables it prints the statements in Section 5 that rest on per-seed
 evidence rather than on means:
 
 * cylinder + joint OT against the best Cartesian arm, at every size and k;
-* joint OT against independent pairing on the cylinder at k <= 4 (the 11-44%
-  reduction, seeds separated in 7 of 9 cells);
-* OT on the Cartesian arm at 16x16 (0.421 -> 0.185 at k = 1);
+* joint OT against independent pairing on the cylinder at k <= 4 (the reduction
+  and the number of cells whose seeds separate);
+* OT on the Cartesian arm at 16x16, k = 1;
 * straightness of every 64x64 arm ("both geometries fit their targets equally
   straight").
 

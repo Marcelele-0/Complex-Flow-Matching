@@ -1,0 +1,32 @@
+# @package _global_
+# Table 2 -- spatial field synthesis at 64x64.
+#
+# Both geometries x both couplings under the matched loss (paper_unet: squared
+# velocity error, unweighted phase term), evaluated at k = 1, 2, 4, 8, 100 Heun
+# steps. Archived result: docs/reproduce/paper_results/unet_eval_metrics_l2u.json.
+#
+#   uv run python scripts/paper/reproduce.py table2_unet64              # the table
+#   uv run python scripts/paper/reproduce.py table2_unet64 --seeds 0    # quick check
+#
+# One cell by hand (this config includes the protocol):
+#   uv run python -m cfm.train +experiment=table2_unet64 manifold=cylindrical \
+#       training.coupling=ot dataset.crop_size=[64,64] training.seed=0 \
+#       logging.experiment_name=my_run
+defaults:
+  - paper_unet
+  - _self_
+
+paper:
+  name: Table 2 -- spatial field synthesis, 64x64
+  section: Table 2 (Section 5.2)
+  runtime: ~20 min per run on an RTX 4070 Ti SUPER; 20 runs
+  kind: unet_grid
+  sides: [64]
+  seeds: [0, 1, 2, 3, 4]
+  arms:
+    - experiment: paper_unet
+      prefix: l2u_
+      geometries: [euclidean, cylindrical]
+      couplings: [independent, ot]
+  report:
+    - [scripts/paper/paper_tables.py, --prefix, "{tag}l2u_", --seeds, "{seeds}"]

@@ -64,13 +64,24 @@ def run_name(side: int, geometry: str, coupling: str, seed: int) -> str:
     return f"unsz_{geometry}_{coupling}_{side}_s{seed}_eval"
 
 
-def load(archive: bool) -> dict[str, Runs]:
-    """loss label -> evaluation name -> metrics."""
+def load(archive: bool, tag: str = "") -> dict[str, Runs]:
+    """Evaluations of every loss variant.
+
+    Args:
+        archive: Read the archives in ``docs/reproduce/paper_results/`` instead of
+            ``outputs/evaluate``.
+        tag: With ``archive`` false, a run-name tag prepended to each prefix, as
+            written by ``reproduce.py --tag``.
+
+    Returns:
+        loss label -> unprefixed evaluation name -> metrics.
+    """
     sources: dict[str, Runs] = {}
     for label, (prefix, filename, _) in SOURCES.items():
         if archive:
             sources[label] = json.loads((RESULTS / filename).read_text())
             continue
+        prefix = tag + prefix
         runs: Runs = {}
         for path in sorted(EVALUATIONS.glob(f"{prefix}*_eval")):
             found = sorted(path.glob("*/metrics.json"))
@@ -152,15 +163,21 @@ def print_protocol(
 
 
 def main() -> None:
+    """Print both protocols for one metric."""
+    global SEEDS, SIDES
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
         "--archive", action="store_true", help="Read docs/reproduce/paper_results/."
     )
     parser.add_argument("--metric", choices=METRICS, default=METRICS[0])
     parser.add_argument("--bootstrap-seed", type=int, default=0)
+    parser.add_argument("--tag", default="", help="Run-name tag of reproduce.py --tag.")
+    parser.add_argument("--seeds", type=int, nargs="+", default=list(SEEDS))
+    parser.add_argument("--sides", type=int, nargs="+", default=list(SIDES))
     args = parser.parse_args()
+    SEEDS, SIDES = tuple(args.seeds), tuple(args.sides)
 
-    sources = load(args.archive)
+    sources = load(args.archive, args.tag)
     rng = np.random.default_rng(args.bootstrap_seed)
     print_protocol(
         "MATCHED LOSS (L2, unweighted phase, both geometries)",

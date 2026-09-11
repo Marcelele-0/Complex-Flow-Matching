@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# One arm of Tables 2/3, train then evaluate. Everything except the loss is
-# identical to scripts/paper/table2_unet64.sh and table3_unet_sizes.sh.
+# One run of the U-Net experiments, train then evaluate, through conf/experiment/.
+# scripts/paper/reproduce.py runs whole specs; this runs a single cell (the WCSS array uses it).
 #
 #   LOSS_MODE=l2u bash scripts/paper/run_arm.sh NAME SIDE MANIFOLD COUPLING SEED [EPOCHS]
 #
 # LOSS_MODE:
 #   l2u  (default) the fair loss: L2 in both geometries, unweighted phase term
-#        (see scripts/paper/ablation_loss32.sh)
+#        (see conf/experiment/ablation_loss32.yaml)
 #   l1w  the arXiv v1 loss: L1 in both geometries, amplitude-weighted phase term
 #   l1u  L1 in both geometries, unweighted phase term -- the cylinder's
 #        counterpart of Cartesian L1, which has no phase weighting to remove

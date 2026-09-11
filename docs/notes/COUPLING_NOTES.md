@@ -1,13 +1,20 @@
 # The coupling is not the sort: two gates on synthetic data
 
-Companion to `GEOMETRY_NOTES.md`. Everything here is measured on an analytic
+Everything here is measured on an analytic
 target with no MRI cohort involved, which is the point: on images the two
 geometries differ in loss, in input representation and in prior, and those three
 differences invalidate any comparison between them. On single complex numbers
 all three can be removed by construction, so what is left is the geometry, the
 coupling and the integrator.
 
-Recorded 2026-09-09/10. Raw console output in `docs/reproduce/gate_artefacts/`.
+Recorded 2026-09-09/10.
+
+**Removed from the tree on 2026-09-11.** The exploratory scripts quoted below
+(`scripts/sweeps/`, `scripts/coupling_gate_b.py`, `scripts/paper/ablation_loss32.sh`)
+and their raw console output (`gate_artefacts/`, formerly `docs/reproduce/gate_artefacts/`)
+are no longer checked out; the numbers here are the record. Recover any of them with
+`git show 1d12a6f:<path>`, e.g. `git show 1d12a6f:docs/reproduce/gate_artefacts/dim_sweep.txt`.
+The paper's own results are reproduced from the configs in `conf/experiment/` (see the README).
 
 ---
 
@@ -100,7 +107,7 @@ The factorised cost is **invariant in rho** while the true optimum rises. A
 number that beats the optimum is not a better solution; it is the signature of an
 infeasible one.
 
-`docs/reproduce/gate_artefacts/gate_a_factorised_coupling.png` shows it directly: the three
+`gate_artefacts/gate_a_factorised_coupling.png` shows it directly: the three
 panels of the coupled cloud are indistinguishable across rho.
 
 ### Consequence
@@ -288,7 +295,7 @@ solver steps and the Heun solver makes NFE = `2k - 1`.
 At prior correlation 4, k=2, per seed: cylindrical OT `[0.106, 0.106]` against the
 best Cartesian arm `[0.130, 0.132]`, and cylindrical independent `[0.137, 0.135]`.
 At k=4 the arms overlap. Raw per-seed values in
-`docs/reproduce/gate_artefacts/smooth_prior_sweep.txt`.
+`gate_artefacts/smooth_prior_sweep.txt`.
 
 ### A measurement defect, found and fixed
 
@@ -299,7 +306,7 @@ regression than the one the model was fitted to. It now scores under
 reproduced exactly (largest difference 0.0), and straightness barely moved:
 cylindrical OT reads 0.974 on Table 1 (was 0.972) and 0.947 at prior correlation 4
 (was 0.952). The conclusion drawn from the defective number survives the correct
-one. `docs/reproduce/gate_artefacts/straightness_reeval.txt` (a one-off check, kept as a historical record).
+one. `gate_artefacts/straightness_reeval.txt` (a one-off check, kept as a historical record).
 
 ### Reading
 
@@ -414,7 +421,7 @@ training-domain reference:
 Per seed, cylindrical OT against Cartesian OT: k=2 `[0.175, 0.168]` vs
 `[0.319, 0.336]`, k=4 `[0.163, 0.164]` vs `[0.255, 0.259]`, k=8 `[0.094, 0.133]`
 vs `[0.134, 0.109]` (overlapping). Raw tables in
-`docs/reproduce/gate_artefacts/unet_prior_sweep.txt`.
+`gate_artefacts/unet_prior_sweep.txt`.
 
 - **The U-Net learns spatial structure from white noise.** Generated lag-1
   amplitude correlation 0.964-0.967 against 0.956 in the data, in both
@@ -441,7 +448,7 @@ All on the training-domain reference where a trained model is involved.
 
 ### Minibatch OT against dimension, and patch-level coupling
 
-`scripts/coupling_dimension.py`, network-free. `docs/reproduce/gate_artefacts/coupling_dimension.txt`.
+`scripts/coupling_dimension.py`, network-free. `gate_artefacts/coupling_dimension.txt`.
 
 | field | dimension | OT cost reduction | share of batch reordered | spread of pairwise costs |
 | --- | --- | --- | --- | --- |
@@ -472,7 +479,7 @@ untested proposal whose seams appear at assembly instead.
 
 ### Dimension sweep, MLP, independent coupling
 
-`scripts/sweeps/dim_sweep.sh`, `docs/reproduce/gate_artefacts/dim_sweep.txt`. Price of one step,
+`scripts/sweeps/dim_sweep.sh`, `gate_artefacts/dim_sweep.txt`. Price of one step,
 `W2(k=1) - W2(k=100)` sliced, per seed:
 
 | field | cylindrical | Cartesian | ratio |
@@ -487,7 +494,7 @@ is equally poor at one step and at a hundred.
 
 ### Phase prior, cylindrical arm only, MLP, independent coupling
 
-`scripts/sweeps/phase_prior.sh`, `docs/reproduce/gate_artefacts/phase_prior_sweep.txt`.
+`scripts/sweeps/phase_prior.sh`, `gate_artefacts/phase_prior_sweep.txt`.
 `cylinder_toy_iid`, 64x64, rho = 0.5, two seeds.
 
 | phase spread | straightness | phase W2, k=1 | phase W2, k=100 | amplitude W2, k=100 | sliced W2, k=1 | sliced W2, k=100 |
@@ -507,7 +514,7 @@ shared with a Cartesian arm.
 ### Angular velocity of the bridges
 
 `scripts/bridge_angular_velocity.py`, network-free,
-`docs/reproduce/gate_artefacts/bridge_angular_velocity.txt`. At rho = 0.5 over a million pairs:
+`gate_artefacts/bridge_angular_velocity.txt`. At rho = 0.5 over a million pairs:
 the Cartesian chord under independent pairing has median peak angular velocity
 2.81, q99.9 1566, 46.0% of chords above pi, and a power-law tail of index 1.006,
 which means an infinite expected peak; under minibatch OT the median is 0.31 and
@@ -548,8 +555,8 @@ of an earlier plan, not the paper's Table 1 (which is the bridge table).
 | Smooth prior, MLP | `bash scripts/sweeps/smooth_prior.sh LOGDIR` | `smooth_prior_sweep.txt` | 3, 5 |
 | U-Net, 64x64 | `bash scripts/sweeps/unet_prior.sh LOGDIR` then `uv run python scripts/sweeps/analyse_unet.py` | `unet_prior_sweep.txt` | 5 |
 | U-Net, 32x32 and 16x16 | `bash scripts/sweeps/unet_size.sh LOGDIR` then `uv run python scripts/sweeps/analyse_unet_size.py` | `unet_size_sweep.txt` | 8 |
-| Loss ablation, 32x32 | `bash scripts/paper/ablation_loss32.sh LOGDIR` then `uv run python scripts/paper/ablation_tables.py` | console | 9 |
-| v2 grid, both losses, 5 seeds | `bash scripts/paper/tables23_v2.sh` (`LOSS_MODE=l1u` / `l1w` for the L1 arms) | `docs/reproduce/paper_results/unet_eval_metrics_{l2u,l1u_cylindrical,l1w_cartesian}.json` | 9 |
+| Loss ablation, 32x32 | `uv run python scripts/paper/reproduce.py ablation_loss32` | console | 9 |
+| v2 grid, both losses, 5 seeds | `uv run python scripts/paper/reproduce.py tableA_loss_protocols` | `docs/reproduce/paper_results/unet_eval_metrics_{l2u,l1u_cylindrical,l1w_cartesian}.json` | 9 |
 | Loss protocols, statistics | `uv run python scripts/paper/loss_protocols.py --archive` | console | 9 |
 
 **The v2 paper** reads its U-Net tables from the three archives above; their
@@ -563,7 +570,7 @@ White prior, `c_unet`, `cylinder_toy_field` with correlation length 4 pixels at
 every size, rho = 0.5, two seeds. 16x16 and 32x32 from
 `scripts/sweeps/unet_size.sh`, 64x64 from the white-prior arm of
 `unet_prior.sh`; tables from `scripts/sweeps/analyse_unet_size.py`,
-`docs/reproduce/gate_artefacts/unet_size_sweep.txt`. Sliced W2, cylinder with OT against the
+`gate_artefacts/unet_size_sweep.txt`. Sliced W2, cylinder with OT against the
 Cartesian arm with OT (the better Cartesian arm at every entry that decides):
 
 | field | arm | k=1 | k=2 | k=4 | k=8 | k=100 |
@@ -615,7 +622,7 @@ the weight off.
 
 ### Ablation, 32x32, 3 seeds, joint OT
 
-`scripts/paper/ablation_loss32.sh`, local RTX 4070 Ti SUPER. Sliced W2, mean over
+`conf/experiment/ablation_loss32.yaml` (then run with the equivalent, since removed, `scripts/paper/ablation_loss32.sh`), local RTX 4070 Ti SUPER. Sliced W2, mean over
 seeds; the weighted L1 rows reproduce the v1 archive (0.121 against 0.114 / 0.134).
 
 | arm | k=1 | k=4 | k=100 | phase W2, k=100 |

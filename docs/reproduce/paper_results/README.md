@@ -80,13 +80,12 @@ uv run python scripts/paper/loss_protocols.py --archive [--metric w2_phase_circu
 # regenerate the LaTeX the paper includes
 uv run python scripts/paper/latex_tables.py
 
-# retrain one run
-LOSS_MODE=l2u bash scripts/paper/run_arm.sh l2u_un_cylindrical_ot_scnull_s0 64 cylindrical ot 0
+# retrain a result from its config in conf/experiment/ (resumes if interrupted)
+uv run python scripts/paper/reproduce.py tableA_loss_protocols
 
-# retrain the whole v2 grid, one run after another (resumes if interrupted)
-bash scripts/paper/tables23_v2.sh                  # matched loss, both geometries
-LOSS_MODE=l1u bash scripts/paper/tables23_v2.sh    # cylinder with L1
-LOSS_MODE=l1w bash scripts/paper/tables23_v2.sh    # Cartesian with L1
+# or a quick check with one seed at 16x16
+uv run python scripts/paper/reproduce.py tableA_loss_protocols \
+    --seeds 0 --sides 16 --tag quick_
 ```
 
 After retraining, export an archive with `paper_tables.py --export --prefix PREFIX

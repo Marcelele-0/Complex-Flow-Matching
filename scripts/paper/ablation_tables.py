@@ -1,4 +1,4 @@
-"""Summarise the loss ablation written by ``scripts/paper/ablation_loss32.sh``.
+"""Summarise the loss ablation of ``conf/experiment/ablation_loss32.yaml``.
 
 For every arm and solver step count it prints the mean over seeds of four
 metrics -- sliced W2 of the complex values, W2 of the amplitude, circular W2 of

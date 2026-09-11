@@ -1,0 +1,19 @@
+# @package _global_
+# Section 5.3 -- how much transport cost minibatch OT saves over independent
+# pairing, against field size. No network.
+#
+# Cylindrical metric, pointwise copula target (rho 0.5), white prior, batch 64. The
+# same script also prints the patch-seam numbers of Table 4 (table4_factorized).
+#
+#   uv run python scripts/paper/reproduce.py sec53_ot_cost
+paper:
+  name: Section 5.3 -- OT cost saving against field size
+  section: Section 5.3 and the second contribution
+  runtime: ~10 s on CPU
+  kind: commands
+  commands:
+    - [scripts/coupling_dimension.py]
+  expected: |
+    section 1 ("cost drop"):
+      1x1 85.9%   2x2 72.1%   4x4 43.7%   8x8 21.3%   16x16 11.5%   32x32 5.1%   64x64 3.1%
+    and in every row the assignment still reorders ~95-100% of the batch.
