@@ -114,3 +114,34 @@ def test_reference_goes_through_the_training_normalisation(geometry: str) -> Non
         assert field.shape == (1, 1, 16, 16)
         assert float(field.abs().max()) == pytest.approx(1.0, abs=1e-5)
         assert float(raw.abs().max()) > 1.0
+
+
+class _ZeroVelocity(torch.nn.Module):
+    """Predicts no motion at all: the residual then equals the displacement."""
+
+    def forward(self, state: torch.Tensor, time: torch.Tensor) -> torch.Tensor:
+        return torch.zeros(state.shape[0], 2, *state.shape[-2:])
+
+
+def test_straightness_is_chunk_invariant_for_a_degenerate_model() -> None:
+    """Chunking changes the draws, not the accumulation.
+
+    A model that predicts zero explains none of the displacement, so straightness is
+    1 whatever the chunk size. That pins the sums and means across chunks, which is
+    the part chunking could get wrong; the draws themselves differ by construction.
+    """
+    from cfm.evaluate import straightness
+    from cfm.manifolds import CylindricalManifold
+
+    manifold = CylindricalManifold()
+    device = torch.device("cpu")
+    data = manifold.from_complex(torch.randn(8, 1, 8, 8, dtype=torch.complex64))
+
+    whole = straightness(
+        _ZeroVelocity(), manifold, data, device, torch.Generator().manual_seed(0), None, chunk=None
+    )
+    chunked = straightness(
+        _ZeroVelocity(), manifold, data, device, torch.Generator().manual_seed(0), None, chunk=3
+    )
+    assert whole == pytest.approx(1.0)
+    assert chunked == pytest.approx(1.0)
