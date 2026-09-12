@@ -52,6 +52,19 @@ at 1 GB of RAM and the OOM killer is silent), prints the GPU and torch versions,
 trains one 64x64 arm for two epochs so the timing is on record. `uv sync --frozen
 --no-dev` took 98 s; compute nodes have internet and uv fetches its own Python 3.11.
 
+## Gotchas paid for once
+
+- **The venv remembers where the project was.** `uv` installs `torch-cfmri` as a path
+  dependency, so moving or deleting the checkout leaves `import cfm` failing with
+  `ModuleNotFoundError` even though the venv looks intact. Fix: `uv sync --frozen
+  --no-dev --offline` from the new location (the deps are already cached, so it is a
+  two-second reinstall of the project alone).
+- **Renaming a project field's options wipes the values.** Editing the Status options
+  of the GitHub project through `updateProjectV2Field` recreated them with new ids and
+  cleared every item's Status. Set field values *after* any option rename.
+- **`squeue -j <array-id>` can return nothing while tasks still run.** Count states with
+  `sacct -j <id> -X -n -o State | sort | uniq -c` instead, or a wait loop exits early.
+
 ## Hardware and partitions (verified)
 
 | partition | max wall | nodes | GPUs |
