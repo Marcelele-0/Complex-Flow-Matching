@@ -13,6 +13,7 @@ from cfm.core.registry import DATASETS
 from cfm.data.dataset import SKMTEADataset
 from cfm.data.espirit import compute_espirit_maps, ensure_espirit_maps, process_h5_file
 from cfm.data.fastmri import FastMRIDataset
+from cfm.data.knee_store import KneeStoreDataset
 from cfm.data.hdf5_manager import WorkerHDF5Manager
 from cfm.data.masks import (
     BaseMaskGenerator,
@@ -131,6 +132,7 @@ __all__ = [
     "CylinderToyIIDDataset",
     "EuclideanNormalize",
     "FastMRIDataset",
+    "KneeStoreDataset",
     "SKMTEADataset",
     "WindowAmplitudeNormalize",
     "WindowEuclideanNormalize",
