@@ -1,3 +1,5 @@
+import math
+
 import torch
 
 from cfm.utils.complex_ops import (
@@ -5,6 +7,7 @@ from cfm.utils.complex_ops import (
     complex_to_euclidean,
     cylinder_to_complex,
     euclidean_to_complex,
+    wrap_to_pi,
 )
 
 
@@ -118,3 +121,32 @@ def test_both_representations_describe_the_same_complex_number() -> None:
     via_euclidean = euclidean_to_complex(complex_to_euclidean(z))
 
     assert torch.allclose(via_cylinder, via_euclidean, atol=1e-5)
+
+
+def test_wrap_to_pi_resolves_the_antipodal_tie_the_same_way_in_every_precision() -> None:
+    """At the cut locus both arcs minimise, so the sign is a choice; pin it to +pi.
+
+    ``atan2(sin(d), cos(d))`` leaves that choice to rounding and the precisions
+    disagree: float32's ``pi`` rounds above the true value, so ``sin`` comes out
+    negative and the result is ``-pi``, while float64 returns ``+pi``.
+    """
+    for dtype in (torch.float32, torch.float64):
+        for delta in (math.pi, -math.pi):
+            wrapped = wrap_to_pi(torch.tensor([delta], dtype=dtype))
+            assert wrapped.item() > 0.0, f"{dtype} {delta} fell on the negative branch"
+            assert math.isclose(wrapped.item(), math.pi, rel_tol=1e-6)
+
+
+def test_wrap_to_pi_matches_atan2_away_from_the_cut_locus() -> None:
+    """The deterministic wrap must not change the target anywhere it was well defined."""
+    delta = torch.linspace(-6.0, 6.0, 20001, dtype=torch.float64)
+    expected = torch.atan2(torch.sin(delta), torch.cos(delta))
+    torch.testing.assert_close(wrap_to_pi(delta), expected, atol=1e-9, rtol=0.0)
+
+
+def test_wrap_to_pi_lands_in_the_half_open_interval() -> None:
+    """Range is (-pi, pi]: the upper end is attained, the lower end never is."""
+    delta = torch.linspace(-20.0, 20.0, 100001, dtype=torch.float64)
+    wrapped = wrap_to_pi(delta)
+    assert wrapped.max().item() <= math.pi + 1e-12
+    assert wrapped.min().item() > -math.pi

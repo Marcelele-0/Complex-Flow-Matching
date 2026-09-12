@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import torch
 
+from cfm.utils.complex_ops import wrap_to_pi
+
 
 class GeodesicFlowBridge:
     """Geodesic probability path on product manifold R+ x S^1."""
@@ -14,17 +16,16 @@ class GeodesicFlowBridge:
     def get_shortest_angular_diff(
         self, phi_start: torch.Tensor, phi_end: torch.Tensor
     ) -> torch.Tensor:
-        """Calculate shortest directed angular distance in [-pi, pi].
+        """Calculate shortest directed angular distance in (-pi, pi].
 
         Args:
             phi_start: Initial angle in radians [B, 1, H, W].
             phi_end: Target angle in radians [B, 1, H, W].
 
         Returns:
-            Shortest angular displacement [B, 1, H, W] in [-pi, pi].
+            Shortest angular displacement [B, 1, H, W] in (-pi, pi].
         """
-        diff = phi_end - phi_start
-        return (diff + torch.pi) % (2 * torch.pi) - torch.pi
+        return wrap_to_pi(phi_end - phi_start)
 
     def forward(
         self, cyl_noise: torch.Tensor, cyl_data: torch.Tensor, t: torch.Tensor

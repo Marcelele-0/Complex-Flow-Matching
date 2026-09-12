@@ -2,7 +2,33 @@
 
 from __future__ import annotations
 
+import math
+
 import torch
+
+_TWO_PI = 2.0 * math.pi
+
+
+def wrap_to_pi(delta: torch.Tensor) -> torch.Tensor:
+    """Wrap an angular difference into ``(-pi, pi]`` with a deterministic tie rule.
+
+    The Riemannian logarithm on ``S^1`` is single-valued except at the cut locus:
+    when the endpoints are antipodal, both arcs are minimising and the sign of the
+    displacement is a free choice. ``atan2(sin(d), cos(d))`` leaves that choice to
+    floating-point rounding, and the two precisions disagree -- ``d = pi`` returns
+    ``-pi`` in float32 (whose ``pi`` rounds above the true value, making ``sin``
+    negative) and ``+pi`` in float64. This wrap resolves the tie to ``+pi`` in every
+    precision, so the training target does not depend on the dtype it is computed in.
+
+    Away from the cut locus the result matches ``atan2(sin(d), cos(d))`` to rounding.
+
+    Args:
+        delta: Angular difference in radians, any shape, any real dtype.
+
+    Returns:
+        The same shape, wrapped into ``(-pi, pi]``, with antipodal ties at ``+pi``.
+    """
+    return math.pi - torch.remainder(math.pi - delta, _TWO_PI)
 
 
 def complex_to_cylinder(z: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
