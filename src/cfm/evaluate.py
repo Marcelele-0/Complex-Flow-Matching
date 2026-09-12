@@ -143,6 +143,7 @@ def straightness(
     device: torch.device,
     generator: torch.Generator,
     coupling: BaseCoupling | None = None,
+    chunk: int | None = None,
 ) -> float:
     """Regression residual of the conditional velocity, normalised.
 
@@ -162,24 +163,37 @@ def straightness(
         generator: RNG for the prior draw and the time sample. Must live on
             ``device``: torch refuses a CPU generator for a CUDA draw.
         coupling: The pairing training used. ``None`` pairs independently.
+        chunk: Fields per forward pass. ``None`` sends the whole batch at once,
+            which is what every synthetic run did and what keeps their numbers
+            reproducible; a 320x320 cohort does not fit that way, so the fastMRI
+            experiments set it. Chunking changes how the generator is consumed, so
+            two chunk sizes give slightly different draws and must not be mixed
+            within one table.
 
     Returns:
         ``0`` for a perfectly straight field, ``1`` for one that explains none of
         the displacement.
     """
     batch, _, height, width = data_states.shape
-    prior = manifold.sample_noise(batch, height, width, device, generator=generator)
-    times = torch.rand(batch, 1, 1, 1, device=device, generator=generator)
+    step = batch if chunk is None else min(chunk, batch)
 
-    if coupling is not None:
-        data_states = coupling(prior, data_states, manifold)
-    state, target = manifold.bridge(prior, data_states, times)
-    residual = (model(state, times.reshape(-1)) - target).square().flatten(1).sum(1)
-    displacement = target.square().flatten(1).sum(1)
+    residuals, displacements = [], []
+    for start in range(0, batch, step):
+        block = data_states[start : start + step]
+        size = block.shape[0]
+        prior = manifold.sample_noise(size, height, width, device, generator=generator)
+        times = torch.rand(size, 1, 1, 1, device=device, generator=generator)
+        if coupling is not None:
+            block = coupling(prior, block, manifold)
+        state, target = manifold.bridge(prior, block, times)
+        residuals.append((model(state, times.reshape(-1)) - target).square().flatten(1).sum(1))
+        displacements.append(target.square().flatten(1).sum(1))
+
+    displacement = torch.cat(displacements)
     total = displacement.mean()
     if float(total) <= 0.0:
         return 0.0
-    return float(residual.mean() / total)
+    return float(torch.cat(residuals).mean() / total)
 
 
 def format_table(rows: Sequence[tuple[int, dict[str, float]]], metrics: Sequence[str]) -> str:
@@ -282,8 +296,15 @@ def main(cfg: DictConfig) -> None:
     print(f"Reference: {data_states.shape[0]} fields of {height}x{width}, in the training domain")
 
     coupling_name = str(cfg.get("training", {}).get("coupling", "independent"))
+    straightness_chunk = settings.get("straightness_batch_size")
     straightness_value = straightness(
-        model, manifold, data_states, device, device_generator, build_coupling(coupling_name)
+        model,
+        manifold,
+        data_states,
+        device,
+        device_generator,
+        build_coupling(coupling_name),
+        chunk=None if straightness_chunk is None else int(straightness_chunk),
     )
 
     nfe: Sequence[int] = [int(n) for n in settings.get("nfe", [1, 2, 4, 8, 16, 32, 64, 100])]

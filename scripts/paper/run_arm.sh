@@ -4,6 +4,17 @@
 #
 #   LOSS_MODE=l2u bash scripts/paper/run_arm.sh NAME SIDE MANIFOLD COUPLING SEED [EPOCHS]
 #
+# SIDE is the synthetic field size; pass `native` for a cohort whose size is fixed by
+# the data (fastMRI), and no crop override is sent. Two environment variables cover
+# the file-backed cohorts:
+#   EXPERIMENT   a conf/experiment/ name, used instead of the LOSS_MODE mapping
+#                (e.g. EXPERIMENT=table5_fastmri SIDE=native)
+#   HOLDOUT_ROLE dataset.role for the evaluation only, so the reference fields come
+#                from volumes no arm trained on (e.g. HOLDOUT_ROLE=holdout)
+#   BATCH        override the experiment's batch size. The protocol's value must be
+#                the same for every arm of a table; this exists for a smaller GPU
+#                and for smoke runs, and a table built with it is not comparable.
+#
 # LOSS_MODE:
 #   l2u  (default) the fair loss: L2 in both geometries, unweighted phase term
 #        (see conf/experiment/ablation_loss32.yaml)
@@ -21,20 +32,32 @@ C="$4"
 SEED="$5"
 EPOCHS="${6:-40}"
 LOSS_MODE="${LOSS_MODE:-l2u}"
+EXPERIMENT="${EXPERIMENT:-}"
+HOLDOUT_ROLE="${HOLDOUT_ROLE:-}"
+BATCH="${BATCH:-}"
 
 # Everything but geometry, coupling, size and seed lives in conf/experiment/.
 # The archived runs were launched with the equivalent explicit overrides;
 # tests/test_paper_results.py checks that both compose to the same config.
-case "$LOSS_MODE" in
-  l2u) EXPERIMENT=paper_unet ;;
-  l1u) EXPERIMENT=paper_unet_l1 ;;
-  l1w) EXPERIMENT=paper_unet_v1loss ;;
-  *) echo "unknown LOSS_MODE=$LOSS_MODE (expected l2u, l1u or l1w)"; exit 2 ;;
-esac
-COMMON=(
-  +experiment="$EXPERIMENT" manifold="$M" training.coupling="$C"
-  dataset.crop_size="[$SIDE,$SIDE]"
-)
+if [ -z "$EXPERIMENT" ]; then
+  case "$LOSS_MODE" in
+    l2u) EXPERIMENT=paper_unet ;;
+    l1u) EXPERIMENT=paper_unet_l1 ;;
+    l1w) EXPERIMENT=paper_unet_v1loss ;;
+    *) echo "unknown LOSS_MODE=$LOSS_MODE (expected l2u, l1u or l1w)"; exit 2 ;;
+  esac
+fi
+COMMON=(+experiment="$EXPERIMENT" manifold="$M" training.coupling="$C")
+if [ "$SIDE" != native ]; then
+  COMMON+=(dataset.crop_size="[$SIDE,$SIDE]")
+fi
+if [ -n "$BATCH" ]; then
+  COMMON+=(training.batch_size="$BATCH")
+fi
+EVAL_ONLY=()
+if [ -n "$HOLDOUT_ROLE" ]; then
+  EVAL_ONLY+=(dataset.role="$HOLDOUT_ROLE")
+fi
 
 echo "[$(date '+%H:%M:%S')] train $NAME ($EXPERIMENT)"
 uv run --no-sync python -m cfm.train "${COMMON[@]}" \
@@ -43,7 +66,7 @@ code=$?
 if [ "$code" -ne 0 ]; then echo "FAILED train $NAME exit=$code"; exit "$code"; fi
 
 echo "[$(date '+%H:%M:%S')] evaluate $NAME"
-uv run --no-sync python -m cfm.evaluate "${COMMON[@]}" \
+uv run --no-sync python -m cfm.evaluate "${COMMON[@]}" ${EVAL_ONLY[@]+"${EVAL_ONLY[@]}"} \
   evaluate.run_name="$NAME" evaluate.num_fields=64 evaluate.seed="$SEED" \
   evaluate.nfe='[1,2,4,8,100]' logging.experiment_name="${NAME}_eval"
 code=$?

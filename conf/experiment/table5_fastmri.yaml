@@ -1,0 +1,56 @@
+# @package _global_
+# The training protocol behind Table 5: fastMRI knee CORPD at the acquisition's own
+# resolution. This is a protocol config like `paper_unet`, not a paper experiment:
+# it gets a `paper:` block, and an entry in reproduce.py's PAPER_ORDER, once the
+# table's archive exists (issue #79).
+#
+# Same objective, schedule and evaluation as `paper_unet`, on real complex data
+# instead of the synthetic copula: knee coronal proton-density volumes without fat
+# suppression, coil-combined with ESPIRiT, cropped to 320x320, central 11 slices,
+# read from the store built by scripts/data/build_knee_pd_store.py. Geometry,
+# coupling and seed are chosen on the command line:
+#
+#   uv run python -m cfm.train +experiment=table5_fastmri \
+#       manifold=cylindrical training.coupling=ot training.seed=0 \
+#       logging.experiment_name=fm_cylindrical_ot_s0
+#   uv run python -m cfm.evaluate +experiment=table5_fastmri \
+#       manifold=cylindrical training.coupling=ot dataset.role=holdout \
+#       evaluate.run_name=fm_cylindrical_ot_s0 evaluate.nfe=[1,2,4,8,100]
+#
+# Training reads `role: fit`; evaluation must be given `dataset.role=holdout`, so the
+# reference fields come from volumes no arm was trained on. The split is by volume,
+# because slices of one knee are highly correlated.
+#
+# batch_size is PROVISIONAL: measured here as the largest that fits an H100 with room
+# to spare (about 1.1 GiB per sample at 320x320; a 16 GB card tops out at 12). Issue
+# #76 replaces it with the measured value, and changing it changes the protocol, so
+# every arm of the table must use the same one.
+defaults:
+  - override /dataset: fastmri_knee_pd
+  - override /model: c_unet
+
+dataset:
+  role: fit
+  holdout_fraction: 0.2
+  split_seed: 0
+
+training:
+  bridge: noise
+  epochs: 40
+  batch_size: 32
+  grad_clip: null
+  compile: false
+  loss:
+    amp_loss_type: l2
+    phase_loss_type: l2
+    phase_amplitude_weighting: false
+    vel_loss_type: l2
+
+evaluate:
+  # 320x320 fields do not fit through the model in one pass, unlike the 64x64
+  # synthetic ones; see conf/evaluate/default.yaml.
+  straightness_batch_size: 8
+  batch_size: 8
+
+logging:
+  use_wandb: false
