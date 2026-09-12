@@ -1,6 +1,6 @@
 # Local debug subset of fastMRI multi-coil, for workstation development and
-# distribution tracking. Identical to fastmri_full except for the data location
-# and the volume cap; keep the two in step so a local run predicts a cluster run.
+# distribution tracking. Raw multi-coil k-space; the generative experiments read the compact store
+# built from it (conf/dataset/fastmri_knee_pd.yaml), not this directory.
 name: "fastmri"
 data_dir: "data/fastmri_local"
 num_slices: 1
