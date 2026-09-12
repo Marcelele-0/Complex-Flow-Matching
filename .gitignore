@@ -76,6 +76,9 @@ anonymous_submission_build/
 
 # Claude Code specification
 CLAUDE.md
+.claude/*
+# Skills are part of the project: agents and teammates need them.
+!.claude/skills/
 
 # Local Overleaf git clone (holds the paper sources and an access token in its .git/config)
 overleaf_cache/

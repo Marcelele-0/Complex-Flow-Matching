@@ -29,10 +29,10 @@
 #SBATCH --time=00:30:00
 #SBATCH --gres=gpu:hopper:1
 #SBATCH --array=0-35
-#SBATCH --output=/lustre/pd03/hpc-danbor2008-1756464546/marcelele/CyFM/logs/%x-%A_%a.txt
-#SBATCH --error=/lustre/pd03/hpc-danbor2008-1756464546/marcelele/CyFM/logs/%x-%A_%a.err
+#SBATCH --output=/lustre/pd03/hpc-danbor2008-1756464546/CyFM/logs/%x-%A_%a.txt
+#SBATCH --error=/lustre/pd03/hpc-danbor2008-1756464546/CyFM/logs/%x-%A_%a.err
 set -u
-source /home/marcelele/CyFM/scripts/wcss/env.sh
+source /lustre/pd03/hpc-danbor2008-1756464546/CyFM/scripts/wcss/env.sh
 PREFIX="${PREFIX:-l2u_}"
 SIDES="${SIDES:-64 32 16}"
 GEOMS="${GEOMS:-cylindrical euclidean}"
