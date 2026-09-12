@@ -28,7 +28,7 @@ from cfm.data.transforms import (
 from cfm.flow.bridge import GeodesicFlowBridge
 from cfm.flow.solver import CylindricalODESolver
 from cfm.flow.torus_math import DecoupledCylindricalLoss
-from cfm.utils.complex_ops import cylinder_to_complex
+from cfm.utils.complex_ops import cylinder_to_complex, wrap_to_pi
 from cfm.utils.random_fields import smooth_standard_normals
 
 
@@ -276,8 +276,7 @@ class CylindricalManifold(BaseManifold):
 
         phi_0 = torch.atan2(x_0[:, 2:3, :, :], x_0[:, 1:2, :, :])
         phi_1 = torch.atan2(x_1[:, 2:3, :, :], x_1[:, 1:2, :, :])
-        diff = phi_1 - phi_0
-        u_phi = torch.atan2(torch.sin(diff), torch.cos(diff))
+        u_phi = wrap_to_pi(phi_1 - phi_0)
         return torch.cat([u_m, u_phi], dim=1)
 
     def geodesic_path(self, x_0: torch.Tensor, x_1: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
@@ -288,8 +287,7 @@ class CylindricalManifold(BaseManifold):
 
         phi_0 = torch.atan2(x_0[:, 2:3, :, :], x_0[:, 1:2, :, :])
         phi_1 = torch.atan2(x_1[:, 2:3, :, :], x_1[:, 1:2, :, :])
-        diff = phi_1 - phi_0
-        u_phi = torch.atan2(torch.sin(diff), torch.cos(diff))
+        u_phi = wrap_to_pi(phi_1 - phi_0)
         phi_t = phi_0 + t * u_phi
 
         px_t = torch.cos(phi_t)
