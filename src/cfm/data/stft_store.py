@@ -82,7 +82,7 @@ class StftStoreDataset(BaseComplexDataset):
     def __init__(
         self,
         data_dir: str | pathlib.Path = "data/librispeech_stft",
-        store: str = "dev-clean.h5",
+        store: str = "librispeech.h5",
         role: str = "all",
         holdout_fraction: float = 0.2,
         split_seed: int = 0,

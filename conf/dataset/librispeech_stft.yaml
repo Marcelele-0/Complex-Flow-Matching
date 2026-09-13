@@ -13,9 +13,11 @@
 # and test-clean together give 80.
 name: librispeech_stft
 
-# Directory holding <store> and its .json manifest.
+# Directory holding <store> and its .json manifest. The default name is what
+# scripts/wcss/build_stft_store.sbatch writes: one store pooling both cohorts, since
+# their speaker ids are disjoint and the split is made here rather than by the corpus.
 data_dir: "data/librispeech_stft"
-store: "dev-clean.h5"
+store: "librispeech.h5"
 
 # Speaker-level split. Segments of one utterance share a voice, a room and a
 # microphone, and one speaker reads many utterances, so anything finer than a speaker
