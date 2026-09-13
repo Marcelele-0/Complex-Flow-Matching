@@ -65,3 +65,29 @@ def test_the_experiment_reaches_both_commands(tmp_path: pathlib.Path) -> None:
     train, evaluate = _capture(tmp_path, EXPERIMENT="table5_fastmri")
     assert "+experiment=table5_fastmri" in train
     assert "+experiment=table5_fastmri" in evaluate
+
+
+def test_train_and_eval_stores_go_to_their_own_commands(tmp_path: pathlib.Path) -> None:
+    """Hydra refuses the same override twice, so neither store may live in COMMON."""
+    train, evaluate = _capture(
+        tmp_path,
+        EXPERIMENT="table5_fastmri",
+        TRAIN_STORE="train.h5",
+        EVAL_STORE="val.h5",
+        HOLDOUT_ROLE="all",
+    )
+    assert "dataset.store=train.h5" in train
+    assert "dataset.store=val.h5" not in train
+    assert "dataset.store=val.h5" in evaluate
+    assert "dataset.store=train.h5" not in evaluate
+    assert evaluate.count("dataset.store=") == 1
+
+
+def test_data_dir_reaches_both_so_a_job_can_stage_to_node_local(
+    tmp_path: pathlib.Path,
+) -> None:
+    train, evaluate = _capture(
+        tmp_path, EXPERIMENT="table5_fastmri", DATA_DIR="/scratch/stage", EVAL_STORE="val.h5"
+    )
+    assert "dataset.data_dir=/scratch/stage" in train
+    assert "dataset.data_dir=/scratch/stage" in evaluate
