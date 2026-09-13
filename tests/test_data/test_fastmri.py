@@ -15,7 +15,6 @@ from cfm.core.dataset import BaseComplexDataset
 from cfm.core.registry import DATASETS
 from cfm.data.fastmri import FastMRIDataset
 from cfm.data.hdf5_manager import WorkerHDF5Manager
-from cfm.data.masks import CartesianMaskGenerator, PoissonDiscMaskGenerator
 from cfm.data.transforms import CenterCropOrPad
 from cfm.utils.fft import fft2c
 
@@ -141,7 +140,7 @@ def test_sense_combine_matches_sigpy_espirit_convention() -> None:
 def test_fastmri_generation_mode_identity(mock_fastmri_h5_dir) -> None:
     """FastMRIDataset in generation mode performs SENSE combination recovering ground truth."""
     data_dir, gt_slices = mock_fastmri_h5_dir
-    dataset = FastMRIDataset(data_dir=data_dir, num_slices=1, mode="generation", use_cache=False)
+    dataset = FastMRIDataset(data_dir=data_dir, num_slices=1, use_cache=False)
 
     assert len(dataset) == len(gt_slices)
     assert len(dataset) == 6  # 4 + 2 slices
@@ -154,118 +153,12 @@ def test_fastmri_generation_mode_identity(mock_fastmri_h5_dir) -> None:
         torch.testing.assert_close(item, gt_slices[idx], atol=1e-5, rtol=1e-5)
 
 
-def test_fastmri_reconstruction_mode(mock_fastmri_h5_dir) -> None:
-    """FastMRIDataset in reconstruction mode returns input, mask, target, and multicoil dict."""
-    data_dir, _ = mock_fastmri_h5_dir
-    dataset = FastMRIDataset(
-        data_dir=data_dir,
-        mode="reconstruction",
-        acceleration=4,
-        use_cache=False,
-    )
-
-    item = dataset[0]
-    assert isinstance(item, dict)
-    assert set(item.keys()) == {
-        "input",
-        "mask",
-        "target",
-        "masked_kspace",
-        "sensitivity_maps",
-    }
-
-    assert item["input"].shape == (1, 32, 32)
-    assert item["mask"].shape == (1, 32, 32)
-    assert item["target"].shape == (1, 32, 32)
-    assert item["masked_kspace"].shape == (4, 32, 32)
-    assert item["sensitivity_maps"].shape == (4, 32, 32)
-
-    assert item["input"].dtype == torch.complex64
-    assert item["target"].dtype == torch.complex64
-    assert item["masked_kspace"].dtype == torch.complex64
-    assert item["sensitivity_maps"].dtype == torch.complex64
-    assert item["mask"].dtype == torch.float32
-
-    # Peak amplitude normalized to 1.0
-    assert item["target"].abs().max().item() <= 1.0 + 1e-6
-
-
-@pytest.mark.parametrize("crop_size", [None, 16])
-def test_fastmri_masked_kspace_is_consistent_with_target(mock_fastmri_h5_dir, crop_size) -> None:
-    """masked_kspace equals F(S * target) on the sampled lines, with and without a crop.
-
-    This is what the data consistency projection assumes. It breaks if the target is
-    rescaled or cropped without the k-space and maps being brought along.
-    """
-    data_dir, _ = mock_fastmri_h5_dir
-    pre_transform = CenterCropOrPad(crop_size) if crop_size is not None else None
-    dataset = FastMRIDataset(
-        data_dir=data_dir,
-        mode="reconstruction",
-        use_cache=False,
-        pre_transform=pre_transform,
-    )
-
-    item = dataset[0]
-    expected = fft2c(item["sensitivity_maps"] * item["target"]) * item["mask"]
-    torch.testing.assert_close(item["masked_kspace"], expected, atol=1e-5, rtol=1e-5)
-
-    if crop_size is not None:
-        assert item["target"].shape == (1, crop_size, crop_size)
-        assert item["sensitivity_maps"].shape == (4, crop_size, crop_size)
-
-
-def test_fastmri_post_transform_may_not_resize(mock_fastmri_h5_dir) -> None:
-    """A post_transform that changes shape is rejected rather than silently desyncing."""
-    data_dir, _ = mock_fastmri_h5_dir
-    dataset = FastMRIDataset(
-        data_dir=data_dir,
-        mode="reconstruction",
-        use_cache=False,
-        post_transform=CenterCropOrPad(16),
-    )
-
-    with pytest.raises(ValueError, match="post_transform changed the spatial shape"):
-        _ = dataset[0]
-
-
-def test_fastmri_mask_generators(mock_fastmri_h5_dir) -> None:
-    """FastMRIDataset correctly integrates with Poisson-Disc and Cartesian mask generators."""
-    data_dir, _ = mock_fastmri_h5_dir
-
-    # Poisson-Disc mask config
-    dataset_poisson = FastMRIDataset(
-        data_dir=data_dir,
-        mode="reconstruction",
-        mask={"type": "poisson_disc", "acceleration": 4},
-        use_cache=False,
-    )
-    assert isinstance(dataset_poisson.mask_generator, PoissonDiscMaskGenerator)
-    item_p = dataset_poisson[0]
-    assert isinstance(item_p, dict)
-    assert item_p["mask"].shape == (1, 32, 32)
-
-    # Cartesian mask generator instance
-    cart_gen = CartesianMaskGenerator(acceleration=4.0)
-    dataset_cart = FastMRIDataset(
-        data_dir=data_dir,
-        mode="reconstruction",
-        mask=cart_gen,
-        use_cache=False,
-    )
-    assert isinstance(dataset_cart.mask_generator, CartesianMaskGenerator)
-    item_c = dataset_cart[0]
-    assert isinstance(item_c, dict)
-    assert item_c["mask"].shape == (1, 32, 32)
-
-
 def test_fastmri_multi_slice_window(mock_fastmri_h5_dir) -> None:
     """FastMRIDataset supports 2.5D multi-slice windows in generation mode."""
     data_dir, _ = mock_fastmri_h5_dir
     dataset = FastMRIDataset(
         data_dir=data_dir,
         num_slices=3,
-        mode="generation",
         use_cache=False,
     )
 
@@ -379,17 +272,9 @@ def test_fastmri_validation_errors(mock_fastmri_h5_dir) -> None:
     with pytest.raises(ValueError, match="positive odd integer"):
         FastMRIDataset(data_dir=data_dir, num_slices=2)
 
-    # Invalid mode
-    with pytest.raises(ValueError, match="mode must be 'generation' or 'reconstruction'"):
-        FastMRIDataset(data_dir=data_dir, mode="unknown")
-
     # Reconstruction mode with num_slices > 1
-    with pytest.raises(ValueError, match="supports num_slices=1 only"):
-        FastMRIDataset(data_dir=data_dir, mode="reconstruction", num_slices=3)
 
     # Acceleration < 1
-    with pytest.raises(ValueError, match="acceleration must be >= 1"):
-        FastMRIDataset(data_dir=data_dir, acceleration=0.5)
 
     # Non-existent data_dir
     with pytest.raises(FileNotFoundError):

@@ -9,12 +9,11 @@ import h5py
 import numpy as np
 import pytest
 import torch
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
 
 from cfm.core.registry import DATASETS
 from cfm.data import _ENTRY_POINT_KEYS, DEFAULT_DATASET, build_dataset, build_geometry_transform
 from cfm.data.fastmri import FastMRIDataset
-from cfm.data.masks import PoissonDiscMaskGenerator
 from cfm.utils.fft import fft2c
 
 
@@ -52,29 +51,13 @@ def test_build_dataset_honours_aliases(fastmri_dir) -> None:
     assert isinstance(build_dataset(cfg), FastMRIDataset)
 
 
-def test_build_dataset_resolves_nested_config_nodes(fastmri_dir) -> None:
-    """DictConfig sub-nodes reach the dataset as plain containers."""
-    cfg = OmegaConf.create(
-        {
-            "name": "fastmri",
-            "data_dir": fastmri_dir,
-            "use_cache": False,
-            "mask": {"type": "poisson_disc", "acceleration": 8},
-        }
-    )
-    dataset = build_dataset(cfg)
-    assert isinstance(dataset.mask_generator, PoissonDiscMaskGenerator)
-    assert dataset.acceleration == 8
-
-
 def test_build_dataset_overrides_win(fastmri_dir) -> None:
     """Caller-supplied arguments take precedence over the config."""
     cfg = OmegaConf.create(
         {"name": "fastmri", "data_dir": "wrong/path", "use_cache": True, "num_slices": 1}
     )
-    dataset = build_dataset(cfg, data_dir=fastmri_dir, use_cache=False, mode="reconstruction")
+    dataset = build_dataset(cfg, data_dir=fastmri_dir, use_cache=False)
     assert dataset.data_dir == fastmri_dir
-    assert dataset.mode == "reconstruction"
 
 
 def test_build_dataset_ignores_entry_point_keys(fastmri_dir) -> None:
@@ -118,15 +101,18 @@ def test_shipped_dataset_configs_match_their_constructors(config_path) -> None:
     constructor would otherwise only fail at the start of a real run.
     """
     cfg = OmegaConf.load(config_path)
+    # A dataset group is a mapping; OmegaConf.load's return type also admits a list.
+    assert isinstance(cfg, DictConfig), f"{config_path.name} is not a mapping"
     name = cfg.get("name", DEFAULT_DATASET)
     dataset_cls = DATASETS.get(name)
 
-    accepted = set(inspect.signature(dataset_cls.__init__).parameters) - {"self"}
+    # signature() on the class already describes the constructor, without "self".
+    accepted = set(inspect.signature(dataset_cls).parameters)
     unknown = sorted(set(cfg.keys()) - accepted - _ENTRY_POINT_KEYS)
 
-    assert not unknown, (
-        f"{config_path.name} sets keys {dataset_cls.__name__} cannot take: {unknown}"
-    )
+    assert (
+        not unknown
+    ), f"{config_path.name} sets keys {dataset_cls.__name__} cannot take: {unknown}"
 
 
 def test_build_geometry_transform_enforces_a_fixed_shape() -> None:
