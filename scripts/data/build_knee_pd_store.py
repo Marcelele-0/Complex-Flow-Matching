@@ -75,13 +75,25 @@ COPY_ROWS = 64
 
 
 def git_revision() -> str:
-    """The commit the store was built from, or ``"unknown"`` outside a checkout."""
+    """The commit the store was built from.
+
+    Falls back to a ``GIT_REVISION`` file at the project root before giving up. The
+    cluster checkout is an rsync copy rather than a git repository, so ``git rev-parse``
+    fails there and the store is stamped ``unknown``, which is what happened to the
+    first knee train store: the only link between a binary artefact outside git and the
+    code that produced it, lost at write time. ``build_stft_store.py`` already had this
+    fallback, which is why the audio store carries a real revision and the knee store
+    did not.
+    """
     try:
         out = subprocess.run(
             ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
         )
         return out.stdout.strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
+        stamp = pathlib.Path(__file__).resolve().parents[2] / "GIT_REVISION"
+        if stamp.is_file():
+            return stamp.read_text().strip()
         return "unknown"
 
 
