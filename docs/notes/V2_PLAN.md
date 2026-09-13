@@ -60,10 +60,33 @@ against ~820). Go for ICLR if one run fits well inside `lem-gpu-short`'s 3-day w
 the 20 runs plus their evaluations fit the remaining GPU budget (~7.5k h) before the
 deadline.
 
-**Results:** not yet run.
-**Done:** a fastMRI metrics.json exists, the batch size and timings are in this file, and
-the go/no-go is written down.
-**Cost:** one GPU job, under two hours. **Blocks:** P0-3, P1-5.
+**Results** (job 5883147, 2026-09-13, one H100):
+
+    max_batch=84  max_power_of_two=64  capacity_gib=93.1   both geometries alike
+    epoch_seconds=8.3  first_batch_seconds=1.6  peak_vram_gib=70.77  batches=13  batch_size=64
+    phase_step_median=0.045  noise_reference=1.571  ratio=0.03  volumes=93
+
+The batch is **64**, not the provisional 32, and both geometries probe identically, so
+neither binds. The phase check passes with room to spare: a ratio of 0.03 against the
+1.571 that scrambled phase gives means the coil combination is right and the phase
+carries structure, which is the premise of the whole paper.
+
+**GO for ICLR.** One run on the `fit` role of val.h5 is 8.3 x 40 / 3600 = 0.09 GPU-h.
+The train store is 5324 slices against 814, so x6.5: ~54 s/epoch, 36 minutes and
+0.60 GPU-h per run, far inside `lem-gpu-short`'s 3-day wall. The 20 flow runs cost
+~12 GPU-h out of ~7340 remaining, i.e. 0.16% of the budget. Compute is not the
+constraint on this table; the missing arms are (P1-3 diffusion baseline, P2-2
+phase-free floor).
+
+Not measured, and deliberately not chased: the batch for a 16 GB card. The probe's
+memory cap raises `ValueError: Expected a torch.device with a specified index` because
+`set_per_process_memory_fraction` was passed the string `cuda`. The one-line fix is in
+this commit, but the probe was not re-run: every arm of Table 5 runs on WCSS, so the
+local number would not inform anything.
+
+**Done:** metrics.json at `outputs/evaluate/gate_cylindrical_ot_b64_j5883147_eval/`,
+panels at `outputs/gate/5883147/knee_panels.png`.
+**Cost:** one GPU job, 2 minutes of an H100. **Blocks:** P0-3, P1-5 -- now unblocked.
 
 ### P0-2. The data pipeline: raw fastMRI -> a compact CORPD store
 **The protocol changed from brain AXT2 to knee CORPD_FBK**; the sections above and below
