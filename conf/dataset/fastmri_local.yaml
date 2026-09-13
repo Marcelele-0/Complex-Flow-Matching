@@ -4,10 +4,6 @@
 name: "fastmri"
 data_dir: "data/fastmri_local"
 num_slices: 1
-acceleration: 4
-mask:
-  type: "poisson_disc"
-  acceleration: 4
 
 # fastMRI is not a uniform cohort: knee volumes are 640x368 and 640x372, brain
 # volumes include 640x320 and 768x396. Without a fixed output size a batch drawn

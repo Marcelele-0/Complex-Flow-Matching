@@ -18,7 +18,7 @@ from cfm.data import (
     ensure_espirit_maps,
 )
 from cfm.data.espirit import process_h5_file
-from cfm.data.torch_espirit import compute_espirit_torch
+from cfm.data.torch_espirit import calibrate_fastmri_file_torch, compute_espirit_torch
 from cfm.utils.fft import fft2c
 
 pytest.importorskip("sigpy", reason="sigpy is required for ESPIRiT tests")
@@ -154,7 +154,7 @@ def test_fastmri_dataset_auto_calibration_default_sens_dir(tmp_path: Path) -> No
         assert "sensitivity_maps" not in hf
 
     # Initialize FastMRIDataset with auto_calibrate=True (default) and sens_dir=None
-    dataset = FastMRIDataset(data_dir=str(data_dir), mode="generation", use_cache=False)
+    dataset = FastMRIDataset(data_dir=str(data_dir), use_cache=False)
 
     # Source file MUST remain untouched (NEVER opened r+)
     with h5py.File(vol_path, "r") as hf:
@@ -187,7 +187,6 @@ def test_fastmri_dataset_auto_calibration_sidecar(tmp_path: Path) -> None:
     dataset = FastMRIDataset(
         data_dir=str(data_dir),
         sens_dir=str(sens_dir),
-        mode="reconstruction",
         use_cache=False,
     )
 
@@ -201,12 +200,11 @@ def test_fastmri_dataset_auto_calibration_sidecar(tmp_path: Path) -> None:
     with h5py.File(sidecar_path, "r") as hf:
         assert "sensitivity_maps" in hf
 
-    # Reconstruction sample retrieval must succeed
+    # Sample retrieval must succeed against the freshly written sidecar
     item = dataset[0]
-    assert isinstance(item, dict)
-    assert "input" in item
-    assert "sensitivity_maps" in item
-    assert item["sensitivity_maps"].shape == (4, 24, 24)
+    assert isinstance(item, torch.Tensor)
+    assert item.is_complex()
+    assert item.shape == (1, 24, 24)
 
 
 @contextmanager
@@ -450,3 +448,57 @@ def test_calibrate_fastmri_file_torch(tmp_path: Path) -> None:
         assert "sensitivity_maps" in hf
         assert hf["sensitivity_maps"].shape == (2, 4, 24, 24)
         assert hf["sensitivity_maps"].dtype == np.complex64
+
+
+def test_calibrating_a_subset_gives_the_same_maps_as_calibrating_everything(
+    tmp_path: Path,
+) -> None:
+    """The property the central-slice optimisation rests on.
+
+    ESPIRiT runs per slice from that slice's own k-space, so restricting the loop is
+    not an approximation: the maps for a kept slice must come out bit-identical. If
+    calibration ever gains a 3D component this test fails, which is the point -- the
+    build would otherwise silently start producing different data.
+    """
+    rng = np.random.default_rng(0)
+    kspace = (rng.normal(size=(6, 3, 24, 24)) + 1j * rng.normal(size=(6, 3, 24, 24))).astype(
+        np.complex64
+    )
+    src = tmp_path / "vol.h5"
+    with h5py.File(src, "w") as handle:
+        handle.create_dataset("kspace", data=kspace)
+
+    full = tmp_path / "full.h5"
+    partial = tmp_path / "partial.h5"
+    wanted = [2, 3]
+    assert calibrate_fastmri_file_torch(src, full, device="cpu")
+    assert calibrate_fastmri_file_torch(src, partial, device="cpu", slices=wanted)
+
+    with h5py.File(full, "r") as a, h5py.File(partial, "r") as b:
+        for s in wanted:
+            np.testing.assert_array_equal(a["sensitivity_maps"][s], b["sensitivity_maps"][s])
+        # And the slices that were skipped are left zeroed rather than wrong.
+        assert not np.any(b["sensitivity_maps"][0])
+        assert b["sensitivity_maps"].attrs["calibrated_slices"] == "2,3"
+
+
+def test_a_partial_sidecar_is_not_mistaken_for_a_complete_one(tmp_path: Path) -> None:
+    """Reusing a narrower sidecar would hand back zeroed maps, i.e. a black image."""
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "data"))
+    from build_knee_pd_store import has_maps
+
+    rng = np.random.default_rng(1)
+    kspace = (rng.normal(size=(6, 3, 24, 24)) + 1j * rng.normal(size=(6, 3, 24, 24))).astype(
+        np.complex64
+    )
+    src = tmp_path / "vol.h5"
+    with h5py.File(src, "w") as handle:
+        handle.create_dataset("kspace", data=kspace)
+    sidecar = tmp_path / "sens.h5"
+    assert calibrate_fastmri_file_torch(src, sidecar, device="cpu", slices=[2, 3])
+
+    assert has_maps(sidecar, [2, 3])
+    assert has_maps(sidecar, [3])
+    assert not has_maps(sidecar, [1, 2, 3])

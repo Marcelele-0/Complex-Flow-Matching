@@ -32,39 +32,112 @@ until it has run. Registering the ICLR abstract is cheap and commits us to nothi
 
 ## Critical path (P0)
 
-### P0-1. fastMRI gate: loader, epoch time, and how 64x64 is reached
-Validate the fastMRI path on this branch with a short train/evaluate pass on the local
-AXT2 subset; record dataset-construction time (ESPIRiT runs eagerly), epoch time, VRAM.
-Decide and document how a 640x320 acquisition becomes 64x64: **cropping the centre of
-k-space** (the whole anatomy at low resolution, the physically natural choice, and the
-one that keeps the phase structure) against cropping the image (a patch of the middle).
-**Done:** a fastMRI metrics.json exists, the timings are in this file, the crop rule is
-implemented and documented, and a go/no-go for ICLR is written down.
-**Cost:** half a day, local. **Blocks:** P0-2, P0-3, P1-5.
+### P0-1. fastMRI gate: batch size, epoch time, and a go/no-go for ICLR
+Issue #76. Every paper result is synthetic, and until one fastMRI epoch is timed nothing
+on fastMRI can be scheduled and the venue cannot be chosen (ICLR 2026-09-25 against
+ICML). It runs on the validation store alone (`data/knee_pd/val.h5`, P0-2): no raw data,
+no NYU links, no ESPIRiT.
 
-### P0-2. The data pipeline: raw fastMRI -> a compact 64x64 AXT2 dataset
-Brain AXT2 only: one contrast, one orientation, 267 subjects locally and ~2300 in the
-full cohort, which is the largest single-contrast group and the one the complex-MRI
-generation literature uses. Mixing knee with brain, or contrasts with each other, makes
-the target distribution a mixture, which is defensible in a reconstruction paper and not
-in a generative one.
-Steps: ESPIRiT sensitivity maps -> coil combination -> centre-of-k-space crop to 64x64 ->
-one HDF5 per split plus a manifest (subject, volume, slice index, acquisition, checksum)
--> patient-level split recorded in the manifest, not computed at load time.
-Output is ~32 KB per slice: the whole AXT2 cohort is **under 1 GB**, so training never
-touches lustre and the set fits in RAM. Raw archives can be deleted after each batch.
+1. The largest batch at 320x320 that fits both geometries, on an H100 and on a 16 GB
+   card. Every arm of the table shares one batch, so the hungrier geometry binds.
+2. One epoch of `+experiment=table5_fastmri`: seconds per epoch, seconds to the first
+   batch, peak VRAM.
+3. Evaluation from `dataset.role=holdout` writes a metrics.json in the training
+   transform's domain, with the raw cohort absent.
+4. Amplitude and phase panels, and the mean phase step between neighbouring pixels inside
+   the anatomy against the pi/2 that scrambled phase gives. A ratio near 1 means the coil
+   combination is wrong and everything downstream is meaningless.
+
+One GPU job does all four and ends by printing the lines for this section:
+
+    sbatch scripts/wcss/gate_fastmri.sbatch
+
+**Go/no-go rule.** Table 5 needs 20 flow runs (two geometries x two couplings x 5 seeds)
+of 40 epochs. One run costs about `epoch_seconds x 40 / 3600` GPU-hours on the store it
+trains on. `table5_fastmri` trains on the `fit` role of val.h5 today, which is what the
+gate times; moving Table 5 to the train store multiplies that by ~6.5 (5324 slices
+against ~820). Go for ICLR if one run fits well inside `lem-gpu-short`'s 3-day wall and
+the 20 runs plus their evaluations fit the remaining GPU budget (~7.5k h) before the
+deadline.
+
+**Results** (job 5883147, 2026-09-13, one H100):
+
+    max_batch=84  max_power_of_two=64  capacity_gib=93.1   both geometries alike
+    epoch_seconds=8.3  first_batch_seconds=1.6  peak_vram_gib=70.77  batches=13  batch_size=64
+    phase_step_median=0.045  noise_reference=1.571  ratio=0.03  volumes=93
+
+The batch is **64**, not the provisional 32, and both geometries probe identically, so
+neither binds. The phase check passes with room to spare: a ratio of 0.03 against the
+1.571 that scrambled phase gives means the coil combination is right and the phase
+carries structure, which is the premise of the whole paper.
+
+**GO for ICLR.** One run on the `fit` role of val.h5 is 8.3 x 40 / 3600 = 0.09 GPU-h.
+The train store is 5324 slices against 814, so x6.5: ~54 s/epoch, 36 minutes and
+0.60 GPU-h per run, far inside `lem-gpu-short`'s 3-day wall. The 20 flow runs cost
+~12 GPU-h out of ~7340 remaining, i.e. 0.16% of the budget. Compute is not the
+constraint on this table; the missing arms are (P1-3 diffusion baseline, P2-2
+phase-free floor).
+
+Not measured, and deliberately not chased: the batch for a 16 GB card. The probe's
+memory cap raises `ValueError: Expected a torch.device with a specified index` because
+`set_per_process_memory_fraction` was passed the string `cuda`. The one-line fix is in
+this commit, but the probe was not re-run: every arm of Table 5 runs on WCSS, so the
+local number would not inform anything.
+
+**Done:** metrics.json at `outputs/evaluate/gate_cylindrical_ot_b64_j5883147_eval/`,
+panels at `outputs/gate/5883147/knee_panels.png`.
+**Cost:** one GPU job, 2 minutes of an H100. **Blocks:** P0-3, P1-5 -- now unblocked.
+
+### P0-2. The data pipeline: raw fastMRI -> a compact CORPD store
+**The protocol changed from brain AXT2 to knee CORPD_FBK**; the sections above and below
+have not been rewritten for it. Knee coronal proton-density without fat suppression is
+one acquisition on one hardware setup -- every such volume is 15-coil in one of two
+nearly identical matrices -- where brain AXT2 mixes eight coil counts, and without fat
+suppression the fat-water chemical shift leaves the phase structure this paper is about.
+It is also the split the score-based-prior literature trains on. The protocol of record
+is `conf/dataset/fastmri_knee_pd.yaml`.
+
+Per volume: ESPIRiT maps -> adjoint SENSE coil combination -> centre crop to 320x320
+(removes the 2x readout oversampling, unifies 640x368 with 640x372) -> the central 11
+slices -> complex64, at 0.82 MB per slice. Selection is checked in code from the HDF5
+`acquisition` attribute, never from a filename. Normalisation is not baked in: the
+manifold transform normalises each field by its own peak, as it does for the synthetic
+cohorts.
 On WCSS this runs on **CPU partitions** (`bem2-cpu-normal`, 21-day limit): downloading
 and ESPIRiT are not work for an H100, and the GPU grant (~7.5k h left) is the scarce
 resource, while CPU has ~45k h.
-**Done:** the manifest and the HDF5 exist for the local 267 volumes, a test asserts the
-split is patient-disjoint, and the pipeline reruns from raw with one command.
-**Cost:** a day of work; download time depends on P0-2a. **Blocks:** P0-3, P1-5.
+
+**Done:** `scripts/data/build_knee_pd_store.py` (selection, ESPIRiT, combination, crop,
+atomic write, manifest with rejection counts) and `KneeStoreDataset`, which reads the
+store and nothing else. Slices stream into a resizable HDF5 as each volume is combined,
+so memory is one volume rather than the split. `--merge` joins the per-archive stores the
+cluster produces, refusing parts built under different protocols or a volume processed
+twice. `scripts/wcss/build_knee_store.sbatch` runs one archive per array task on
+`bem2-cpu-normal`. Validation store built: 1023 slices, 93 volumes, 838 MB, seven volumes
+rejected on the matrix rule.
+
+**Remaining:** the ESPIRiT cost per volume on a CPU node is still unmeasured, which is
+what decides whether 484 volumes is an hour or a day -- the builder now prints
+`espirit_seconds_per_volume`, so one archive answers it. Node-local scratch on
+`bem2-cpu-normal` is unverified (the 7 TB figure is documented for GPU nodes). Then the
+train store itself, which needs P0-2a. Copy the existing `val.h5` to
+`$PDDIR/CyFM/data/knee_pd/` rather than rebuilding it there.
+**Blocks:** P0-3, P1-5.
 
 #### P0-2a. Fresh fastMRI links (user action)
 The links in `.env` (2 mini, 19 full archives) return 403; NYU signs them for about two
-weeks. Needed only to go beyond the local 267 volumes. Each brain train batch is ~180 GB
-raw, of which AXT2 is ~120 GB (~260 volumes, ~4k slices), and leaves ~130 MB after
-preprocessing, so batches are downloaded one at a time until P1-5 says to stop.
+weeks and ours are from 2026-09-05. Needed for the train split: knee multicoil train is
+5 batches and ~917 GB, of which CORPD_FBK is about half. NYU does no server-side
+filtering, so the whole tar comes down and the acquisition attribute filters it as files
+land.
+
+Refreshed URLs go back into `FASTMRI_FULL_URLS` in `.env`, which stays the one place the
+team maintains them; `scripts/wcss/build_knee_store.sbatch` reads that variable and
+indexes it, one archive per array task. Verify before queueing anything:
+
+    uv run python scripts/data/fastmri_urls.py --check
+
+**Done:** every link answers 200 to a HEAD request.
 
 ### P0-3. Table 5: fastMRI AXT2 at 64x64
 Six rows, the same protocol as Table 2, 5 seeds: CyFM with joint OT and with independent

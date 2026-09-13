@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import signal
+import time
 from collections.abc import Callable
 from types import FrameType
 from typing import Any, cast
@@ -159,13 +160,6 @@ def main(cfg: DictConfig) -> None:
         raise ValueError(
             f"training.bridge must be one of {list(BRIDGE_ENDPOINTS)}, got {bridge_endpoint!r}."
         )
-    conditional_bridge = bridge_endpoint == "aliased"
-    if conditional_bridge and num_slices > 1:
-        raise ValueError(
-            "training.bridge='aliased' needs the dataset's reconstruction mode, which is "
-            f"single-slice only, but dataset.num_slices={num_slices}. Set "
-            "dataset.num_slices=1, or train the 2.5D model with training.bridge=noise."
-        )
 
     # --- Coupling ---
     # Which prior sample is paired with which datum. The default reproduces plain
@@ -174,12 +168,6 @@ def main(cfg: DictConfig) -> None:
     coupling_name = str(cfg.get("training", {}).get("coupling", "independent"))
     coupling = build_coupling(coupling_name)
     reorders = coupling_name not in ("independent", "none")
-    if reorders and conditional_bridge:
-        raise ValueError(
-            f"training.coupling={coupling_name!r} reorders the data batch, but "
-            "training.bridge='aliased' fixes each pairing by construction: the alias "
-            "belongs to its own target. Use training.bridge=noise."
-        )
     if reorders and num_slices > 1:
         raise ValueError(
             f"training.coupling={coupling_name!r} pairs whole samples, but "
@@ -232,22 +220,13 @@ def main(cfg: DictConfig) -> None:
     # point: the conditional bridge only helps if training and evaluation construct
     # their states identically.
     dataset: BaseComplexDataset
-    if conditional_bridge:
-        dataset = build_dataset(
-            dataset_cfg,
-            data_dir=data_dir,
-            mode="reconstruction",
-            pre_transform=geometry,
-            num_slices=1,
-        )
-    else:
-        dataset = build_dataset(
-            dataset_cfg,
-            data_dir=data_dir,
-            transform=slice_pipeline,
-            window_transform=window_pipeline,
-            num_slices=num_slices,
-        )
+    dataset = build_dataset(
+        dataset_cfg,
+        data_dir=data_dir,
+        transform=slice_pipeline,
+        window_transform=window_pipeline,
+        num_slices=num_slices,
+    )
 
     # Train only on the volumes the split manifest lists, through the same two
     # functions evaluate.py uses. Without this the loader globs every .h5 and
@@ -263,14 +242,7 @@ def main(cfg: DictConfig) -> None:
         f"Split '{split}': {len(indices)} of {len(dataset.slice_map)} slices "
         f"from {num_files} volume(s)."
     )
-    if conditional_bridge:
-        acceleration = dataset_cfg.get("acceleration", "?")
-        print_main(
-            f"Bridge: aliased -> clean (conditional, R={acceleration}). The model sees "
-            "the undersampled reconstruction at t=0, matching evaluate.py's warm start."
-        )
-    else:
-        print_main("Bridge: noise -> clean (unconditional prior).")
+    print_main("Bridge: noise -> clean (unconditional prior).")
     dataset_subset: BaseComplexDataset | Subset[Any] = (
         Subset(dataset, indices) if len(indices) < len(dataset.slice_map) else dataset
     )
@@ -435,6 +407,13 @@ def main(cfg: DictConfig) -> None:
             # would replay the orders it had already seen.
             sampler.set_epoch(epoch)
 
+        # Timed from here, so the first batch includes worker start-up and the store's
+        # first open: that is what "seconds to first batch" costs a new cohort.
+        epoch_started = time.perf_counter()
+        first_batch_seconds: float | None = None
+        if device.type == "cuda":
+            torch.cuda.reset_peak_memory_stats(device)
+
         epoch_loss_total = 0.0
         # Component names come from the manifold, so a geometry's own breakdown
         # reaches the logs without any geometry-specific code in this loop.
@@ -443,16 +422,7 @@ def main(cfg: DictConfig) -> None:
         pbar = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{epochs}", disable=not ctx.is_main)
 
         for _batch_idx, batch in enumerate(pbar):
-            # Reconstruction mode yields a dict of complex tensors; generation mode a
-            # single state tensor. Both ends of the conditional bridge are mapped
-            # through the manifold here, so the geometry still owns the
-            # representation and nothing below this point is mode-specific.
-            x_alias: torch.Tensor | None = None
-            if conditional_bridge:
-                x_1 = manifold.from_complex(batch["target"].to(device))
-                x_alias = manifold.from_complex(batch["input"].to(device))
-            else:
-                x_1 = batch.to(device)
+            x_1 = batch.to(device)
 
             # 2.5D batches are [B, S, C, H, W]; plain 2D batches are [B, C, H, W].
             # S is folded into the batch for the bridge, which slices channels as
@@ -466,14 +436,7 @@ def main(cfg: DictConfig) -> None:
                 b, c, h, w = x_1.shape
                 s, center, flat = 1, 0, b
 
-            # The only difference between the two bridges: where the path starts.
-            # Everything downstream - the time draw, the bridge, the target velocity,
-            # the loss - is identical, which is what keeps the two training regimes
-            # comparable and keeps the geometry the only variable under study.
-            if x_alias is not None:
-                x_0 = x_alias
-            else:
-                x_0 = manifold.sample_noise(flat, h, w, device)
+            x_0 = manifold.sample_noise(flat, h, w, device)
 
             # --- Time Sampling ---
             # One time per sample: every slice of a window is the same example, so
@@ -522,6 +485,10 @@ def main(cfg: DictConfig) -> None:
             else:
                 grad_norm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), float("inf")))
             optimizer.step()
+            if first_batch_seconds is None:
+                if device.type == "cuda":
+                    torch.cuda.synchronize(device)
+                first_batch_seconds = time.perf_counter() - epoch_started
 
             # --- Update metrics ---
             epoch_loss_total += loss.item()
@@ -570,6 +537,17 @@ def main(cfg: DictConfig) -> None:
         breakdown = ", ".join(f"{name}: {value:.5f}" for name, value in avg_components.items())
         print_main(
             f"Epoch {epoch + 1} | Avg Loss: {avg_loss:.5f} ({breakdown}) | LR: {current_lr:.6f}"
+        )
+        # One parseable line per epoch: the fastMRI gate reads it, and a table's GPU
+        # budget is extrapolated from it.
+        epoch_seconds = time.perf_counter() - epoch_started
+        first = float("nan") if first_batch_seconds is None else first_batch_seconds
+        peak_vram_gib = float("nan")
+        if device.type == "cuda":
+            peak_vram_gib = torch.cuda.max_memory_allocated(device) / 2**30
+        print_main(
+            f"epoch_seconds={epoch_seconds:.1f} first_batch_seconds={first:.1f} "
+            f"peak_vram_gib={peak_vram_gib:.2f} batches={int(num_batches)} batch_size={batch_size}"
         )
 
         scheduler.step()
