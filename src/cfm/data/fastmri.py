@@ -16,9 +16,8 @@ import numpy as np
 import torch
 
 from cfm.core.dataset import BaseComplexDataset
-from cfm.core.registry import DATASETS, MASKS
+from cfm.core.registry import DATASETS
 from cfm.data.hdf5_manager import WorkerHDF5Manager
-from cfm.data.masks import BaseMaskGenerator
 from cfm.utils.fft import fft2c, ifft2c
 
 logger = logging.getLogger(__name__)
@@ -95,13 +94,7 @@ class FastMRIDataset(BaseComplexDataset):
         transform: Optional per-slice transform callable.
         window_transform: Optional multi-slice window transform callable.
         num_slices: Number of contiguous slices in window (must be positive odd).
-        mode: Operation mode ('generation' or 'reconstruction').
-        acceleration: Undersampling acceleration factor (e.g. 4 or 8).
-        mask: Mask generator instance, config dictionary, or registry key.
-        mask_seed: Optional fixed seed for mask generation reproducibility.
-        pre_transform: Optional geometric transform applied before undersampling.
             May crop the image; the sensitivity maps are center-cropped to match.
-        post_transform: Optional intensity transform applied after undersampling.
             Must not change the spatial shape.
         use_cache: Whether to use persistent disk index caching.
         cache_dir: Directory to store index cache files.
@@ -123,12 +116,6 @@ class FastMRIDataset(BaseComplexDataset):
         transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
         window_transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
         num_slices: int = 1,
-        mode: str = "generation",
-        acceleration: int | float = 4,
-        mask: BaseMaskGenerator | Mapping[str, Any] | str | None = None,
-        mask_seed: int | None = None,
-        pre_transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
-        post_transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
         use_cache: bool = True,
         cache_dir: str | Path = ".cache",
         files_pattern: str | None = None,
@@ -150,17 +137,6 @@ class FastMRIDataset(BaseComplexDataset):
         if num_slices <= 0 or num_slices % 2 == 0:
             raise ValueError(f"num_slices must be a positive odd integer, got {num_slices}")
 
-        if mode not in ("generation", "reconstruction"):
-            raise ValueError(f"mode must be 'generation' or 'reconstruction', got {mode!r}")
-
-        if mode == "reconstruction" and num_slices != 1:
-            raise ValueError(
-                f"mode='reconstruction' currently supports num_slices=1 only, got {num_slices}."
-            )
-
-        if acceleration < 1:
-            raise ValueError(f"acceleration must be >= 1, got {acceleration}")
-
         if max_volumes is not None and max_volumes < 1:
             raise ValueError(f"max_volumes must be >= 1, got {max_volumes}")
 
@@ -168,10 +144,6 @@ class FastMRIDataset(BaseComplexDataset):
         self.transform = transform
         self.window_transform = window_transform
         self.num_slices = num_slices
-        self.mode = mode
-        self.mask_seed = mask_seed
-        self.pre_transform = pre_transform
-        self.post_transform = post_transform
         self.use_cache = use_cache
         self.cache_dir = str(cache_dir)
         if sens_dir is not None:
@@ -182,31 +154,6 @@ class FastMRIDataset(BaseComplexDataset):
         self.sens_key = sens_key
         self.auto_calibrate = auto_calibrate
         self.calib_workers = calib_workers
-
-        # Resolve mask generator from MASKS registry
-        if isinstance(mask, BaseMaskGenerator):
-            self.mask_generator = mask
-        elif isinstance(mask, str):
-            self.mask_generator = MASKS.build(mask, acceleration=acceleration)
-        elif isinstance(mask, Mapping) or (mask is not None and hasattr(mask, "get")):
-            m_dict = dict(mask)
-            if "name" in m_dict:
-                m_name = str(m_dict.pop("name"))
-            elif "type" in m_dict:
-                m_name = str(m_dict.pop("type"))
-            else:
-                m_name = "cartesian"
-            m_accel = m_dict.pop("acceleration", acceleration)
-            self.mask_generator = MASKS.build(m_name, acceleration=m_accel, **m_dict)
-        elif mask is None:
-            self.mask_generator = MASKS.build("cartesian", acceleration=acceleration)
-        else:
-            raise TypeError(f"Unsupported mask specification type: {type(mask)}")
-
-        acc = getattr(self.mask_generator, "acceleration", acceleration)
-        self.acceleration: int | float = (
-            int(acc) if isinstance(acc, int | float) and float(acc).is_integer() else float(acc)
-        )
 
         # File discovery
         if files_pattern is not None:
@@ -409,18 +356,6 @@ class FastMRIDataset(BaseComplexDataset):
             i = -i if i < 0 else 2 * (depth - 1) - i
         return i
 
-    def _mask_seed(self, f_path: str, slice_idx: int) -> int:
-        """Compute deterministic seed from file path, slice index, and acceleration."""
-        key = f"{os.path.basename(f_path)}:{slice_idx}:{self.acceleration}"
-        if self.mask_seed is not None:
-            key = f"{key}:{self.mask_seed}"
-        return int.from_bytes(hashlib.sha256(key.encode()).digest()[:4], "big")
-
-    def _undersampling_mask(self, f_path: str, slice_idx: int, h: int, w: int) -> torch.Tensor:
-        """Construct deterministic undersampling mask [1, H, W] via configured mask generator."""
-        seed = self._mask_seed(f_path, slice_idx)
-        return self.mask_generator.generate(shape=(h, w), seed=seed)
-
     @staticmethod
     def sense_combine(kspace: torch.Tensor, sensitivity_maps: torch.Tensor) -> torch.Tensor:
         """Perform adjoint SENSE coil combination from k-space and sensitivity maps.
@@ -496,64 +431,6 @@ class FastMRIDataset(BaseComplexDataset):
 
         return ksp_tensor, sens_tensor
 
-    def _reconstruction_item(
-        self,
-        handle: h5py.File,
-        slice_idx: int,
-        f_path: str,
-    ) -> dict[str, torch.Tensor]:
-        """Build the reconstruction-mode sample for one slice."""
-        ksp_slice, sens_slice = self._read_slice_data(handle, slice_idx, f_path)
-        img_complex = self.sense_combine(ksp_slice, sens_slice)
-
-        if self.pre_transform is not None:
-            img_complex = self.pre_transform(img_complex)
-            # Geometry only. Running the image pipeline over the maps would
-            # renormalise them and break sum_c |S_c|^2 = 1, which is what makes the
-            # adjoint combination above a coil combination in the first place.
-            sens_slice = _center_crop_to(sens_slice, img_complex.shape[-2], img_complex.shape[-1])
-
-        _, h, w = img_complex.shape
-        mask = self._undersampling_mask(f_path, slice_idx, h, w)
-
-        if self.pre_transform is None:
-            # Nothing has touched the image, so the measured k-space still describes
-            # it exactly and is preferable to a re-synthesised copy: it carries the
-            # true acquisition noise and any signal outside the span of the maps.
-            y_full = ksp_slice
-        else:
-            y_full = fft2c(sens_slice * img_complex)
-
-        y_under = y_full * mask
-
-        x_alias = (sens_slice.conj() * ifft2c(y_under)).sum(dim=0, keepdim=True)
-
-        scale = img_complex.abs().max().clamp(min=1e-8)
-        x_gt = img_complex / scale
-        x_alias = x_alias / scale
-        masked_kspace = y_under / scale
-
-        if self.post_transform is not None:
-            before = x_gt.shape
-            x_gt = self.post_transform(x_gt)
-            x_alias = self.post_transform(x_alias)
-            if x_gt.shape[-2:] != before[-2:]:
-                raise ValueError(
-                    "post_transform changed the spatial shape from "
-                    f"{tuple(before[-2:])} to {tuple(x_gt.shape[-2:])}. It runs after "
-                    "the mask, k-space and sensitivity maps are fixed, so a resize "
-                    "here would silently desynchronise them. Use pre_transform for "
-                    "anything geometric."
-                )
-
-        return {
-            "input": x_alias,
-            "mask": mask,
-            "target": x_gt,
-            "masked_kspace": masked_kspace,
-            "sensitivity_maps": sens_slice,
-        }
-
     def __getitem__(self, idx: int) -> torch.Tensor | dict[str, torch.Tensor]:
         """Retrieve slice or multi-slice window by index.
 
@@ -561,16 +438,11 @@ class FastMRIDataset(BaseComplexDataset):
             idx: Slice index in flat dataset map.
 
         Returns:
-            In generation mode: complex tensor [1, H, W] or window [S, 1, H, W].
-            In reconstruction mode: dictionary containing 'input', 'mask', 'target',
-                'masked_kspace', and 'sensitivity_maps'.
+            Complex tensor [1, H, W], or a window [S, 1, H, W].
         """
         f_path, slice_idx = self.slice_map[idx]
         manager = WorkerHDF5Manager.get_instance()
         handle = manager.get_handle(f_path)
-
-        if self.mode == "reconstruction":
-            return self._reconstruction_item(handle, slice_idx, f_path)
 
         if self.num_slices == 1:
             ksp_slice, sens_slice = self._read_slice_data(handle, slice_idx, f_path)
