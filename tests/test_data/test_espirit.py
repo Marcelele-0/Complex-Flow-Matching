@@ -154,7 +154,7 @@ def test_fastmri_dataset_auto_calibration_default_sens_dir(tmp_path: Path) -> No
         assert "sensitivity_maps" not in hf
 
     # Initialize FastMRIDataset with auto_calibrate=True (default) and sens_dir=None
-    dataset = FastMRIDataset(data_dir=str(data_dir), mode="generation", use_cache=False)
+    dataset = FastMRIDataset(data_dir=str(data_dir), use_cache=False)
 
     # Source file MUST remain untouched (NEVER opened r+)
     with h5py.File(vol_path, "r") as hf:
@@ -187,7 +187,6 @@ def test_fastmri_dataset_auto_calibration_sidecar(tmp_path: Path) -> None:
     dataset = FastMRIDataset(
         data_dir=str(data_dir),
         sens_dir=str(sens_dir),
-        mode="reconstruction",
         use_cache=False,
     )
 
@@ -201,12 +200,11 @@ def test_fastmri_dataset_auto_calibration_sidecar(tmp_path: Path) -> None:
     with h5py.File(sidecar_path, "r") as hf:
         assert "sensitivity_maps" in hf
 
-    # Reconstruction sample retrieval must succeed
+    # Sample retrieval must succeed against the freshly written sidecar
     item = dataset[0]
-    assert isinstance(item, dict)
-    assert "input" in item
-    assert "sensitivity_maps" in item
-    assert item["sensitivity_maps"].shape == (4, 24, 24)
+    assert isinstance(item, torch.Tensor)
+    assert item.is_complex()
+    assert item.shape == (1, 24, 24)
 
 
 @contextmanager

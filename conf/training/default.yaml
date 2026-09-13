@@ -10,26 +10,9 @@ weight_decay: 1e-4
 
 matmul_precision: "high"
 
-# Which distribution the probability path starts from at t=0.
-#
-#   noise    x_0 ~ manifold.sample_noise(...). The model is an unconditional prior:
-#            it learns the data distribution and never sees a measurement. This is
-#            what the synthesis track needs.
-#   aliased  x_0 = the zero-filled reconstruction of the undersampled slice, x_1 the
-#            fully sampled one. The model learns to remove aliasing, which is the
-#            task evaluate.py actually asks of it.
-#
-# `noise` was the only behaviour before this key existed, and remains the default so
-# the synthesis runs are unaffected.
-#
-# Why `aliased` exists: evaluate.py warm-starts from the aliased image
-# (`bridge(x_0, x_alias, t_start)`) while `noise` training only ever builds states as
-# `bridge(x_0, x_clean, t)`. The velocity field is then queried off its training
-# distribution, and the measured consequence is that both geometries score below a
-# plain zero-filled reconstruction. Setting this to `aliased` makes the two agree.
-#
-# Requires dataset.num_slices=1: the dataset's reconstruction mode is single-slice
-# only, so 2.5D windows cannot use this path.
+# Which distribution the probability path starts from at t=0. Only `noise` exists:
+# x_0 ~ manifold.sample_noise(...), so the model is an unconditional prior over
+# complex fields. The paper generates; it does not reconstruct from measurements.
 bridge: "noise"
 
 # Continue from paths.state_dir/last.pt when that file exists, instead of starting at
