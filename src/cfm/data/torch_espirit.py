@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Sequence
 from pathlib import Path
 
 import h5py
@@ -151,6 +152,7 @@ def calibrate_fastmri_file_torch(
     kernel_width: int = 6,
     thresh: float = 0.02,
     crop: float = 0.95,
+    slices: Sequence[int] | None = None,
 ) -> bool:
     """Calibrate fastMRI multi-coil HDF5 file on GPU.
 
@@ -165,6 +167,14 @@ def calibrate_fastmri_file_torch(
         kernel_width: Calibration Hankel kernel size.
         thresh: Eigenvalue threshold for signal subspace selection.
         crop: Eigenvalue cropping threshold for the background mask.
+        slices: Slice indices to calibrate; ``None`` calibrates every slice. Each
+            slice is calibrated from its own k-space alone -- see the loop below --
+            so restricting this changes nothing about the maps that are produced,
+            it only skips work whose result would be discarded. The sidecar keeps
+            the volume's full shape so callers still index by the original slice
+            number, and records what was covered in the ``calibrated_slices``
+            attribute, so a later run cannot mistake a partial sidecar for a
+            complete one.
 
     Returns:
         True if successfully computed, False otherwise.
@@ -218,9 +228,19 @@ def calibrate_fastmri_file_torch(
 
             if len(shape) == 3:
                 sens_ds[:] = calibrate(kspace_ds[:])
+                sens_ds.attrs["calibrated_slices"] = "all"
             else:
-                for s in range(shape[0]):
+                wanted = range(shape[0]) if slices is None else sorted({int(i) for i in slices})
+                out_of_range = [i for i in wanted if not 0 <= i < shape[0]]
+                if out_of_range:
+                    raise ValueError(
+                        f"slices {out_of_range} outside the volume's {shape[0]} slices"
+                    )
+                for s in wanted:
                     sens_ds[s] = calibrate(kspace_ds[s])
+                sens_ds.attrs["calibrated_slices"] = (
+                    "all" if slices is None else ",".join(str(i) for i in wanted)
+                )
 
         os.replace(tmp_path, dest_path)
         return True

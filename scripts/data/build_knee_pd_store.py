@@ -129,19 +129,33 @@ def append_block(images: h5py.Dataset, block: np.ndarray) -> int:
     return start
 
 
-def has_maps(sens_path: pathlib.Path) -> bool:
-    """Whether a usable ESPIRiT sidecar already exists for this volume.
+def has_maps(sens_path: pathlib.Path, indices: Sequence[int] | None = None) -> bool:
+    """Whether a usable ESPIRiT sidecar already exists for the slices we need.
 
     A sidecar left half-written by a killed job is unreadable rather than absent, and
     on a run that spans hundreds of volumes that has to mean "calibrate it again", not
     "abort the archive". Opened through a context manager because the caller runs this
     once per volume and HDF5 holds the file open until the handle is released.
+
+    Since calibration may now cover only the central slices, presence of the dataset is
+    no longer enough: a sidecar built for one slice selection would otherwise be reused
+    for a wider one and hand back zeroed maps, which read as a black image rather than
+    as an error. The ``calibrated_slices`` attribute is checked against what is asked
+    for; a sidecar written before that attribute existed is treated as complete.
     """
     if not sens_path.is_file():
         return False
     try:
         with h5py.File(sens_path, "r") as handle:
-            return SENS_KEY in handle
+            if SENS_KEY not in handle:
+                return False
+            if indices is None:
+                return True
+            covered = handle[SENS_KEY].attrs.get("calibrated_slices", "all")
+            if covered == "all":
+                return True
+            have = {int(part) for part in str(covered).split(",") if part != ""}
+            return set(indices) <= have
     except OSError:
         return False
 
@@ -317,20 +331,29 @@ def build(args: argparse.Namespace) -> None:
                         raw_path.unlink()
                     continue
 
+                # The slices are chosen before calibration, not after: ESPIRiT runs
+                # per slice from that slice's own k-space, so calibrating the whole
+                # volume and then keeping the central few produces bit-identical maps
+                # while spending roughly three times the work. Measured at ~6 min per
+                # volume on CPU, that waste dominated the intake.
+                indices = central_indices(header["depth"], args.slices)
+
                 sens_path = sens_dir / raw_path.name
-                if not has_maps(sens_path):
+                if not has_maps(sens_path, indices):
                     print(
-                        f"[{position}/{len(volumes)}] calibrating {raw_path.name} on {device}",
+                        f"[{position}/{len(volumes)}] calibrating {raw_path.name} on {device} "
+                        f"({len(indices)} of {header['depth']} slices)",
                         flush=True,
                     )
                     mark = time.time()
-                    calibrate_fastmri_file_torch(raw_path, sens_path, device=device)
+                    calibrate_fastmri_file_torch(
+                        raw_path, sens_path, device=device, slices=indices
+                    )
                     elapsed = time.time() - mark
                     espirit_seconds += elapsed
                     calibrated += 1
                     print(f"    espirit {elapsed:.1f}s", flush=True)
 
-                indices = central_indices(header["depth"], args.slices)
                 block = combined_slices(raw_path, sens_path, indices, args.crop)
                 start = append_block(images, block.numpy())
                 for offset, index in enumerate(indices):
