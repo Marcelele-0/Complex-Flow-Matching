@@ -24,6 +24,7 @@ dependencies = [
     "torchvision>=0.26.0",
     "tqdm>=4.67.3",
     "scipy>=1.15.0",
+    "soundfile>=0.13.1",
     "pandas>=2.2.0",
     "wandb>=0.25.1",
 ]

@@ -1,0 +1,32 @@
+# LibriSpeech dev-clean and test-clean as complex STFT segments, read from the compact
+# store built by scripts/data/build_stft_store.py.
+#
+# Why audio at all: without a second domain the paper reads as medical imaging at the
+# wrong venue. Why speech specifically: a spectrogram's modulus is what a mel-based
+# model keeps and its phase is what it discards and then guesses back with Griffin-Lim,
+# so the quantity this paper is about is audible here rather than only measurable.
+#
+# Why this corpus: CC BY 4.0, already 16 kHz so nothing is resampled, and laid out as
+# <speaker>/<chapter>/<utterance>.flac, which supplies the speaker id the split needs
+# without a metadata file. Only about an hour of speech fills a training set of this
+# size, so the binding constraint is the number of speakers, not the hours; dev-clean
+# and test-clean together give 80.
+name: librispeech_stft
+
+# Directory holding <store> and its .json manifest.
+data_dir: "data/librispeech_stft"
+store: "dev-clean.h5"
+
+# Speaker-level split. Segments of one utterance share a voice, a room and a
+# microphone, and one speaker reads many utterances, so anything finer than a speaker
+# leaks: the assignment hashes the speaker id. "fit" trains, "holdout" is never
+# trained on, "all" ignores the split.
+role: fit
+holdout_fraction: 0.2
+split_seed: 0
+
+split: null
+
+# Segments are cut to 64 bins x 64 frames at build time, so the entry points must not
+# crop a second time.
+crop_size: null
