@@ -61,8 +61,8 @@ def main(run: str, side: int, ks: list[int], n_fields: int = 64) -> None:
         zeros += int((a == 0).sum())
         tot += int(a.numel())
         print(
-            f"{k:>5} {2*k-1:>5} {100*s.neg/max(s.total,1):>12.4f}% "
-            f"{100*zeros/max(tot,1):>11.4f}% {s.min_raw:>12.5f}"
+            f"{k:>5} {2 * k - 1:>5} {100 * s.neg / max(s.total, 1):>12.4f}% "
+            f"{100 * zeros / max(tot, 1):>11.4f}% {s.min_raw:>12.5f}"
         )
 
 
