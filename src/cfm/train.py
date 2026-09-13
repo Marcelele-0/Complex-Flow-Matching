@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import signal
+import time
 from collections.abc import Callable
 from types import FrameType
 from typing import Any, cast
@@ -435,6 +436,13 @@ def main(cfg: DictConfig) -> None:
             # would replay the orders it had already seen.
             sampler.set_epoch(epoch)
 
+        # Timed from here, so the first batch includes worker start-up and the store's
+        # first open: that is what "seconds to first batch" costs a new cohort.
+        epoch_started = time.perf_counter()
+        first_batch_seconds: float | None = None
+        if device.type == "cuda":
+            torch.cuda.reset_peak_memory_stats(device)
+
         epoch_loss_total = 0.0
         # Component names come from the manifold, so a geometry's own breakdown
         # reaches the logs without any geometry-specific code in this loop.
@@ -522,6 +530,10 @@ def main(cfg: DictConfig) -> None:
             else:
                 grad_norm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), float("inf")))
             optimizer.step()
+            if first_batch_seconds is None:
+                if device.type == "cuda":
+                    torch.cuda.synchronize(device)
+                first_batch_seconds = time.perf_counter() - epoch_started
 
             # --- Update metrics ---
             epoch_loss_total += loss.item()
@@ -570,6 +582,17 @@ def main(cfg: DictConfig) -> None:
         breakdown = ", ".join(f"{name}: {value:.5f}" for name, value in avg_components.items())
         print_main(
             f"Epoch {epoch + 1} | Avg Loss: {avg_loss:.5f} ({breakdown}) | LR: {current_lr:.6f}"
+        )
+        # One parseable line per epoch: the fastMRI gate reads it, and a table's GPU
+        # budget is extrapolated from it.
+        epoch_seconds = time.perf_counter() - epoch_started
+        first = float("nan") if first_batch_seconds is None else first_batch_seconds
+        peak_vram_gib = float("nan")
+        if device.type == "cuda":
+            peak_vram_gib = torch.cuda.max_memory_allocated(device) / 2**30
+        print_main(
+            f"epoch_seconds={epoch_seconds:.1f} first_batch_seconds={first:.1f} "
+            f"peak_vram_gib={peak_vram_gib:.2f} batches={int(num_batches)} batch_size={batch_size}"
         )
 
         scheduler.step()
