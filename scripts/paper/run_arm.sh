@@ -11,6 +11,12 @@
 #                (e.g. EXPERIMENT=table5_fastmri SIDE=native)
 #   HOLDOUT_ROLE dataset.role for the evaluation only, so the reference fields come
 #                from volumes no arm trained on (e.g. HOLDOUT_ROLE=holdout)
+#   EVAL_STORE   dataset.store for the evaluation only. fastMRI ships its own
+#                patient-disjoint train/val split, so Table 5 trains on train.h5 and
+#                scores against val.h5 rather than hashing one store into two roles.
+#                Without this the runner can only split a single store, and a grid
+#                pointed at val.h5 would train on 814 slices instead of 5324 -- the
+#                runs would finish and the numbers would look plausible.
 #   BATCH        override the experiment's batch size. The protocol's value must be
 #                the same for every arm of a table; this exists for a smaller GPU
 #                and for smoke runs, and a table built with it is not comparable.
@@ -34,6 +40,7 @@ EPOCHS="${6:-40}"
 LOSS_MODE="${LOSS_MODE:-l2u}"
 EXPERIMENT="${EXPERIMENT:-}"
 HOLDOUT_ROLE="${HOLDOUT_ROLE:-}"
+EVAL_STORE="${EVAL_STORE:-}"
 BATCH="${BATCH:-}"
 
 # Everything but geometry, coupling, size and seed lives in conf/experiment/.
@@ -57,6 +64,9 @@ fi
 EVAL_ONLY=()
 if [ -n "$HOLDOUT_ROLE" ]; then
   EVAL_ONLY+=(dataset.role="$HOLDOUT_ROLE")
+fi
+if [ -n "$EVAL_STORE" ]; then
+  EVAL_ONLY+=(dataset.store="$EVAL_STORE")
 fi
 
 echo "[$(date '+%H:%M:%S')] train $NAME ($EXPERIMENT)"
