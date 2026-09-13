@@ -91,3 +91,22 @@ def test_data_dir_reaches_both_so_a_job_can_stage_to_node_local(
     )
     assert "dataset.data_dir=/scratch/stage" in train
     assert "dataset.data_dir=/scratch/stage" in evaluate
+
+
+def test_the_audio_grid_splits_one_store_by_role(tmp_path: pathlib.Path) -> None:
+    """Table 6's protocol, and the reason it needs its own script.
+
+    LibriSpeech ships no disjoint cohorts, so dev-clean and test-clean are pooled into
+    one store and hashed by speaker: training reads role=fit, evaluation role=holdout,
+    out of the same file. Sending an EVAL_STORE here, as Table 5 does, would point the
+    evaluation at a store that does not exist.
+    """
+    train, evaluate = _capture(
+        tmp_path, EXPERIMENT="table6_audio", HOLDOUT_ROLE="holdout", DATA_DIR="/scratch/stage"
+    )
+    assert "+experiment=table6_audio" in train
+    assert "dataset.role=holdout" in evaluate
+    assert "dataset.role=" not in train
+    assert "dataset.store=" not in evaluate
+    assert "dataset.data_dir=/scratch/stage" in train
+    assert "dataset.data_dir=/scratch/stage" in evaluate
