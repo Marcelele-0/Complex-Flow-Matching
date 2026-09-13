@@ -218,8 +218,10 @@ def main() -> int:
             return 2
         total = torch.cuda.get_device_properties(device).total_memory
         if args.memory_gib > 0:
+            # torch wants an index here, not the string "cuda": passing the bare
+            # string raises ValueError and the capped probe never runs.
             torch.cuda.set_per_process_memory_fraction(
-                min(1.0, args.memory_gib * GIB / total), device
+                min(1.0, args.memory_gib * GIB / total), torch.cuda.current_device()
             )
         capacity = args.memory_gib if args.memory_gib > 0 else total / GIB
         print(f"device={torch.cuda.get_device_name(device)} capacity_gib={capacity:.1f}")

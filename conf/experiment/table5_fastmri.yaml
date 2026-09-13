@@ -21,10 +21,10 @@
 # reference fields come from volumes no arm was trained on. The split is by volume,
 # because slices of one knee are highly correlated.
 #
-# batch_size is PROVISIONAL: measured here as the largest that fits an H100 with room
-# to spare (about 1.1 GiB per sample at 320x320; a 16 GB card tops out at 12). Issue
-# #76 replaces it with the measured value, and changing it changes the protocol, so
-# every arm of the table must use the same one.
+# batch_size is MEASURED, not provisional: the #76 gate (job 5883147) found 84 to be the
+# largest that fits an H100 at 320x320, and 64 the largest power of two, at a peak of
+# 70.8 of 93.1 GiB. Both geometries probe identically, so neither binds. Changing this
+# changes the protocol, so every arm of the table must use the same one.
 defaults:
   - override /dataset: fastmri_knee_pd
   - override /model: c_unet
@@ -37,7 +37,7 @@ dataset:
 training:
   bridge: noise
   epochs: 40
-  batch_size: 32
+  batch_size: 64
   grad_clip: null
   compile: false
   loss:
