@@ -34,7 +34,7 @@ from typing import Any
 
 ARM_ORDER = ("cylindrical_ot", "cylindrical_independent", "euclidean_ot", "euclidean_independent")
 NAME = re.compile(
-    r"^(?P<family>l2u|l1u|l1w|t6e40|t6)_(?:un(?:sz)?_)?"
+    r"^(?P<family>l2u|l1u|l1w|t6e40|t6e10|t6)_(?:un(?:sz)?_)?"
     r"(?P<manifold>cylindrical|euclidean)_(?P<coupling>ot|independent)"
     r"(?:_(?P<side>scnull|\d+))?_s(?P<seed>\d+)(?P<dense>_dense)?$"
 )
@@ -184,6 +184,7 @@ def main() -> None:
         ("l2u", "16", "TABELA 3 -- syntetyk 16x16"),
         ("l2u", "32", "TABELA 3 -- syntetyk 32x32"),
         ("t6e40", "native", "BLOK MOWY -- LibriSpeech STFT, 40 epok"),
+        ("t6e10", "native", "BLOK MOWY -- LibriSpeech STFT, 10 epok"),
         ("t6", "native", "BLOK MOWY -- LibriSpeech STFT, sonda 2-epokowa"),
     ):
         print(f"\n{'=' * 78}\n{title}\n{'=' * 78}")
