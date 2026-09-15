@@ -43,7 +43,10 @@ from __future__ import annotations
 
 import argparse
 import math
+import pathlib
 
+import h5py
+import numpy as np
 import torch
 
 from cfm.data.synthetic import CylinderToy, cylinder_prior
@@ -64,8 +67,114 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--ot-batch", type=int, default=256, help="Batch size for the minibatch OT arm."
     )
+    parser.add_argument(
+        "--target-store",
+        type=pathlib.Path,
+        default=None,
+        help="Draw the target from this HDF5 store instead of the synthetic toy.",
+    )
+    parser.add_argument(
+        "--store-fields",
+        type=int,
+        default=4096,
+        help="Fields to read from the store; enough to sample from, cheap to load.",
+    )
+    parser.add_argument(
+        "--min-field-peak",
+        type=float,
+        default=0.0,
+        help="Drop whole fields whose absolute peak is below this fraction of the loudest.",
+    )
+    parser.add_argument(
+        "--min-amplitude",
+        type=float,
+        default=0.0,
+        help="Drop target coefficients below this fraction of their field's peak.",
+    )
     parser.add_argument("--seed", type=int, default=0)
     return parser.parse_args()
+
+
+def store_target(
+    path: pathlib.Path,
+    pairs: int,
+    fields: int,
+    generator: torch.Generator,
+    min_amplitude: float = 0.0,
+    min_field_peak: float = 0.0,
+) -> tuple[torch.Tensor, str]:
+    """Draw complex coefficients from a prebuilt store, normalised as training sees them.
+
+    The manifold transform divides each field by its own peak modulus, so the amplitudes
+    a bridge actually meets are relative ones. Drawing raw coefficients would compare a
+    prior supported on the unit disc against a target on an arbitrary physical scale,
+    and the resulting geometry would be an artefact of that mismatch rather than of the
+    data. Normalising per field, exactly as the training transform does, is what makes
+    the measurement comparable to the synthetic row above it.
+
+    Args:
+        path: Store written by one of the ``build_*_store`` scripts.
+        pairs: Coefficients to draw.
+        fields: Upper bound on fields read; a few thousand already hold far more
+            coefficients than are sampled.
+        generator: Seeded RNG, so a rerun prints the same numbers.
+        min_amplitude: Keep only coefficients at or above this fraction of their field's
+            peak. The peak angular velocity of a chord grows as the target amplitude
+            falls, and a real spectrum spends most of its bins near its own noise floor,
+            where the phase carries nothing. Reporting the measurement with and without
+            this filter separates a geometric fact about the parametrisation from an
+            artefact of counting bins nobody hears.
+
+    Returns:
+        The drawn coefficients as ``complex128``, and a label naming the store.
+
+    Raises:
+        FileNotFoundError: If the store is absent.
+        KeyError: If it holds neither of the two dataset names this project writes.
+    """
+    if not path.is_file():
+        raise FileNotFoundError(f"No store at {path}")
+    with h5py.File(path, "r") as handle:
+        for key in ("frames", "images"):
+            if key in handle:
+                break
+        else:
+            raise KeyError(f"{path} holds none of ('frames', 'images'); has {list(handle)}")
+        available = handle[key].shape[0]
+        take = min(fields, available)
+        if take < available:
+            chosen = torch.randperm(available, generator=generator)[:take].sort().values
+            block = handle[key][chosen.numpy()]
+        else:
+            block = handle[key][:]
+        data = torch.from_numpy(np.asarray(block, dtype=np.complex64))
+
+    spatial = tuple(range(1, data.ndim))
+    peak = data.abs().amax(dim=spatial, keepdim=True).clamp_min(1e-12)
+    dropped_fields = 0
+    if min_field_peak > 0.0:
+        # Applied before the per-field normalisation, and that order is the point: a field
+        # that holds only silence still has its own maximum divided out, so afterwards its
+        # noise floor looks as loud as a vowel. Judging a field by its absolute peak is the
+        # only way to tell the two apart.
+        keep = peak.reshape(-1) >= min_field_peak * peak.max()
+        dropped_fields = int((~keep).sum())
+        if not bool(keep.any()):
+            raise ValueError(f"no field of {path.name} reaches {min_field_peak} of the loudest")
+        data, peak = data[keep], peak[keep]
+    flat = (data / peak).reshape(-1).to(torch.complex128)
+    total = flat.numel()
+    label = f"{path.name} ({take - dropped_fields:,} fields"
+    if dropped_fields:
+        label += f" after dropping {dropped_fields / take:.1%} below {min_field_peak:g} peak"
+    label += f", {total:,} coefficients"
+    if min_amplitude > 0.0:
+        flat = flat[flat.abs() >= min_amplitude]
+        if flat.numel() == 0:
+            raise ValueError(f"no coefficient of {path.name} reaches {min_amplitude}")
+        label += f", {flat.numel() / total:.1%} kept above {min_amplitude:g} of peak"
+    index = torch.randint(flat.numel(), (pairs,), generator=generator)
+    return flat[index], label + ")"
 
 
 def cartesian_peak(start: torch.Tensor, end: torch.Tensor) -> torch.Tensor:
@@ -81,10 +190,24 @@ def cartesian_peak(start: torch.Tensor, end: torch.Tensor) -> torch.Tensor:
     velocity = end - start
     moment = (start.conj() * end).imag.abs()
     squared_speed = velocity.abs().square().clamp_min(_DISTANCE_FLOOR)
-    # Closest approach of the infinite line, clipped to the segment.
-    t_star = (-(start.conj() * velocity).real / squared_speed).clamp(0.0, 1.0)
-    closest = (start + t_star * velocity).abs().square().clamp_min(_DISTANCE_FLOOR)
-    return moment / closest
+    raw = -(start.conj() * velocity).real / squared_speed
+
+    # Where the foot of the perpendicular falls inside the segment, the closest approach
+    # is |moment| / |velocity| and the peak reduces to |velocity|^2 / |moment|. Forming it
+    # that way rather than as moment / |start + t velocity|^2 is not a simplification but
+    # a numerical necessity: a chord that passes close to the origin makes that sum a
+    # difference of two nearly equal complex numbers, and on real normalised data -- where
+    # most coefficients sit far below their field's peak -- the cancellation leaves the
+    # result dominated by rounding. The dense-grid check in verify_closed_form fails on
+    # both real stores with the cancelling form and passes with this one.
+    interior = squared_speed / moment.clamp_min(_DISTANCE_FLOOR)
+
+    # At a clamped foot the closest approach is an endpoint modulus, computed directly and
+    # so free of that cancellation.
+    endpoint = torch.where(raw <= 0.0, start.abs().square(), end.abs().square())
+    at_endpoint = moment / endpoint.clamp_min(_DISTANCE_FLOOR)
+
+    return torch.where((raw > 0.0) & (raw < 1.0), interior, at_endpoint)
 
 
 def cartesian_at(start: torch.Tensor, end: torch.Tensor, t: float) -> torch.Tensor:
@@ -115,12 +238,25 @@ def verify_closed_form(start: torch.Tensor, end: torch.Tensor, grid: int = 20001
         end: Complex endpoints at ``t = 1``.
         grid: Number of time points.
 
+    The comparison is only made where the grid itself is trustworthy. Evaluating
+    ``(1 - t) z_0 + t z_1`` near the origin subtracts two nearly equal complex numbers, so
+    when the closest approach falls far below the endpoint moduli the grid's position is
+    rounding noise and can come out *smaller* than the true minimum -- making its rate
+    exceed the closed form and, before this gate existed, aborting the whole measurement
+    on real data. The closed form has no such cancellation, so those pairs are excluded
+    from the check rather than from the measurement.
+
+    Args:
+        start: Complex endpoints at ``t = 0``.
+        end: Complex endpoints at ``t = 1``.
+        grid: Number of time points.
+
     Returns:
-        Median of ``(closed - grid) / closed`` over pairs.
+        Median of ``(closed - grid) / closed`` over the pairs the grid can resolve.
 
     Raises:
-        AssertionError: If the grid ever exceeds the closed form, which would
-            mean the formula is wrong.
+        AssertionError: If the grid exceeds the closed form on a pair it can resolve,
+            which would mean the formula is wrong.
     """
     times = torch.linspace(0.0, 1.0, grid, dtype=torch.float64)
     start64, end64 = start.to(torch.complex128), end.to(torch.complex128)
@@ -129,8 +265,26 @@ def verify_closed_form(start: torch.Tensor, end: torch.Tensor, grid: int = 20001
     rates = (positions.conj() * velocity[None]).imag.abs() / positions.abs().square()
     on_grid = rates.max(dim=0).values
     closed = cartesian_peak(start64, end64)
-    assert bool((on_grid <= closed * (1 + 1e-9) + 1e-12).all()), "grid exceeded the closed form"
-    return float(((closed - on_grid) / closed).median())
+
+    scale = torch.maximum(start64.abs(), end64.abs()).clamp_min(_DISTANCE_FLOOR)
+    closest = (closed / (start64.conj() * end64).imag.abs().clamp_min(_DISTANCE_FLOOR)).rsqrt()
+    # A target coefficient that is exactly zero -- background outside the imaged field, and
+    # the knee store holds many -- makes the chord radial: its argument never turns, so the
+    # closed form correctly reports zero, while the grid evaluates 0/0 at t = 1 and returns
+    # NaN. Excluding those from the comparison keeps a degenerate case from being read as a
+    # failure of the formula.
+    resolved = (closest / scale > 1e-6) & torch.isfinite(on_grid)
+    checked = closed[resolved]
+    assert bool(
+        (on_grid[resolved] <= checked * (1 + 1e-9) + 1e-12).all()
+    ), "grid exceeded the closed form"
+    if not bool(resolved.any()):
+        return float("nan")
+    print(
+        f"grid check: {float(resolved.double().mean()):.1%} of pairs resolvable in float64"
+        f" (the rest are radial or pass within rounding of the origin)"
+    )
+    return float(((checked - on_grid[resolved]) / checked).median())
 
 
 def hill_tail_index(values: torch.Tensor, fraction: float = 0.01) -> float:
@@ -166,8 +320,19 @@ def main() -> None:
     n = args.pairs
 
     prior = cylinder_prior(n, generator=generator).to(torch.complex128)
-    toy = CylinderToy(coupling=args.coupling, dtype=torch.float64)
-    target = toy.sample(n, generator=generator)
+    if args.target_store is None:
+        toy = CylinderToy(coupling=args.coupling, dtype=torch.float64)
+        target = toy.sample(n, generator=generator)
+        source = f"synthetic toy, coupling rho = {args.coupling}"
+    else:
+        target, source = store_target(
+            args.target_store,
+            n,
+            args.store_fields,
+            generator,
+            args.min_amplitude,
+            args.min_field_peak,
+        )
 
     # Minibatch OT in the plane, the pairing a Cartesian OT flow trains on.
     batch = args.ot_batch
@@ -185,7 +350,7 @@ def main() -> None:
     print(
         f"closed form vs 20001-point grid, median relative gap: {gap:.2e}  (grid never exceeds it)"
     )
-    print(f"pairs: {n:,} | target coupling rho = {args.coupling} | OT batch {batch}")
+    print(f"pairs: {n:,} | target: {source} | OT batch {batch}")
 
     arms = {
         "Cartesian / independent": cartesian_peak(prior, target),
@@ -199,6 +364,28 @@ def main() -> None:
     for name, values in arms.items():
         exceed = float((values > math.pi).double().mean())
         print(f"{name:<28}{quantile_row(values)}{exceed:>8.1%}")
+
+    # Weighted by the target's energy and truncated nowhere. The peak angular velocity
+    # has a Pareto tail of index one, so its mean is infinite and any quantile of it
+    # moves with wherever the sample is cut -- on real data most coefficients sit near
+    # their field's noise floor, and including or excluding them changes an unweighted
+    # quantile several-fold while changing the signal by a fraction of a percent. This
+    # statistic has no such freedom: it is a bounded average, it needs no threshold,
+    # and it answers what a coarse integrator actually has to cope with -- the share of
+    # the signal's energy that lies on paths turning faster than pi.
+    print("\n1b. SHARE OF TARGET ENERGY ON PATHS WITH PEAK > pi   no threshold, no truncation")
+    # The OT arm is measured against the permuted targets it is actually paired with,
+    # not against the original order; weighting one by the other silently mismatches
+    # every path with a stranger's energy.
+    weights = {
+        "Cartesian / independent": target.abs().square(),
+        "Cartesian / minibatch OT": paired.abs().square(),
+        "Cylindrical / independent": target.abs().square(),
+    }
+    for name, values in arms.items():
+        w = weights[name]
+        share = float((w * (values > math.pi)).sum() / w.sum())
+        print(f"  {name:<28} {share:>7.1%}")
 
     print("\n2. AT t = 0.5, WHERE A CHORD PASSES CLOSEST TO THE ORIGIN ON AVERAGE")
     print(f"{'arm':<28}{'median':>12}{'q90':>12}{'q99':>12}{'q99.9':>12}{'max':>14}")
