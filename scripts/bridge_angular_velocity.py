@@ -305,11 +305,25 @@ def hill_tail_index(values: torch.Tensor, fraction: float = 0.01) -> float:
     return float(1.0 / (torch.log(top[:k]) - torch.log(top[k])).mean())
 
 
+def _cell(value: float, width: int) -> str:
+    """One number, switched to exponent notation before it can run into its neighbour.
+
+    On a real store the upper quantiles of the Cartesian peak reach 1e30 and beyond,
+    because the statistic has a Pareto tail of index one and the coefficients near a
+    field's noise floor drive it without limit. Fixed-point formatting silently ran
+    those columns together into an unreadable digit string, which looked like a
+    formatting nuisance but is really the same fact: an unweighted quantile of this
+    quantity is a statement about float64 rather than about the data, which is why the
+    energy-weighted share exists and is the number to quote.
+    """
+    return f"{value:>{width}.3g}" if abs(value) >= 1e6 else f"{value:>{width}.3f}"
+
+
 def quantile_row(values: torch.Tensor) -> str:
     """Median, tail quantiles and maximum, formatted."""
     probabilities = torch.tensor([0.5, 0.9, 0.99, 0.999], dtype=values.dtype)
     q = torch.quantile(values[: min(values.numel(), 16_000_000)], probabilities)
-    cells = [f"{float(x):>12.3f}" for x in q] + [f"{float(values.max()):>14.1f}"]
+    cells = [_cell(float(x), 13) for x in q] + [_cell(float(values.max()), 15)]
     return "".join(cells)
 
 
@@ -359,8 +373,8 @@ def main() -> None:
     }
 
     print("\n1. PEAK |d arg(x_t)/dt| ALONG THE PATH")
-    print(f"{'arm':<28}{'median':>12}{'q90':>12}{'q99':>12}{'q99.9':>12}{'max':>14}{'> pi':>9}")
-    print("-" * 100)
+    print(f"{'arm':<28}{'median':>13}{'q90':>13}{'q99':>13}{'q99.9':>13}{'max':>15}{'> pi':>9}")
+    print("-" * 104)
     for name, values in arms.items():
         exceed = float((values > math.pi).double().mean())
         print(f"{name:<28}{quantile_row(values)}{exceed:>8.1%}")
@@ -388,8 +402,8 @@ def main() -> None:
         print(f"  {name:<28} {share:>7.1%}")
 
     print("\n2. AT t = 0.5, WHERE A CHORD PASSES CLOSEST TO THE ORIGIN ON AVERAGE")
-    print(f"{'arm':<28}{'median':>12}{'q90':>12}{'q99':>12}{'q99.9':>12}{'max':>14}")
-    print("-" * 100)
+    print(f"{'arm':<28}{'median':>13}{'q90':>13}{'q99':>13}{'q99.9':>13}{'max':>15}")
+    print("-" * 104)
     print(f"{'Cartesian / independent':<28}{quantile_row(cartesian_at(prior, target, 0.5))}")
     print(
         f"{'Cartesian / minibatch OT':<28}{quantile_row(cartesian_at(prior[:usable], paired, 0.5))}"
