@@ -1,0 +1,35 @@
+\begin{table}[h]
+    \centering
+    \caption{\textbf{Analytical path geometry, on three sources of complex data.} Peak
+    angular velocity $|\dot{\theta}|$ along $10^6$ exact bridges from the prior to each
+    target; no network is involved. \textbf{Paths} counts every coefficient equally;
+    \textbf{Energy} weights each path by its target's $|z_1|^2$. The two disagree because
+    the weighting \emph{is} a choice of metric: $|z_1|^2$ reinstates the $A^2$ that the
+    plane's inherited metric $\mathrm{d}A^2 + A^2\mathrm{d}\theta^2$ carries on its
+    angular term and that the cylinder drops. We report both. The upper quantiles are
+    omitted for the real sources: the peak has a Pareto tail of index one, so they are
+    finite only because the sample is.}
+    \label{tab:bridge_ablation}
+    \vspace{1mm}
+    \begin{tabular}{llcc}
+        \toprule
+        \textbf{Target} & \textbf{Geometry / coupling} & \textbf{Paths $> \pi$ $\downarrow$} & \textbf{Energy $> \pi$ $\downarrow$} \\
+        \midrule
+        Synthetic
+          & Cartesian, independent  & 46.0\% & 42.6\% \\
+          & Cartesian, minibatch OT & 1.0\%  & 0.1\%  \\
+          & \textbf{Cylindrical (ours)} & \textbf{0.0\%} & \textbf{0.0\%} \\
+        \midrule
+        Knee MRI
+          & Cartesian, independent  & 56.4\% & 48.3\% \\
+          & Cartesian, minibatch OT & 13.1\% & 0.1\%  \\
+          & \textbf{Cylindrical (ours)} & \textbf{0.0\%} & \textbf{0.0\%} \\
+        \midrule
+        Speech STFT
+          & Cartesian, independent  & 94.8\% & 49.4\% \\
+          & Cartesian, minibatch OT & 81.9\% & 5.1\%  \\
+          & \textbf{Cylindrical (ours)} & \textbf{0.0\%} & \textbf{0.0\%} \\
+        \bottomrule
+    \end{tabular}
+    \vspace{1mm}
+\end{table}
