@@ -8,7 +8,14 @@
     plane's inherited metric $\mathrm{d}A^2 + A^2\mathrm{d}\theta^2$ carries on its
     angular term and that the cylinder drops. We report both. The upper quantiles are
     omitted for the real sources: the peak has a Pareto tail of index one, so they are
-    finite only because the sample is.}
+    finite only because the sample is.
+    \textbf{Targets.} \emph{Synthetic} is the Gaussian-copula field of
+    Section~\ref{sec:exp_unet_baseline}. \emph{Knee MRI} is the fastMRI knee cohort,
+    coronal proton density without fat suppression, coil-combined with ESPIRiT and cropped
+    to $320\times320$. \emph{Speech STFT} is LibriSpeech read speech at 16~kHz, analysed
+    with a 128-point Hann window at hop 64 and cut into segments of 64 bins by 64 frames
+    ($0.26$~s). Both real targets are normalised by each field's own peak modulus, exactly
+    as the training transform does, so the amplitudes a bridge meets are relative ones.}
     \label{tab:bridge_ablation}
     \vspace{1mm}
     \begin{tabular}{llcc}
