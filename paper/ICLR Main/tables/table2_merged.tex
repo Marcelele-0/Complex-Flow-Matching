@@ -6,7 +6,11 @@
     first step count at which an arm reaches $E^\star$, the $k=100$ error of the
     \emph{worse} geometry, which is what stops the comparison from being an artefact of
     the two converging to different asymptotes. Errors are comparable within a block and
-    not across blocks: the two domains differ in data, resolution and scale.}
+    not across blocks. Each block holds its own protocol fixed across arms -- same architecture, batch, objective, seeds and epoch count --
+    but an epoch is not the same amount of optimisation in the two domains: the speech store
+    holds $110{,}099$ segments against $8{,}192$ synthetic fields, so forty epochs are
+    thirteen times as many gradient steps there. Passes were held fixed, not steps; we say so
+    because more data on one side is not a neutral choice in a comparison between domains.}
     \label{tab:unet_baseline}
     \vspace{1mm}
     \resizebox{\linewidth}{!}{
