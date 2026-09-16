@@ -1,0 +1,41 @@
+\begin{table}[h]
+    \centering
+    \caption{\textbf{Both geometries under both losses.} Generative error (Sliced $W_2$, $\downarrow$), mean over 5 seeds. L1 / L2: absolute / squared error of the velocity; the cylindrical phase term is unweighted in both. Taking each geometry's best of the four variants per cell, CyFM has the lower error at every $k \le 8$ with all seeds separated, except $16\times16$, $k = 8$ ($p = 0.15$); at $k = 100$ no best-against-best comparison is significant ($p \ge 0.54$).}
+    \label{tab:unet_loss_protocols}
+    \vspace{1mm}
+    \resizebox{\linewidth}{!}{
+    \begin{tabular}{llllccccc}
+        \toprule
+        \textbf{Resolution} & \textbf{Geometry} & \textbf{Coupling} & \textbf{Loss} & \textbf{1 Step} & \textbf{2 Steps} & \textbf{4 Steps} & \textbf{8 Steps} & \textbf{100 Steps} \\
+        \midrule
+        $16\times16$ & Cartesian & Independent & L1 & 0.418 & 0.353 & 0.226 & 0.085 & 0.076 \\
+         & Cartesian & Independent & L2 & 0.442 & 0.334 & 0.225 & 0.100 & 0.071 \\
+         & Cartesian & OT & L1 & 0.183 & 0.168 & 0.130 & 0.077 & 0.061 \\
+         & Cartesian & OT & L2 & 0.227 & 0.202 & 0.153 & 0.097 & 0.068 \\
+         & CyFM & Independent & L1 & 0.143 & 0.134 & 0.137 & 0.130 & 0.102 \\
+         & CyFM & Independent & L2 & 0.116 & 0.155 & 0.133 & 0.097 & 0.062 \\
+         & CyFM & Joint OT & L1 & 0.093 & 0.096 & 0.090 & 0.092 & 0.070 \\
+         & CyFM & Joint OT & L2 & 0.098 & 0.086 & 0.053 & 0.064 & 0.054 \\
+        \midrule
+        $32\times32$ & Cartesian & Independent & L1 & 0.428 & 0.363 & 0.258 & 0.125 & 0.069 \\
+         & Cartesian & Independent & L2 & 0.431 & 0.339 & 0.253 & 0.127 & 0.043 \\
+         & Cartesian & OT & L1 & 0.320 & 0.263 & 0.199 & 0.091 & 0.048 \\
+         & Cartesian & OT & L2 & 0.340 & 0.275 & 0.209 & 0.104 & 0.037 \\
+         & CyFM & Independent & L1 & 0.125 & 0.146 & 0.129 & 0.097 & 0.110 \\
+         & CyFM & Independent & L2 & 0.123 & 0.145 & 0.113 & 0.063 & 0.047 \\
+         & CyFM & Joint OT & L1 & 0.091 & 0.087 & 0.079 & 0.056 & 0.070 \\
+         & CyFM & Joint OT & L2 & 0.113 & 0.094 & 0.072 & 0.049 & 0.041 \\
+        \midrule
+        $64\times64$ & Cartesian & Independent & L1 & 0.411 & 0.365 & 0.283 & 0.136 & 0.037 \\
+         & Cartesian & Independent & L2 & 0.416 & 0.349 & 0.285 & 0.154 & 0.046 \\
+         & Cartesian & OT & L1 & 0.363 & 0.313 & 0.252 & 0.126 & 0.032 \\
+         & Cartesian & OT & L2 & 0.376 & 0.318 & 0.260 & 0.141 & 0.047 \\
+         & CyFM & Independent & L1 & 0.107 & 0.169 & 0.145 & 0.091 & 0.050 \\
+         & CyFM & Independent & L2 & 0.121 & 0.148 & 0.109 & 0.066 & 0.043 \\
+         & CyFM & Joint OT & L1 & 0.092 & 0.122 & 0.099 & 0.064 & 0.035 \\
+         & CyFM & Joint OT & L2 & 0.117 & 0.114 & 0.078 & 0.054 & 0.040 \\
+        \bottomrule
+    \end{tabular}
+    }
+    \vspace{1mm}
+\end{table}
