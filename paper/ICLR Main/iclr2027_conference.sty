@@ -1,246 +1,278 @@
-%%%% ICLR Macros (LaTex)
-%%%% Adapted by Hugo Larochelle from the NIPS stylefile Macros
-%%%% Style File
-%%%% Dec 12, 1990   Rev Aug 14, 1991; Sept, 1995; April, 1997; April, 1999; October 2014
+%-------------------------
+% Resume in Latex
+% Author : Jake Gutierrez
+% Based off of: https://github.com/sb2nov/resume
+% License : MIT
+%------------------------
 
-% This file can be used with Latex2e whether running in main mode, or
-% 2.09 compatibility mode.
-%
-% If using main mode, you need to include the commands
-%             \documentclass{article}
-%             \usepackage{iclr14submit_e,times}
-%
+\documentclass[letterpaper,11pt]{article}
 
-% Change the overall width of the page.  If these parameters are
-%       changed, they will require corresponding changes in the
-%       maketitle section.
-%
-\usepackage{eso-pic} % used by \AddToShipoutPicture
-\RequirePackage{fancyhdr}
-\RequirePackage{natbib}
-
-% modification to natbib citations
-\setcitestyle{authoryear,round,citesep={;},aysep={,},yysep={;}}
-
-\renewcommand{\topfraction}{0.95}   % let figure take up nearly whole page
-\renewcommand{\textfraction}{0.05}  % let figure take up nearly whole page
-
-% Define iclrfinal, set to true if iclrfinalcopy is defined
-\newif\ificlrfinal
-\iclrfinalfalse
-\def\iclrfinalcopy{\iclrfinaltrue}
-\font\iclrtenhv  = phvb at 8pt
-
-% Specify the dimensions of each page
-
-\setlength{\paperheight}{11in}
-\setlength{\paperwidth}{8.5in}
-
-
-\oddsidemargin .5in    %   Note \oddsidemargin = \evensidemargin
-\evensidemargin .5in
-\marginparwidth 0.07 true in
-%\marginparwidth 0.75 true in
-%\topmargin 0 true pt           % Nominal distance from top of page to top of
-%\topmargin 0.125in
-\topmargin -0.625in
-\addtolength{\headsep}{0.25in}
-\textheight 9.0 true in       % Height of text (including footnotes & figures)
-\textwidth 5.5 true in        % Width of text line.
-\widowpenalty=10000
-\clubpenalty=10000
-
-% \thispagestyle{empty}        \pagestyle{empty}
-\flushbottom \sloppy
-
-% We're never going to need a table of contents, so just flush it to
-% save space --- suggested by drstrip@sandia-2
-\def\addcontentsline#1#2#3{}
-
-% Title stuff, taken from deproc.
-\def\maketitle{\par
-\begingroup
-   \def\thefootnote{\fnsymbol{footnote}}
-   \def\@makefnmark{\hbox to 0pt{$^{\@thefnmark}$\hss}} % for perfect author
-                                                        % name centering
-%   The footnote-mark was overlapping the footnote-text,
-%   added the following to fix this problem               (MK)
-   \long\def\@makefntext##1{\parindent 1em\noindent
-                            \hbox to1.8em{\hss $\m@th ^{\@thefnmark}$}##1}
-   \@maketitle \@thanks
-\endgroup
-\setcounter{footnote}{0}
-\let\maketitle\relax \let\@maketitle\relax
-\gdef\@thanks{}\gdef\@author{}\gdef\@title{}\let\thanks\relax}
-
-% The toptitlebar has been raised to top-justify the first page
-
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage{verbatim}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
 \usepackage{fancyhdr}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\usepackage{fontawesome5}
+\usepackage{multicol}
+\setlength{\multicolsep}{-3.0pt}
+\setlength{\columnsep}{-1pt}
+\input{glyphtounicode}
+
 \pagestyle{fancy}
-\fancyhead{}
+\fancyhf{}
+\fancyfoot{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
 
-% Title (includes both anonimized and non-anonimized versions)
-\def\@maketitle{\vbox{\hsize\textwidth
-%\linewidth\hsize \vskip 0.1in \toptitlebar \centering
-{\LARGE\sc \@title\par}
-%\bottomtitlebar % \vskip 0.1in %  minus
-\ificlrfinal
-    \lhead{Published as a conference paper at ICLR 2027}
-    \def\And{\end{tabular}\hfil\linebreak[0]\hfil
-            \begin{tabular}[t]{l}\bf\rule{\z@}{24pt}\ignorespaces}%
-  \def\AND{\end{tabular}\hfil\linebreak[4]\hfil
-            \begin{tabular}[t]{l}\bf\rule{\z@}{24pt}\ignorespaces}%
-    \begin{tabular}[t]{l}\bf\rule{\z@}{24pt}\@author\end{tabular}%
-\else
-       \lhead{Under review as a conference paper at ICLR 2027}
-   \def\And{\end{tabular}\hfil\linebreak[0]\hfil
-            \begin{tabular}[t]{l}\bf\rule{\z@}{24pt}\ignorespaces}%
-  \def\AND{\end{tabular}\hfil\linebreak[4]\hfil
-            \begin{tabular}[t]{l}\bf\rule{\z@}{24pt}\ignorespaces}%
-    \begin{tabular}[t]{l}\bf\rule{\z@}{24pt}Anonymous authors\\Paper under double-blind review\end{tabular}%
-\fi
-\vskip 0.3in minus 0.1in}}
+% Adjust margins
+\addtolength{\oddsidemargin}{-0.6in}
+\addtolength{\evensidemargin}{-0.5in}
+\addtolength{\textwidth}{1.19in}
+\addtolength{\topmargin}{-0.7in}
+\addtolength{\textheight}{1.4in}
 
-\renewenvironment{abstract}{\vskip.075in\centerline{\large\sc
-Abstract}\vspace{0.5ex}\begin{quote}}{\par\end{quote}\vskip 1ex}
+\urlstyle{same}
 
-% sections with less space
-\def\section{\@startsection {section}{1}{\z@}{-2.0ex plus
-    -0.5ex minus -.2ex}{1.5ex plus 0.3ex
-minus0.2ex}{\large\sc\raggedright}}
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
 
-\def\subsection{\@startsection{subsection}{2}{\z@}{-1.8ex plus
--0.5ex minus -.2ex}{0.8ex plus .2ex}{\normalsize\sc\raggedright}}
-\def\subsubsection{\@startsection{subsubsection}{3}{\z@}{-1.5ex
-plus      -0.5ex minus -.2ex}{0.5ex plus
-.2ex}{\normalsize\sc\raggedright}}
-\def\paragraph{\@startsection{paragraph}{4}{\z@}{1.5ex plus
-0.5ex minus .2ex}{-1em}{\normalsize\bf}}
-\def\subparagraph{\@startsection{subparagraph}{5}{\z@}{1.5ex plus
-  0.5ex minus .2ex}{-1em}{\normalsize\sc}}
-\def\subsubsubsection{\vskip
-5pt{\noindent\normalsize\rm\raggedright}}
+% Sections formatting
+\titleformat{\section}{
+  \vspace{-4pt}\scshape\raggedright\large\bfseries
+}{}{0em}{}[\color{black}\titlerule \vspace{-5pt}]
 
+\pdfgentounicode=1
 
-% Footnotes
-\footnotesep 6.65pt %
-\skip\footins 9pt plus 4pt minus 2pt
-\def\footnoterule{\kern-3pt \hrule width 12pc \kern 2.6pt }
-\setcounter{footnote}{0}
-
-% Lists and paragraphs
-\parindent 0pt
-\topsep 4pt plus 1pt minus 2pt
-\partopsep 1pt plus 0.5pt minus 0.5pt
-\itemsep 2pt plus 1pt minus 0.5pt
-\parsep 2pt plus 1pt minus 0.5pt
-\parskip .5pc
-
-
-%\leftmargin2em
-\leftmargin3pc
-\leftmargini\leftmargin \leftmarginii 2em
-\leftmarginiii 1.5em \leftmarginiv 1.0em \leftmarginv .5em
-
-%\labelsep \labelsep 5pt
-
-\def\@listi{\leftmargin\leftmargini}
-\def\@listii{\leftmargin\leftmarginii
-   \labelwidth\leftmarginii\advance\labelwidth-\labelsep
-   \topsep 2pt plus 1pt minus 0.5pt
-   \parsep 1pt plus 0.5pt minus 0.5pt
-   \itemsep \parsep}
-\def\@listiii{\leftmargin\leftmarginiii
-    \labelwidth\leftmarginiii\advance\labelwidth-\labelsep
-    \topsep 1pt plus 0.5pt minus 0.5pt
-    \parsep \z@ \partopsep 0.5pt plus 0pt minus 0.5pt
-    \itemsep \topsep}
-\def\@listiv{\leftmargin\leftmarginiv
-     \labelwidth\leftmarginiv\advance\labelwidth-\labelsep}
-\def\@listv{\leftmargin\leftmarginv
-     \labelwidth\leftmarginv\advance\labelwidth-\labelsep}
-\def\@listvi{\leftmargin\leftmarginvi
-     \labelwidth\leftmarginvi\advance\labelwidth-\labelsep}
-
-\abovedisplayskip 7pt plus2pt minus5pt%
-\belowdisplayskip \abovedisplayskip
-\abovedisplayshortskip  0pt plus3pt%
-\belowdisplayshortskip  4pt plus3pt minus3pt%
-
-% Less leading in most fonts (due to the narrow columns)
-% The choices were between 1-pt and 1.5-pt leading
-%\def\@normalsize{\@setsize\normalsize{11pt}\xpt\@xpt} % got rid of @ (MK)
-\def\normalsize{\@setsize\normalsize{11pt}\xpt\@xpt}
-\def\small{\@setsize\small{10pt}\ixpt\@ixpt}
-\def\footnotesize{\@setsize\footnotesize{10pt}\ixpt\@ixpt}
-\def\scriptsize{\@setsize\scriptsize{8pt}\viipt\@viipt}
-\def\tiny{\@setsize\tiny{7pt}\vipt\@vipt}
-\def\large{\@setsize\large{14pt}\xiipt\@xiipt}
-\def\Large{\@setsize\Large{16pt}\xivpt\@xivpt}
-\def\LARGE{\@setsize\LARGE{20pt}\xviipt\@xviipt}
-\def\huge{\@setsize\huge{23pt}\xxpt\@xxpt}
-\def\Huge{\@setsize\Huge{28pt}\xxvpt\@xxvpt}
-
-\def\toptitlebar{\hrule height4pt\vskip .25in\vskip-\parskip}
-
-\def\bottomtitlebar{\vskip .29in\vskip-\parskip\hrule height1pt\vskip
-.09in} %
-%Reduced second vskip to compensate for adding the strut in \@author
-
-
-
-%% % Vertical Ruler
-%% % This code is, largely, from the CVPR 2010 conference style file
-%% % ----- define vruler
-\makeatletter
-\newbox\iclrrulerbox
-\newcount\iclrrulercount
-\newdimen\iclrruleroffset
-\newdimen\cv@lineheight
-\newdimen\cv@boxheight
-\newbox\cv@tmpbox
-\newcount\cv@refno
-\newcount\cv@tot
-% NUMBER with left flushed zeros  \fillzeros[<WIDTH>]<NUMBER>
-\newcount\cv@tmpc@ \newcount\cv@tmpc
-\def\fillzeros[#1]#2{\cv@tmpc@=#2\relax\ifnum\cv@tmpc@<0\cv@tmpc@=-\cv@tmpc@\fi
-\cv@tmpc=1 %
-\loop\ifnum\cv@tmpc@<10 \else \divide\cv@tmpc@ by 10 \advance\cv@tmpc by 1 \fi
-   \ifnum\cv@tmpc@=10\relax\cv@tmpc@=11\relax\fi \ifnum\cv@tmpc@>10 \repeat
-\ifnum#2<0\advance\cv@tmpc1\relax-\fi
-\loop\ifnum\cv@tmpc<#1\relax0\advance\cv@tmpc1\relax\fi \ifnum\cv@tmpc<#1 \repeat
-\cv@tmpc@=#2\relax\ifnum\cv@tmpc@<0\cv@tmpc@=-\cv@tmpc@\fi \relax\the\cv@tmpc@}%
-% \makevruler[<SCALE>][<INITIAL_COUNT>][<STEP>][<DIGITS>][<HEIGHT>]
-\def\makevruler[#1][#2][#3][#4][#5]{\begingroup\offinterlineskip
-\textheight=#5\vbadness=10000\vfuzz=120ex\overfullrule=0pt%
-\global\setbox\iclrrulerbox=\vbox to \textheight{%
-{\parskip=0pt\hfuzz=150em\cv@boxheight=\textheight
-\cv@lineheight=#1\global\iclrrulercount=#2%
-\cv@tot\cv@boxheight\divide\cv@tot\cv@lineheight\advance\cv@tot2%
-\cv@refno1\vskip-\cv@lineheight\vskip1ex%
-\loop\setbox\cv@tmpbox=\hbox to0cm{{\iclrtenhv\hfil\fillzeros[#4]\iclrrulercount}}%
-\ht\cv@tmpbox\cv@lineheight\dp\cv@tmpbox0pt\box\cv@tmpbox\break
-\advance\cv@refno1\global\advance\iclrrulercount#3\relax
-\ifnum\cv@refno<\cv@tot\repeat}}\endgroup}%
-\makeatother
-% ----- end of vruler
-
-% \makevruler[<SCALE>][<INITIAL_COUNT>][<STEP>][<DIGITS>][<HEIGHT>]
-\def\iclrruler#1{\makevruler[12pt][#1][1][3][0.993\textheight]\usebox{\iclrrulerbox}}
-\AddToShipoutPicture{%
-\ificlrfinal\else
-\iclrruleroffset=\textheight
-\advance\iclrruleroffset by -3.7pt
-  \color[rgb]{.7,.7,.7}
-  \AtTextUpperLeft{%
-    \put(\LenToUnit{-35pt},\LenToUnit{-\iclrruleroffset}){%left ruler
-      \iclrruler{\iclrrulercount}}
+% Custom commands
+\newcommand{\resumeItem}[1]{
+  \item\small{
+    {#1 \vspace{-2pt}}
   }
-\fi
 }
-% %% To add a vertical bar on the side
-% \AddToShipoutPicture{
-% \AtTextLowerLeft{
-% \hspace*{-1.8cm}
-% \colorbox[rgb]{0.7,0.7,0.7}{\small \parbox[b][\textheight]{0.1cm}{}}}
-% }
+
+\newcommand{\resumeSubheading}[4]{
+  \vspace{-2pt}\item
+    \begin{tabular*}{1.0\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{#1} & \textbf{\small #2} \\
+      \textit{\small#3} & \textit{\small #4} \\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeSubSubheading}[2]{
+    \item
+    \begin{tabular*}{1.0\textwidth}{l@{\extracolsep{\fill}}r}
+      \textit{\small#1} & \textit{\small #2} \\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeProjectHeading}[2]{
+    \item
+    \begin{tabular*}{1.001\textwidth}{l@{\extracolsep{\fill}}r}
+      \small#1 & \textbf{\small #2}\\
+    \end{tabular*}\vspace{-7pt}
+}
+
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.0in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{-5pt}}
+
+%-------------------------------------------
+%%%%%%  RESUME STARTS HERE  %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+\begin{center}
+    {\Huge \scshape Marcel Musiałek} \\ \vspace{1pt}
+    Wrocław, Poland $|$ B2B Contractor / Hybrid \\ \vspace{4pt}
+    \small \raisebox{-0.1\height}\faPhone\ (+48) 537 677 570 ~ \href{mailto:mnem12321@gmail.com}{\raisebox{-0.2\height}\faEnvelope\  \underline{mnem12321@gmail.com}} ~ 
+    \href{https://www.linkedin.com/in/marcel-musia\%C5\%82ek-772872266/}{\raisebox{-0.2\height}\faLinkedin\ \underline{linkedin.com/in/marcel-musiałek-772872266}} \\ \vspace{2pt}
+    \href{https://github.com/Marcelele-0}{\raisebox{-0.2\height}\faGithub\ \underline{github.com/Marcelele-0}} ~
+    \href{https://scholar.google.com/citations?user=f2QJvJAAAAAJ}{\raisebox{-0.2\height}\faGraduationCap\ \underline{Google Scholar}}
+    \vspace{-8pt}
+\end{center}
+
+%-----------PROFILE-----------
+\section{Profile Summary}
+\vspace{2pt}
+\small{AI Researcher and Machine Learning Engineer specializing in Generative AI, Explainable AI (XAI), and continuous Flow Matching. Bridges the gap between rigorous academic research and production-grade software engineering. Proven expertise in architecting clean-code pipelines, handling unstructured data (Computer Vision, NLP), and implementing robust system observability. Strong algorithmic foundation with first-author publications at top-tier international AI conferences (ICCS, ECML PKDD). Highly proficient in Agile R\&D environments, utilizing advanced MLOps tools to accelerate development.}
+\vspace{-10pt}
+
+%-----------EXPERIENCE-----------
+\section{Professional Experience}
+  \resumeSubHeadingListStart
+    \resumeSubheading
+      {Nokia}{2026 -- Present}
+      {Software \& MLOps Engineer (Infrastructure \& Observability)}{Wrocław, Poland}
+      \resumeItemListStart
+        \resumeItem{Architected testing infrastructure and applied advanced software design patterns to ensure high maintainability and modularity of internal codebases.}
+        \resumeItem{Specialized in system observability, working with Docker and Jenkins workflows to monitor and streamline application performance.}
+        \resumeItem{Verified and analyzed telemetry and logging data using VictoriaMetrics and OpenSearch to ensure system stability and reliability.}
+        \resumeItem{Operated in a fast-paced Agile environment, utilizing Jira and Confluence for sprint planning, issue tracking, and technical documentation.}
+        \resumeItem{Actively leveraged AI-assisted development tools to accelerate coding, refactoring, and daily workflow optimization.}
+      \resumeItemListEnd
+  \resumeSubHeadingListEnd
+\vspace{-16pt}
+
+%-----------PROGRAMMING SKILLS-----------
+\section{Technical Skills}
+ \begin{itemize}[leftmargin=0.15in, label={}]
+    \small{\item{
+     \textbf{AI Domain Expertise}{: Generative AI, Computer Vision, NLP, Flow Matching, XAI, RAG, Deep Metric Learning, 3D Vision (MONAI)} \\
+     \textbf{Core Engineering}{: Software Design Patterns, Clean Code, Testing Infrastructure, REST APIs, Observability, Async Architectures} \\
+     \textbf{Programming Languages}{: Python (Advanced), C++, SQL, HTML/CSS} \\
+     \textbf{Data Science \& Math}{: Pandas, NumPy, Scikit-Learn, SciPy} \\
+     \textbf{ML Frameworks}{: PyTorch (Advanced), PyTorch Lightning, PyTorch Geometric, FastAPI, Pydantic AI, MONAI} \\
+     \textbf{Cloud, DevOps \& Tools}{: AWS, PLGrid, Docker, Jenkins, Redis, PostgreSQL, Jira, Confluence, Git, UV, Weights \& Biases (W\&B), TensorBoard, Hydra}
+    }}
+ \end{itemize}
+ \vspace{-16pt}
+
+%-----------PUBLICATIONS-----------
+\section{Publications (Scientific Contributions)}
+  \begin{itemize}[leftmargin=0.15in, label={}]
+    \small{
+    \item \textbf{M. Musiałek} et al., \textit{"Cylindrical Flow Matching for Complex-Valued Medical Image Synthesis."} NeurIPS Workshop on Geometric Distributional Deep Learning (GDDL), 2026. [In Review]\\
+    \textit{Conducted as Lead Author \& Architect.} Formulated continuous flow matching on circular manifolds ($S^1$) for raw complex-valued MRI k-space data, eliminating amplitude collapse and phase discontinuities via custom autograd kernels.
+    \vspace{2pt}
+    \item O. Furman, Ł. Lenkiewicz, \textbf{M. Musiałek}, M. Zięba, \textit{"CEL: Comprehensive Counterfactual Explanations Library and Benchmark."} ECML PKDD xKDD Workshop, 2026. (Also presented at ML in PL Workshop 2025).\\
+    \textit{Conducted within Genwro.ai.} Developed a scalable XAI benchmark evaluating 14 counterfactual algorithms across 18 tabular datasets using Normalizing Flows (MAF, RealNVP) for density estimation.
+    \vspace{2pt}
+    \item Ł. Lenkiewicz, \textbf{M. Musiałek}, O. Furman, M. Zięba, \textit{"Plausible Visual Counterfactual Explanations in Latent Space with Normalizing Flows."} International Conference on Computational Science (ICCS), pp. 325-332, Springer, 2026.\\
+    \textit{Conducted within Genwro.ai.} Proposed the PLACE framework leveraging Conditional Normalizing Flows in latent spaces to generate semantically plausible visual counterfactuals optimized with LPIPS perceptual loss.
+    \vspace{2pt}
+    \item \textbf{M. Musiałek}*, P. Pilarek*, A. Górska, \textit{"Open-Set Vein Biometric Recognition with Deep Metric Learning."} International Conference on Computational Science (ICCS), pp. 295-308, Springer, 2026. \textit{(*Equal contribution)}\\
+    \textit{Conducted as Main Co-author within KN Solvro.} Developed a deep metric learning framework for open-set biometric identification using Triplet-Center Loss and Active XAI, scaled across PLGrid clusters.
+    }
+  \end{itemize}
+\vspace{-16pt}
+
+%-----------TALKS & PRESENTATIONS-----------
+\section{Talks & Presentations}
+    \resumeSubHeadingListStart
+        \resumeSubheading
+          {International Conference on Computational Science (ICCS 2026)}{Hamburg, Germany}
+          {Oral Presenter}{2026}
+            \resumeItemListStart
+                \resumeItem{Delivered an oral presentation on deep metric learning and Active XAI methodologies for open-set vein biometric recognition to an international academic audience.}
+            \resumeItemListEnd
+        \vspace{2pt}
+        \resumeSubheading
+          {Vascular AI Symposium 2026}{Wrocław, Poland}
+          {Invited Speaker}{2026}
+            \resumeItemListStart
+                \resumeItem{Presented comprehensive research findings on biometric vascular recognition and its medical AI intersections.}
+            \resumeItemListEnd
+    \resumeSubHeadingListEnd
+\vspace{-16pt}
+
+%-----------PROJECTS (ENGINEERING)-----------
+\section{Software \& Engineering Implementations}
+    \vspace{-5pt}
+    \resumeSubHeadingListStart
+      
+      \resumeProjectHeading
+          {\textbf{CYFM Framework for Medical Image Synthesis} $|$ \emph{Lead Engineer (KN Solvro)}}{2026}
+          \resumeItemListStart
+            \resumeItem{Engineered high-performance PyTorch models for continuous flow matching on circular manifolds ($S^1$) to synthesize raw complex-valued MRI k-space data.}
+            \resumeItem{Implemented custom autograd functions for phase-amplitude disentangled loss operations with strict Data Consistency projections ($DC < 10^{-6}$).}
+            \resumeItem{Optimized GPU memory footprint and tensor operations to handle large-scale volumetric data, achieving 444/444 passing unit tests.}
+          \resumeItemListEnd 
+          \vspace{-13pt}
+
+      \resumeProjectHeading
+          {\textbf{CEL: Counterfactual Explanations Library} \href{https://github.com/ofurman/counterfactuals/tree/develop}{\raisebox{-0.15\height}\faGithub} $|$ \emph{Core Contributor (Genwro.ai)}}{2026}
+          \resumeItemListStart
+            \resumeItem{Built an open-source Python library and benchmark suite from the ground up for evaluating transparent counterfactual explanations via Normalizing Flows.}
+            \resumeItem{Engineered architectural refactors and modular mixins (PytorchBase, Classifier/Generative Mixins) with a unified scikit-learn-like API.}
+            \resumeItem{Applied strict Object-Oriented Programming (OOP) and advanced design patterns (Strategy, Factory) to maintain high codebase extensibility.}
+          \resumeItemListEnd
+          \vspace{-13pt}
+
+      \resumeProjectHeading
+          {\textbf{Open-Set Vein Biometric Recognition Framework} \href{https://github.com/Solvro/ml-vein-biometric-recognition}{\raisebox{-0.15\height}\faGithub} $|$ \emph{Main Co-author & Lead ML Engineer}}{2026}
+          \resumeItemListStart
+            \resumeItem{Developed a modular deep learning system for open-set biometric identification, integrating Hydra for dynamic configuration management.}
+            \resumeItem{Established automated experiment tracking and registry workflows using Weights \& Biases (W\&B), MLflow, and TensorBoard.}
+            \resumeItem{Optimized data loaders and P $\times$ K batch samplers for large-scale biometric datasets (MMCBNU\_6000, UTFVP) on PLGrid HPC infrastructure.}
+          \resumeItemListEnd
+          \vspace{-13pt}
+
+      \resumeProjectHeading
+          {\textbf{Distributed XAI Agent & Processing Pipeline} \href{https://github.com/Marcelele-0/xBerryRecruitment}{\raisebox{-0.15\height}\faGithub} $|$ \emph{Lead Systems Engineer}}{2026}
+          \resumeItemListStart
+            \resumeItem{Designed an asynchronous FastAPI backend capable of handling high-burst traffic (100 req/s) with Redis sliding-window buffers and PostgreSQL persistence.}
+            \resumeItem{Integrated Pydantic AI with Gemini 2.5 Flash / GPT-4o-mini to build an autonomous agent tracking telemetry anomalies and generating structured reasoning traces.}
+          \resumeItemListEnd
+          \vspace{-13pt}
+
+      \resumeProjectHeading
+          {\textbf{3D Medical Image Segmentation (Adult Glioma)} \href{https://github.com/Marcelele-0/Segmentation-Adult-Glioma}{\raisebox{-0.15\height}\faGithub} $|$ \emph{ML Researcher}}{2026}
+          \resumeItemListStart
+            \resumeItem{Implemented 3D U-Net architectures using PyTorch Lightning and MONAI framework for volumetric semantic segmentation of BraTS 2024 NIfTI datasets.}
+            \resumeItem{Configured reproducible training pipelines governed by Hydra configurations and W\&B tracking.}
+          \resumeItemListEnd 
+
+    \resumeSubHeadingListEnd
+\vspace{-15pt}
+
+%-----------ACADEMIC SERVICE-----------
+\section{Academic Service}
+    \resumeSubHeadingListStart
+        \resumeSubheading{NeurIPS 2026 Workshop on Geometric Distributional Deep Learning (GDDL)}{Sep. 2026}{Official Peer Reviewer}{Paris, France}
+            \resumeItemListStart
+                \resumeItem{Evaluated academic paper submissions focusing on geometry-aware flows, score transport, and multifractal analysis, providing rigorous technical feedback to international authors.}
+            \resumeItemListEnd
+    \resumeSubHeadingListEnd
+\vspace{-16pt}
+
+%-----------INVOLVEMENT---------------
+\section{Leadership & Extracurricular}
+    \resumeSubHeadingListStart
+        \resumeSubheading
+          {Koło Naukowe Solvro}{Wrocław, Poland}
+          {Vice Head of AI/ML Department}{Sep. 2026 -- Present}
+            \resumeItemListStart
+                \resumeItem{Co-leading a cross-functional department of student researchers and engineers, coordinating end-to-end initiatives in Deep Learning, Generative AI, and foundation models.}
+            \resumeItemListEnd
+        \resumeSubSubheading{Computer Vision Team Lead}{Apr. 2026 -- Sep. 2026}
+            \resumeItemListStart
+                \resumeItem{Managed a 7-8 member Computer Vision team using Agile methodologies, balancing technical leadership, sprint planning, and algorithmic mentorship.}
+            \resumeItemListEnd
+        \resumeSubSubheading{Machine Learning Researcher}{Oct. 2024 -- Mar. 2026}
+            \resumeItemListStart
+                \resumeItem{Conducted foundational research and actively enforced MLOps and software development best practices (clean code, CI/CD, testing) within early research codebases.}
+            \resumeItemListEnd
+            
+        \vspace{3pt}
+        \resumeSubheading
+          {Competitive Hackathons}{Multiple Locations}
+          {Active Participant (HackYeah, GreenHack Prague)}{2023 -- Present}
+            \resumeItemListStart
+                \resumeItem{Engaged in intensive hackathons, honing rapid problem-solving, cross-functional teamwork, and fast-paced MVP code implementation under strict time constraints.}
+            \resumeItemListEnd
+    \resumeSubHeadingListEnd
+\vspace{-16pt}
+
+%-----------EDUCATION-----------
+\section{Education}
+  \resumeSubHeadingListStart
+    \resumeSubheading
+      {Wrocław University of Science and Technology}{Oct. 2023 -- Present}
+      {Bachelor of Science in Algorithmic Computer Science (GPA: 4.26/5.0)}{Wrocław, Poland}
+      \resumeItemListStart
+        \resumeItem{\textbf{Advanced Mathematics:} Introduction to Complex Functions (5.0), Selected Topics in Algebra (5.0), Probabilistic Methods and Statistics, Abstract Algebra and Coding, Mathematical Analysis I \& II.}
+        \resumeItem{\textbf{Algorithmics:} Metaheuristic Algorithms (5.0), Discrete Optimization Algorithms, Algorithms and Data Structures, Formal Languages and Translation Techniques.}
+        \resumeItem{\textbf{Software Engineering & Systems:} Software Engineering Methods, Team Programming (5.0), Concurrent Programming, Embedded Systems (5.0), Computer Architecture and Operating Systems.}
+        \resumeItem{\textbf{Data & Security:} Cryptography (5.0), Data Coding and Compression, Database Systems and Information Management, Modern Web Technologies, Introduction to Artificial Intelligence.}
+      \resumeItemListEnd
+  \resumeSubHeadingListEnd
+
+\end{document}
