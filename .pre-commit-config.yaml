@@ -16,8 +16,13 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      # paper/ mirrors an Overleaf project. Rewriting its whitespace here would
+      # make every commit diverge from the copy people actually edit, so the
+      # formatting hooks leave it alone.
       - id: trailing-whitespace
+        exclude: ^paper/
       - id: end-of-file-fixer
+        exclude: ^paper/
       - id: check-yaml
       - id: check-json
       - id: detect-private-key

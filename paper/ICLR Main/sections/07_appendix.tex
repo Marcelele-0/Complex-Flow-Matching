@@ -1,0 +1,173 @@
+\section{Appendix}
+\label{sec:appendix}
+
+\subsection{The Cylinder is a Metric Substitution, not an Inherited Geometry}
+\label{sec:app_metric_choice}
+
+\begin{lemma}[Amplitude--phase chart and its pullback metric]
+\label{lem:chart_pullback}
+Let $\mathbb{C}^* = \mathbb{C} \setminus \{0\}$ and let
+\begin{equation}
+    \Phi : \mathbb{C}^* \to (0, \infty) \times S^1, \qquad
+    \Phi(z) = \left( |z|, \; z / |z| \right),
+\end{equation}
+with inverse $\Phi^{-1}(A, \theta) = (A\cos\theta, A\sin\theta)$. Then $\Phi$ is a diffeomorphism, and the pullback of the Euclidean metric $g_{\mathrm{euc}} = dx^2 + dy^2$ under $\Phi^{-1}$ is
+\begin{equation}
+    (\Phi^{-1})^* g_{\mathrm{euc}} = dA^2 + A^2 d\theta^2 .
+\end{equation}
+\end{lemma}
+\begin{proof}
+Both $\Phi$ and $\Phi^{-1}$ are smooth on their domains and are mutually inverse by construction, so $\Phi$ is a diffeomorphism. Differentiating $\Phi^{-1}$,
+\begin{align}
+    dx &= \cos\theta \, dA - A \sin\theta \, d\theta, \\
+    dy &= \sin\theta \, dA + A \cos\theta \, d\theta .
+\end{align}
+Squaring and summing, the cross terms $\mp 2A\sin\theta\cos\theta \, dA \, d\theta$ cancel and the remaining terms group by $\cos^2\theta + \sin^2\theta = 1$:
+\begin{equation}
+    dx^2 + dy^2 = dA^2 + A^2 d\theta^2 . \qedhere
+\end{equation}
+\end{proof}
+
+CyFM does not use this metric. It replaces it with the decoupled product metric $g_{\mathrm{cyl}} = dA^2 + d\theta^2$, that is, it deletes the factor $A^2$. The map $\Phi$ is therefore a diffeomorphism but \emph{not} an isometry between $(\mathbb{C}^*, g_{\mathrm{euc}})$ and $((0,\infty) \times S^1, g_{\mathrm{cyl}})$. This substitution, and not the identification of the domain, is the modelling decision this paper evaluates.
+
+\begin{remark}[Flatness is not the distinguishing property]
+\label{rem:both_flat}
+Both metrics have identically vanishing Riemann curvature: $g_{\mathrm{euc}}$ because $\mathbb{C}^*$ is an open subset of the plane, and $g_{\mathrm{cyl}}$ because it is a product of one-dimensional factors. Each is therefore locally isometric to $\mathbb{R}^2$, and no local computation separates them. They are not globally isometric: under $g_{\mathrm{cyl}}$ the curves $A = \mathrm{const}$ are closed geodesics, whereas the geodesics of $g_{\mathrm{euc}}$ are straight line segments and none is closed. The non-trivial fundamental group $\pi_1 = \mathbb{Z}$ is a property of the punctured domain, shared by both, and is a cost the model pays through the $2\pi$ wrap rather than a benefit it gains.
+\end{remark}
+
+\begin{corollary}[Circumference]
+\label{cor:circumference}
+The circle $\{A = r\}$ has length $2\pi r$ under $g_{\mathrm{euc}}$ and length $2\pi$ under $g_{\mathrm{cyl}}$, for every $r > 0$.
+\end{corollary}
+
+This single difference accounts for both of the paper's velocity statements. Under $g_{\mathrm{euc}}$ the circumference available for a phase change shrinks to zero as $r \to 0$, so a path carrying a fixed phase difference through a neighbourhood of the origin must traverse it at ever greater angular speed; this is the $|c| / |z_t|^2$ growth of Proposition~\ref{thm:angular_divergence}. Under $g_{\mathrm{cyl}}$ the circumference is constant, so a half-turn costs the same at every amplitude and an angular displacement of $\pi$ always suffices; this is the bound of Lemma~\ref{lem:bounded_velocity}. The two results are the same fact about the factor $A^2$, read at the two ends of its range.
+
+\subsection{Path-Level Consequences of the Euclidean Metric}
+\label{sec:app_proofs}
+
+We present the formal proofs for the statements made in the main text about what the inherited Euclidean metric on $(\mathrm{Re}, \mathrm{Im}) \in \mathbb{R}^2$ implies for probability paths and for the regression target.
+
+Let $z_1 = e^{i\theta_1}$ and $z_2 = e^{i\theta_2}$ be two unit-amplitude phasors on the circle $S^1$, and let $\Delta\theta = \theta_1 - \theta_2 \in [-\pi, \pi]$ denote their phase difference.
+
+\begin{lemma}[Chordal vs. Geodesic Distance]
+\label{lem:chord_vs_arc}
+The Euclidean (chordal) distance $d_{\mathrm{chord}}$ in the complex plane and the geodesic (arc) distance $d_{S^1}$ on the circle are related by:
+\begin{align}
+    d_{\mathrm{chord}}(\theta_1, \theta_2) &= \|e^{i\theta_1} - e^{i\theta_2}\|_2 = 2 \left|\sin\left(\frac{\Delta\theta}{2}\right)\right|, \\
+    d_{S^1}(\theta_1, \theta_2) &= |\Delta\theta|.
+\end{align}
+\end{lemma}
+\begin{proof}
+Expanding the squared Euclidean distance:
+\begin{align}
+    \|e^{i\theta_1} - e^{i\theta_2}\|_2^2 &= (\cos\theta_1 - \cos\theta_2)^2 + (\sin\theta_1 - \sin\theta_2)^2 \\
+    &= (\cos^2\theta_1 + \sin^2\theta_1) + (\cos^2\theta_2 + \sin^2\theta_2) - 2(\cos\theta_1\cos\theta_2 + \sin\theta_1\sin\theta_2) \\
+    &= 2 - 2\cos(\theta_1 - \theta_2) = 2(1 - \cos\Delta\theta).
+\end{align}
+Using the half-angle trigonometric identity $1 - \cos\alpha = 2\sin^2(\alpha/2)$:
+\begin{equation}
+    \|e^{i\theta_1} - e^{i\theta_2}\|_2^2 = 4\sin^2\left(\frac{\Delta\theta}{2}\right).
+\end{equation}
+Taking the square root yields $d_{\mathrm{chord}} = 2 \left|\sin\left(\frac{\Delta\theta}{2}\right)\right|$. The geodesic distance on the unit circle is trivially the absolute arc length $|\Delta\theta|$.
+\end{proof}
+
+
+\begin{proposition}[Expected Midpoint Attenuation]
+\label{prop:attenuation_proof}
+Consider a linear (Euclidean) interpolation between two unit phasors: $z_t^{\mathrm{euc}} = (1-t)e^{i\theta_1} + t e^{i\theta_2}$ for $t \in [0, 1]$. Under a uniform phase difference prior $\Delta\theta \sim \mathcal{U}((-\pi, \pi])$, the expected magnitude at the midpoint $t=0.5$ is exactly $2/\pi$, representing an expected signal attenuation of:
+\begin{equation}
+    1 - \frac{2}{\pi} \approx 36.338\%.
+\end{equation}
+\end{proposition}
+\begin{proof}
+At $t=0.5$, the interpolated signal is:
+\begin{equation}
+    z_{0.5}^{\mathrm{euc}} = \frac{1}{2} (e^{i\theta_1} + e^{i\theta_2}) = e^{i\frac{\theta_1+\theta_2}{2}} \cos\left(\frac{\Delta\theta}{2}\right).
+\end{equation}
+The magnitude is $|z_{0.5}^{\mathrm{euc}}| = \left|\cos\left(\frac{\Delta\theta}{2}\right)\right|$. The expected value under a uniform distribution $p(\Delta\theta) = \frac{1}{2\pi}$ is:
+\begin{equation}
+    \mathbb{E}\left[|z_{0.5}^{\mathrm{euc}}|\right] = \frac{1}{2\pi} \int_{-\pi}^\pi \left|\cos\left(\frac{\Delta\theta}{2}\right)\right| d\Delta\theta.
+\end{equation}
+Since $\Delta\theta \in [-\pi, \pi]$, the half-angle $\Delta\theta/2 \in [-\pi/2, \pi/2]$. In this domain, the cosine function is non-negative, so the absolute value can be dropped:
+\begin{align}
+    \mathbb{E}\left[|z_{0.5}^{\mathrm{euc}}|\right] &= \frac{1}{2\pi} \int_{-\pi}^\pi \cos\left(\frac{\Delta\theta}{2}\right) d\Delta\theta \\
+    &= \frac{1}{2\pi} \left[ 2\sin\left(\frac{\Delta\theta}{2}\right) \right]_{-\pi}^\pi \\
+    &= \frac{1}{2\pi} \left( 2(1) - 2(-1) \right) = \frac{4}{2\pi} = \frac{2}{\pi} \approx 0.6366.
+\end{align}
+The expected loss in amplitude is therefore $1 - 2/\pi \approx 36.338\%$. By contrast, on the cylindrical manifold, $A_t = (1-t)A_0 + tA_1$, which trivially evaluates to $1.0$ at $t=0.5$, yielding exactly $0\%$ attenuation.
+\end{proof}
+
+
+\begin{proposition}[Vanishing Gradient of the Chordal Penalty]
+\label{prop:vanishing_gradient}
+Let the chordal Euclidean loss be $\mathcal{L}_{\mathrm{chord}}(\theta) = \frac{1}{2}\|e^{i\theta} - e^{i\theta^*}\|_2^2 = 1 - \cos(\theta - \theta^*)$ and the geodesic loss be $\mathcal{L}_{\mathrm{geod}}(\theta) = \frac{1}{2}(\theta - \theta^*)^2$. As the phase error reaches its maximum $\Delta\theta = |\theta - \theta^*| \to \pi$, the gradient of the chordal penalty vanishes to zero, while the geodesic gradient reaches its supremum.
+\end{proposition}
+\begin{proof}
+Taking the derivative of the chordal loss with respect to the phase $\theta$:
+\begin{equation}
+    \frac{\partial \mathcal{L}_{\mathrm{chord}}}{\partial \theta} = \frac{d}{d\theta} (1 - \cos(\theta - \theta^*)) = \sin(\theta - \theta^*).
+\end{equation}
+Taking the limit as $\Delta\theta \to \pi$, we find $\lim_{\Delta\theta \to \pi} |\sin(\Delta\theta)| = \sin(\pi) = 0$. Thus, at the point of maximum possible error (antipodal phase), the network receives exactly zero corrective gradient signal.
+Conversely, the geodesic loss derivative is:
+\begin{equation}
+    \frac{\partial \mathcal{L}_{\mathrm{geod}}}{\partial \theta} = \theta - \theta^*,
+\end{equation}
+which linearly increases with the error, providing a maximal restoring force of $\pi$ at $\Delta\theta \to \pi$.
+\end{proof}
+
+\begin{proposition}[Angular velocity of the Cartesian bridge]
+\label{thm:angular_divergence}
+Let $z_0, z_1 \in \mathbb{C}$ with $z_0 \ne z_1$, and let $z_t = (1-t) z_0 + t z_1$. Write $c = \operatorname{Im}(\bar{z}_0 z_1)$. At every $t$ with $z_t \ne 0$ the induced angular velocity is
+\begin{equation}
+    \dot{\theta}_t = \frac{\operatorname{Im}(\bar{z}_t \dot{z}_t)}{|z_t|^2} = \frac{c}{|z_t|^2},
+\end{equation}
+so the numerator does not depend on $t$, and
+\begin{equation}
+    \label{eq:peak_angular}
+    \sup_{t \in [0,1]} |\dot{\theta}_t| = \frac{|c|}{d^2}, \qquad d = \min_{t \in [0,1]} |z_t| ,
+\end{equation}
+with the supremum attained at the closest approach to the origin.
+\end{proposition}
+\begin{proof}
+With $z = x + iy$ and $A = |z|$, the map $\theta = \operatorname{atan2}(y, x)$ is differentiable at every point with $A > 0$, and the chain rule gives $\dot{\theta} = (x\dot{y} - y\dot{x}) / A^2 = \operatorname{Im}(\bar{z}\dot{z}) / |z|^2$. Along the bridge $\dot{z}_t = z_1 - z_0$ is constant, and
+\begin{align}
+    \operatorname{Im}(\bar{z}_t \dot{z}_t)
+    &= \operatorname{Im}\big( ((1-t)\bar{z}_0 + t \bar{z}_1)(z_1 - z_0) \big) \\
+    &= (1-t) \operatorname{Im}(\bar{z}_0 z_1) - t \operatorname{Im}(\bar{z}_1 z_0) = \operatorname{Im}(\bar{z}_0 z_1) = c,
+\end{align}
+because $\operatorname{Im}(\bar{z}_0 z_0) = \operatorname{Im}(\bar{z}_1 z_1) = 0$ and $\operatorname{Im}(\bar{z}_1 z_0) = -c$. The numerator being constant, $|\dot{\theta}_t|$ is largest exactly where $|z_t|$ is smallest.
+\end{proof}
+
+Two consequences are worth separating from the usual informal statement. First, the bridge does \emph{not} approach the origin arbitrarily closely for fixed endpoints: combining $|\dot{\theta}| = |c| / A^2$ with the Cauchy--Schwarz bound $|\dot{\theta}| \le |z_1 - z_0| / A$ gives $d \ge |c| / |z_1 - z_0|$, which is the distance from the origin to the line through $z_0$ and $z_1$. Second, an upper bound of order $A^{-1}$ on $|\dot{\theta}|$ does not by itself establish divergence, since a purely radial flow has $c = 0$ and $\dot{\theta} \equiv 0$ while satisfying the same bound. What diverges, and the regime the experiments probe, is the peak over a bridge whose endpoints approach antipodal.
+
+\begin{corollary}[Peak angular velocity at equal amplitudes]
+\label{cor:peak_equal_amplitude}
+If $|z_0| = |z_1| = A > 0$ and $\delta = \operatorname{wrap}(\theta_1 - \theta_0)$, the closest approach occurs at $t = 1/2$ and
+\begin{equation}
+    \sup_{t \in [0,1]} |\dot{\theta}_t| = 2 \left| \tan\left( \frac{\delta}{2} \right) \right| ,
+\end{equation}
+which is unbounded as $\delta \to \pm\pi$ and equals the cylindrical rate $|u_\theta| = |\delta|$ only at $\delta = 0$.
+\end{corollary}
+\begin{proof}
+$|z_t|^2 = A^2\big(1 - 2t(1-t)(1 - \cos\delta)\big)$ is minimised at $t = 1/2$, where $|z_{1/2}| = A|\cos(\delta/2)|$. With $c = A^2 \sin\delta = 2A^2 \sin(\delta/2)\cos(\delta/2)$, equation~\eqref{eq:peak_angular} gives $2|\sin(\delta/2)| / |\cos(\delta/2)|$.
+\end{proof}
+
+\begin{corollary}[Heavy tail under a uniform phase difference]
+\label{cor:pareto_tail}
+If in addition $\delta \sim \mathcal{U}(-\pi, \pi]$, then for $x > 0$
+\begin{equation}
+    \mathbb{P}\Big( \sup_t |\dot{\theta}_t| > x \Big) = 1 - \frac{2}{\pi} \arctan\left(\frac{x}{2}\right) = \frac{4}{\pi x} + \mathcal{O}(x^{-3}),
+\end{equation}
+a Pareto tail of index $1$.
+\end{corollary}
+\begin{proof}
+$2|\tan(\delta/2)| > x$ iff $|\delta| > 2\arctan(x/2)$, and $|\delta|$ is uniform on $[0, \pi]$. Expanding $\arctan(x/2) = \pi/2 - 2/x + \mathcal{O}(x^{-3})$ gives the asymptotic form.
+\end{proof}
+
+Corollary~\ref{cor:pareto_tail} fixes the amplitudes. When they are random as well, a second route to a small numerator opens, since $c$ also vanishes as either amplitude does, and the tail is heavier than index $1$ rather than lighter. The index near $1$ measured in Table~\ref{tab:bridge_ablation} is therefore consistent with this analysis but is not derived from it. The cylindrical bridge admits no such tail: $\theta_t = \theta_0 + t u_\theta$ turns at the constant rate $u_\theta$, and $|u_\theta| \le \pi$ for every pair of endpoints.
+
+\subsection{Both Geometries under Both Losses}
+\label{sec:app_losses}
+Tables~\ref{tab:unet_baseline} and~\ref{tab:unet_scaling} train both geometries with the same objective, the unweighted squared velocity error. Table~\ref{tab:unet_loss_protocols} repeats the grid with the absolute error as well, so that each geometry can also be compared at its best objective. The best of the four variants is selected on the evaluation itself, so the comparison is post-selection and its nominal $p$-values do not hold; we report it descriptively, as a robustness check rather than as a test.
+
+\input{tables/tableA_loss_protocols}

@@ -1,0 +1,71 @@
+\section{Cylindrical Flow Matching}
+\label{sec:method}
+
+To remove the amplitude factor from the phase geometry, we formulate \textbf{Cylindrical Flow Matching (CyFM)} for complex-valued fields. A crucial conceptual clarification is that CyFM constructs the full signal domain as a decoupled \textbf{product manifold} of local voxel manifolds:
+\begin{equation}
+    \mathcal{M}^{H \times W} = \prod_{u=1}^H \prod_{v=1}^W \mathcal{M}_{u, v} = ([0, \infty) \times S^1)^{H \times W}.
+\end{equation}
+
+The fundamental group of a product is the product of the factors', and each factor is homotopy equivalent to $S^1$, so $\pi_1(\mathcal{M}^{H \times W}) = \mathbb{Z}^{HW}$: every pixel wraps independently of the others. This product structure has three consequences:
+\begin{itemize}
+    \item \textbf{Point-wise Separability:} The product Riemannian metric $g = \sum_{u, v} (dA_{u,v}^2 + d\theta_{u,v}^2)$ decomposes completely point-wise. Geodesics, exponential maps, and logarithmic maps require zero spatial inter-pixel coupling in the probability paths, making them embarrassingly parallel.
+    \item \textbf{Vanishing Curvature:} Because each local factor is intrinsically flat (Gaussian curvature $K=0$), the entire product manifold $\mathcal{M}^{H \times W}$ has identically vanishing Riemann curvature ($R \equiv 0$), so the construction carries no curvature-dependent local terms. This is not an advantage over the Cartesian baseline, which is flat as well, and flatness removes neither the $2\pi$ wrap, nor the cut locus at antipodal phase, nor the boundary at $A = 0$.
+    \item \textbf{Architectural Synergy:} Spatial correlations are learned by the neural network backbone, while the geometric probability path bounds the target angular velocity ($|u_\theta| \le \pi$) at every spatial coordinate.
+\end{itemize}
+
+\subsection{Geodesic Probability Paths and Bounded Target Velocities}
+Given a prior sample $x_0 = (A_0, \theta_0) \sim p_0$ (e.g., standard uniform noise) and a ground-truth complex target $x_1 = (A_1, \theta_1) \sim p_1$, the geodesic flow path on $\mathcal{M}$ interpolates amplitude along $[0, \infty)$ and phase along $S^1$:
+\begin{equation}
+    A_t = (1 - t) A_0 + t A_1, \quad \theta_t = \exp_{\theta_0}^{S^1}(t \, u_\theta) = (\theta_0 + t \, u_\theta) \pmod{2\pi},
+\end{equation}
+where the target velocity components $(u_A, u_\theta) \in T_{(A_t, \theta_t)}\mathcal{M}$ are given by:
+\begin{equation}
+    u_A = A_1 - A_0, \quad u_\theta = \operatorname{atan2}\big(\sin(\theta_1 - \theta_0),\, \cos(\theta_1 - \theta_0)\big).
+\end{equation}
+The phase target velocity $u_\theta$ is computed via the Riemannian logarithmic map on $S^1$, resolving the minimal circular arc displacement, which is unique except when $\theta_1$ is antipodal to $\theta_0$.
+
+\begin{lemma}[Bounded Angular Velocity]
+\label{lem:bounded_velocity}
+For any pair of configurations $(x_0, x_1) \in \mathcal{M} \times \mathcal{M}$, the target angular velocity under Cylindrical Flow Matching is globally bounded:
+\begin{equation}
+    |u_\theta| \le \pi.
+\end{equation}
+In contrast, wherever $z_t \ne 0$ the induced angular velocity under Cartesian flow $z_t = (1-t)z_0 + t z_1$ is:
+\begin{equation}
+    \dot{\theta}_{\mathrm{Cart}} = \frac{x_t \dot{y}_t - y_t \dot{x}_t}{|z_t|^2} = \frac{A_0 A_1 \sin(\theta_1 - \theta_0)}{|z_t|^2},
+\end{equation}
+whose numerator is constant along the path, so the rate is largest at the closest approach to the origin and is unbounded over near-antipodal endpoints. For equal amplitudes its peak is exactly $2|\tan(\delta/2)|$ (Corollary~\ref{cor:peak_equal_amplitude}).
+\end{lemma}
+The bound holds for the regression target at every pixel, at the cost of handling the periodic wrap. It is a property of the target, not of the learned field: a trained network is not constrained to respect it.
+
+The same caveat governs the amplitude, and there it has a geometric cost. Both endpoints are non-negative and $A_t$ interpolates between them, so the target path never leaves $[0, \infty)$; but $v_A$ is unconstrained, and an integrated trajectory can reach the boundary. Our state space is a manifold with boundary and is therefore not geodesically complete, unlike the complete manifolds without boundary assumed by the Riemannian flow-matching framework \citep{chen2024flow}. We do not reparameterise the radius, since integrating $\rho = \log A$ would change both the radial metric and the probability path; instead the sampler projects onto $A \ge 0$ at every step, and the guarantee is on the target, not on the learned flow. That projection is almost never active: across six trained cylindrical models at $16\times16$, $32\times32$ and $64\times64$, generating $64$ fields at each of $k \in \{1, 2, 4, 8, 100\}$, it altered at most $0.003\%$ of amplitude updates and left at most $0.03\%$ of generated pixels at $A = 0$; at $k \le 4$ it was inactive in every run but one.
+
+\subsection{Joint Optimal Transport Coupling on the Cylinder}
+\label{sec:ot_coupling}
+Pairing prior and data samples independently yields crossing conditional paths whose average the network must regress. Minibatch Optimal Transport (OT) \citep{pooladian2023multisample, tong2023improving} reduces this by re-pairing each training batch. CyFM performs this re-pairing \emph{jointly over whole fields} in the cylindrical metric. For a batch of prior fields $\{x_0^i\}_{i=1}^{B}$ and data fields $\{x_1^j\}_{j=1}^{B}$, the cost of pairing $i$ with $j$ is the squared norm of the cylindrical logarithmic map, averaged over all pixels and both tangent components:
+\begin{equation}
+    \label{eq:ot_cost}
+    c_{ij} = \frac{1}{2HW} \sum_{u=1}^{H} \sum_{v=1}^{W} \Big[ \big(A^{j}_{1,uv} - A^{i}_{0,uv}\big)^2 + w \, d_{S^1}\big(\theta^{i}_{0,uv}, \theta^{j}_{1,uv}\big)^2 \Big],
+\end{equation}
+with phase weight $w = 1$ and $d_{S^1}$ the geodesic (wrapped) angular distance. At every training step the permutation $\sigma$ minimising $\sum_i c_{i\sigma(i)}$ is found exactly by linear sum assignment, and the geodesic bridge of the previous subsection is built between $x_0^i$ and $x_1^{\sigma(i)}$. Generation is unaffected: it starts from the prior and integrates the learned field.
+
+The assignment is joint: amplitude, phase and all pixels of a field are moved together, so every data sample stays intact and the coupling is a valid transport plan between the joint distributions. Because the metric is a sum over coordinates, it is tempting to factorise the problem into independent one-dimensional sorts per coordinate or per spatial patch; this destroys the joint target distribution (Section~\ref{sec:exp_factorized}).
+
+\subsection{Continuous Trigonometric Embedding}
+Two discontinuities meet here, and only one of them is an artefact. The scalar angle $\theta \in [-\pi, \pi)$ jumps across the negative real axis ($-\pi \sim \pi$); where that jump sits depends only on where the interval is cut, and any faithful representation of $S^1$ removes it. Passing raw scalar angles directly to neural networks introduces sharp gradients at this branch cut. The second discontinuity is intrinsic: every point of $S^1$ has a cut locus at its antipode, where the two minimal arcs have equal length $\pi$ and the sign of $u_\theta$ is arbitrary, so the logarithmic map is discontinuous there. We break that tie deterministically in favour of $+\pi$, rather than leaving it to floating-point rounding, which resolves it differently in single and double precision. The bound of Lemma~\ref{lem:bounded_velocity} is unaffected, since $\operatorname{atan2}$ returns values in $(-\pi, \pi]$ and only the sign is ambiguous. Antipodal pairs have measure zero under the phase priors we use, but near them the two branches $\pm\pi$ both enter the conditional expectation that the squared error regresses, and partly cancel. The embedding below removes the first discontinuity and leaves the second:
+\begin{equation}
+    \mathbf{e}(A, \theta) = \big(A, \cos\theta, \sin\theta\big) \in \mathbb{R}^3.
+\end{equation}
+A standard convolutional or vision transformer backbone takes $\mathbf{e}(A_t, \theta_t)$ concatenated with time embedding $t$, and outputs the two-channel tangent vector field $v_\phi(t, \mathbf{e}) = (v_A, v_\theta) \in T_{(A, \theta)}\mathcal{M}$.
+
+\subsection{Training Objective}
+Both geometries regress their target velocity with the squared error, the flow-matching objective whose minimiser is the conditional expectation of the target:
+\begin{equation}
+    \label{eq:loss}
+    \mathcal{L}_{\mathrm{CyFM}}(\phi) = \mathbb{E}_{t, x_0, x_1} \Big[ (v_A - u_A)^2 + \lambda \, (v_\theta - u_\theta)^2 \Big], \qquad \lambda = 1.
+\end{equation}
+The angular term compares two tangent vectors at the same point, so it needs no wrapping: the shortest-arc displacement is already in the target $u_\theta$.
+
+\textbf{Two objectives that break the fixed point.} Weighting the phase term by the target amplitude, $A_1/\bar{A}_1$, is tempting because background phase carries little signal, but the weight depends on $x_1$: the phase channel then regresses an amplitude-weighted conditional mean that the amplitude channel does not, and the learned flow is no longer guaranteed to transport the prior to the data. The absolute error regresses the conditional median instead of the mean, with the same consequence. We measured both at $32\times32$ (joint OT, 3 seeds, $k=100$): the cylindrical sliced $W_2$ is $0.121$ with the amplitude-weighted $\mathcal{L}_1$ loss, $0.074$ without the weight and $0.038$ with the unweighted squared error, against $0.033$ for the Cartesian geometry under the same squared error. Appendix Table~\ref{tab:unet_loss_protocols} reports both geometries under unweighted $\mathcal{L}_1$ and $\mathcal{L}_2$ losses across all resolutions.
+
+\textbf{What differs between the two pipelines.} The Cartesian baselines take the two channels $(\mathrm{Re}, \mathrm{Im})$ and are trained with the same squared error on them. The pipelines therefore differ in the path, in the metric of the coupling, and in the three-channel embedding. The last is a choice rather than a necessity: a network can take the raw scalar angle, but it then sees a branch discontinuity that the embedding avoids.
