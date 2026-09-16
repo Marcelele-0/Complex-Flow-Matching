@@ -6,28 +6,11 @@ We organise the evaluation around four claims. First, we show through analytical
 \subsection{Analytical Bridge Ablation: Isolating the Geometry}
 \label{sec:exp_ablation}
 
-To isolate the effect of the metric without the confounding variables of neural network capacity or imperfect empirical Optimal Transport coupling, we first evaluate the exact analytical probability paths. By computing the theoretical trajectories $z_t$ between samples drawn from a uniform phase prior and a synthetic complex target distribution, we can directly measure the angular velocities predicted in Section~\ref{sec:method}. Because the numerator of the Cartesian angular velocity $\dot{\theta}(t) = \text{Im}(\bar{z}_0 z_1) / |z_t|^2$ is invariant along the straight-line path, the peak angular velocity is governed exclusively by the minimum distance to the origin.
+To isolate the effect of the metric without the confounding variables of neural network capacity or imperfect empirical Optimal Transport coupling, we first evaluate the exact analytical probability paths. By computing the theoretical trajectories $z_t$ between samples drawn from a uniform phase prior and a complex target, we can directly measure the angular velocities predicted in Section~\ref{sec:method}. We run the same measurement against three targets: the synthetic copula used throughout this section, the coil-combined knee MRI of Section~\ref{sec:exp_unet_baseline}, and complex STFT segments of read speech. No network is involved in any of them. Because the numerator of the Cartesian angular velocity $\dot{\theta}(t) = \text{Im}(\bar{z}_0 z_1) / |z_t|^2$ is invariant along the straight-line path, the peak angular velocity is governed exclusively by the minimum distance to the origin.
 
-Table~\ref{tab:bridge_ablation} reports the empirical distribution of peak angular velocities over $10^6$ sampled endpoint pairs (seed $0$); the peak on each bridge is evaluated in closed form (Proposition~\ref{thm:angular_divergence}), so the trajectories are exact and only the endpoint sampling is Monte Carlo. The Cartesian bridge exhibits a heavy-tailed power law (index $\approx 1.0$), consistent with Corollary~\ref{cor:pareto_tail}. With independent coupling, $46\%$ of Cartesian paths exceed an angular velocity of $\pi$ rad per unit time, and the 99.9th percentile reaches $1{,}566$; because the tail index is close to $1$, the sample maximum grows with the number of paths and is not a property of the bridge. Minibatch OT on scalar pairs partially mitigates this by avoiding origin-crossing pairs; the transport-cost reduction that makes this possible shrinks with field dimension (Section~\ref{sec:exp_scaling}), and we do not measure the bridges at field scale. In stark contrast, the Cylindrical bridge is structurally bounded by $\pi$ by construction ($0.0\%$ paths $> \pi$), independently of the coupling. This bounded regression target is consistent with the few-step results below.
+Table~\ref{tab:bridge_ablation} reports the empirical distribution of peak angular velocities over $10^6$ sampled endpoint pairs (seed $0$); the peak on each bridge is evaluated in closed form (Proposition~\ref{thm:angular_divergence}), so the trajectories are exact and only the endpoint sampling is Monte Carlo. The Cartesian bridge exhibits a heavy-tailed power law (index $\approx 1.0$), consistent with Corollary~\ref{cor:pareto_tail}. With independent coupling, $46\%$ of Cartesian paths exceed an angular velocity of $\pi$ rad per unit time, and the 99.9th percentile reaches $1{,}566$; because the tail index is close to $1$, the sample maximum grows with the number of paths and is not a property of the bridge. Minibatch OT on scalar pairs partially mitigates this by avoiding origin-crossing pairs; the transport-cost reduction that makes this possible shrinks with field dimension (Section~\ref{sec:exp_scaling}), and we do not measure the bridges at field scale. In stark contrast, the Cylindrical bridge is structurally bounded by $\pi$ by construction ($0.0\%$ paths $> \pi$), independently of the coupling. The two real targets agree with the synthetic one on the size of the effect and are worse than it: $56.4\%$ of Cartesian paths exceed $\pi$ on knee MRI and $94.8\%$ on speech. The second column weights each path by its target's $|z_1|^2$ instead of counting coefficients equally, and the two disagree sharply on speech ($94.8\%$ against $49.4\%$). That disagreement is not an uncertainty in the measurement but the same modelling choice this paper makes explicit: weighting an angular quantity by $|z_1|^2$ reinstates exactly the $A^2$ that the plane's inherited metric $\mathrm{d}A^2 + A^2\mathrm{d}\theta^2$ carries on its angular term and that the cylinder drops. We therefore report both. This bounded regression target is consistent with the few-step results below.
 
-\begin{table}[h]
-    \centering
-    \caption{\textbf{Analytical Path Geometry.} Distribution of peak angular velocities ($|\dot{\theta}|$, rad per unit time) evaluated on $10^6$ exact theoretical bridges. Cartesian paths exhibit a heavy-tailed divergence, whereas Cylindrical paths are structurally bounded by $\pi$. Minibatch OT row: scalar pairs, batch 256.}
-    \label{tab:bridge_ablation}
-    \vspace{1mm}
-    \resizebox{\linewidth}{!}{
-    \begin{tabular}{llcccc}
-        \toprule
-        \textbf{Geometry} & \textbf{Coupling} & \textbf{Median} & \textbf{99.9th Percentile $\downarrow$} & \textbf{Paths $> \pi$ $\downarrow$} & \textbf{Theoretical Max} \\
-        \midrule
-        Cartesian ($\mathbb{R}^2$) & Independent & 2.81 & 1,566 & 46.0\% & $\infty$ \\
-        Cartesian ($\mathbb{R}^2$) & Minibatch OT & 0.31 & 26.7 & 1.0\% & $\infty$ \\
-        \textbf{Cylindrical (Ours)} & \textbf{Independent} & \textbf{1.57} & \textbf{3.14} & \textbf{0.0\%} & $\mathbf{\pi}$ \\
-        \bottomrule
-    \end{tabular}
-    }
-    \vspace{1mm}
-\end{table}
+\input{tables/table1_bridges}
 
 \subsection{Spatial Field Synthesis: U-Net Evaluation}
 \label{sec:exp_unet_baseline}
@@ -38,7 +21,7 @@ While the analytical bridges characterise the two regression targets exactly, pr
 
 Table~\ref{tab:unet_baseline} presents the results at $64\times64$. CyFM with the joint coupling has the lowest error at every $k \le 8$, with all seeds separated from the best Cartesian arm. At a single integration step ($k=1$) it reaches $0.117$, a $3\times$ lower error than the best Cartesian arm ($0.376$). At convergence ($k=100$) we detect no significant difference ($0.040$ against $0.046$, $p = 0.15$). With the joint coupling the cylindrical error decreases monotonically with $k$, here and at $32\times32$ (Table~\ref{tab:unet_scaling}); without it, the error rises from $k=1$ to $k=2$ at every resolution. Straightness is similar across arms ($0.13$--$0.14$); we did not test for equality. The two error components behave differently: at $k \le 8$ CyFM has the lower amplitude $W_2$ at every resolution with separated seeds, while the circular phase $W_2$ is mixed, the Cartesian geometry being lower at $k = 8$ on $32\times32$ and $64\times64$ fields. We report this as a decomposition of where the arms differ, not as evidence that the amplitude component causes the aggregate difference.
 
-\input{tables/table2_unet64}
+\input{tables/table2_merged}
 
 \subsection{Dimensionality Scaling and the Joint OT Coupling}
 \label{sec:exp_scaling}

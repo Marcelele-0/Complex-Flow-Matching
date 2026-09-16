@@ -171,3 +171,16 @@ Corollary~\ref{cor:pareto_tail} fixes the amplitudes. When they are random as we
 Tables~\ref{tab:unet_baseline} and~\ref{tab:unet_scaling} train both geometries with the same objective, the unweighted squared velocity error. Table~\ref{tab:unet_loss_protocols} repeats the grid with the absolute error as well, so that each geometry can also be compared at its best objective. The best of the four variants is selected on the evaluation itself, so the comparison is post-selection and its nominal $p$-values do not hold; we report it descriptively, as a robustness check rather than as a test.
 
 \input{tables/tableA_loss_protocols}
+
+\subsection{The Speech Grid at Two Training Budgets}
+\label{sec:app_audio_epochs}
+The speech block of Table~\ref{tab:unet_baseline} was first run for two epochs, and at that
+budget the Cartesian arm had the lower error at $k=100$. The schedule explains it rather than
+the geometry: the cosine annealing is parameterised by the epoch count, so a two-epoch run
+drives the learning rate to its floor within those two epochs and trains almost nothing. The
+training loss was still falling when it stopped. Table~\ref{tab:audio_epochs} repeats the grid
+at ten and at forty epochs, where the schedule completes; neither reproduces the two-epoch
+ordering, and the cylindrical arms move little between the two budgets while the Cartesian
+arms do not overtake them at either.
+
+\input{tables/tableB_audio_epochs}
