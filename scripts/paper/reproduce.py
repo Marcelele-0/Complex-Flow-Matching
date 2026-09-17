@@ -51,6 +51,7 @@ PAPER_ORDER = (
     "table3_unet_scaling",
     "tableA_loss_protocols",
     "table4_factorized",
+    "table5_fastmri",
     "sec53_ot_cost",
     "ablation_loss32",
 )

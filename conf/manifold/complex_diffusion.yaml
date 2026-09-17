@@ -1,0 +1,54 @@
+# Variance-Exploding SDE (VE-SDE) for Complex Diffusion MRI.
+#
+# State   : [Re(z), Im(z)]            2 channels
+# Process : x(t) = x(0) + sigma(t) * z,  z ~ N(0, I)
+# Sigma   : sigma(t) = sigma_min * (sigma_max / sigma_min)^t
+# Loss    : Denoising Score Matching with likelihood weighting
+# Solver  : Predictor-Corrector (Euler-Maruyama + Langevin Dynamics)
+#
+# The framework is Song et al. (2021); Chung & Ye (2022) is the MRI application
+# that motivated it. This is not their prior -- Score-MRI trains on magnitude and
+# the complex part enters at inference through data consistency -- so it is a
+# VE-SDE prior over complex fields, unconditional throughout, with no measurement
+# anywhere in the sampling path.
+name: complex_diffusion
+
+# sigma_max must be about the largest distance between two training fields, so
+# the prior forgets the data.
+#
+# It is a distance between whole FIELDS, not between two pixels: summed over
+# 2*H*W coordinates, so it grows about as sqrt(H*W). Measured with
+# calibrate_sigma_max on peak-normalised knee data it is ~140 at 320x320 and ~33
+# at 64x64. A value carried between resolutions is wrong in one direction or the
+# other, so measure it on the store before the grid runs:
+#
+#   cfm.manifolds.complex_diffusion.calibrate_sigma_max(fields)
+#
+# The value below is the 320x320 measurement, the resolution Table 5 runs at.
+sigma_min: 0.01
+sigma_max: 140.0
+
+# Smallest time the reverse integration stops at; sigma(eps) is the noise floor.
+eps: 1e-5
+
+# g(t)^2 weighting. False leaves the raw residual, and the large-t end then
+# dominates: sigma is smallest there, so the target score -z/sigma is largest.
+# It is an ablation, not an alternative protocol.
+likelihood_weighting: true
+
+# Langevin corrector. Each correction costs one model call on top of the
+# predictor, which is why nfe_mode has to be explicit about the budget.
+snr: 0.16
+corrector_steps: 1
+
+# Steps the solver takes when nothing overrides it. The evaluation sweep passes
+# its own count, so this only governs a bare make_solver().
+num_steps: 50
+
+# "heun"   spend the flow arms' budget, 2n-1 model calls: the matched-NFE
+#          columns, where this arm is deliberately handicapped
+# "native" take the sweep's step count literally: the many-step regime score
+#          based models are actually used in
+#
+# Table 5 reports both, so the grid runs this arm twice.
+nfe_mode: heun

@@ -71,6 +71,12 @@ from cfm.utils.metrics import distributional_metrics
 # divergence it is meant to expose happens well above this.
 _ANGULAR_FLOOR = 1e-12
 
+# How the induced angular velocity is read off, per geometry. An arm absent from
+# this table has no such quantity -- the diffusion baseline regresses a score, for
+# which the formula below would still return a number that means nothing -- and is
+# asked for `predicts_velocity` rather than matched by name.
+_ANGULAR_GEOMETRIES = ("euclidean", "cylindrical")
+
 
 class _AngularProbe:
     """Wraps a velocity field and records what the solver actually meets.
@@ -93,13 +99,54 @@ class _AngularProbe:
             which is where a chordal path passes closest to the origin.
     """
 
-    def __init__(self, network: torch.nn.Module, geometry: str, mid_window: float = 0.1) -> None:
+    def __init__(
+        self,
+        network: torch.nn.Module,
+        geometry: str,
+        mid_window: float = 0.1,
+        enabled: bool = True,
+    ) -> None:
         self.network = network
         self.geometry = geometry
         self.mid_window = mid_window
-        self.min_amplitude: torch.Tensor | None = None
-        self.peak_angular: torch.Tensor | None = None
+        # Off for any arm whose output is not a velocity: recording nothing is
+        # correct there, and better than recording a number nobody can interpret.
+        self.enabled = enabled and geometry in _ANGULAR_GEOMETRIES
+        # Per-sample extrema of the batch in flight, and the batches already
+        # finished. Kept apart because the reduction is over a trajectory, within
+        # one batch: a final short batch has a different sample count, and
+        # reducing it against the previous one elementwise would either raise or,
+        # worse, broadcast two unrelated samples together.
+        self._min_amplitude: torch.Tensor | None = None
+        self._peak_angular: torch.Tensor | None = None
+        self._finished_amplitude: list[torch.Tensor] = []
+        self._finished_angular: list[torch.Tensor] = []
         self.peak_angular_mid = 0.0
+
+    def start_batch(self) -> None:
+        """Close the batch in flight, so the next one accumulates on its own."""
+        if self._min_amplitude is not None:
+            self._finished_amplitude.append(self._min_amplitude)
+            self._min_amplitude = None
+        if self._peak_angular is not None:
+            self._finished_angular.append(self._peak_angular)
+            self._peak_angular = None
+
+    @property
+    def min_amplitude(self) -> torch.Tensor | None:
+        """Per-sample minimum amplitude over every trajectory seen so far."""
+        batches = [*self._finished_amplitude]
+        if self._min_amplitude is not None:
+            batches.append(self._min_amplitude)
+        return torch.cat(batches, dim=0) if batches else None
+
+    @property
+    def peak_angular(self) -> torch.Tensor | None:
+        """Per-sample peak angular velocity over every trajectory seen so far."""
+        batches = [*self._finished_angular]
+        if self._peak_angular is not None:
+            batches.append(self._peak_angular)
+        return torch.cat(batches, dim=0) if batches else None
 
     def __call__(self, state: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """Record, then delegate.
@@ -112,6 +159,8 @@ class _AngularProbe:
             The wrapped field's velocity.
         """
         velocity = self.network(state, t)
+        if not self.enabled:
+            return velocity
         if self.geometry == "euclidean":
             real, imag = state[:, 0], state[:, 1]
             squared = (real * real + imag * imag).clamp_min(_ANGULAR_FLOOR)
@@ -122,13 +171,15 @@ class _AngularProbe:
             angular = velocity[:, 1]
 
         magnitude = angular.abs()
-        self.min_amplitude = (
+        self._min_amplitude = (
             amplitude
-            if self.min_amplitude is None
-            else torch.minimum(self.min_amplitude, amplitude)
+            if self._min_amplitude is None
+            else torch.minimum(self._min_amplitude, amplitude)
         )
-        self.peak_angular = (
-            magnitude if self.peak_angular is None else torch.maximum(self.peak_angular, magnitude)
+        self._peak_angular = (
+            magnitude
+            if self._peak_angular is None
+            else torch.maximum(self._peak_angular, magnitude)
         )
         if abs(float(t.reshape(-1)[0]) - 0.5) <= self.mid_window:
             self.peak_angular_mid = max(self.peak_angular_mid, float(magnitude.max()))
@@ -240,6 +291,44 @@ def training_pipeline(dataset_cfg: Any, manifold: Any) -> Compose:
     )
 
 
+def assert_training_domain(reference: torch.Tensor, tolerance: float = 1e-4) -> float:
+    """Check the reference batch carries the normalisation training applied.
+
+    Both geometries divide a field by its own peak modulus before the crop, so
+    every coefficient training ever saw has modulus at most one, and so does
+    every sample a converged model draws. A reference batch that breaks the
+    bound did not come through :func:`training_pipeline`, and scoring against it
+    measures the missing normalisation instead of the model -- the defect that
+    once biased every absolute W2 in this module.
+
+    The bound is one-sided on purpose. Normalisation happens before the crop, so
+    a field whose peak modulus was cropped away is legitimately below one and
+    must not fail; only exceeding one proves the division never happened.
+
+    Args:
+        reference: Complex reference fields of shape ``[B, 1, H, W]``.
+        tolerance: Slack over one, for the rounding in a float32 divide.
+
+    Returns:
+        The largest peak modulus observed, for the run's record.
+
+    Raises:
+        ValueError: If any field's peak modulus exceeds ``1 + tolerance``.
+    """
+    peaks = reference.abs().amax(dim=(-3, -2, -1))
+    largest = float(peaks.max())
+    if largest > 1.0 + tolerance:
+        offenders = int((peaks > 1.0 + tolerance).sum())
+        raise ValueError(
+            f"reference fields are not in the training domain: {offenders} of "
+            f"{peaks.numel()} have a peak modulus above 1 (largest {largest:.6g}). "
+            "Peak normalisation is applied by the manifold's transform, so this "
+            "batch bypassed training_pipeline(); scoring against it would measure "
+            "the normalisation rather than the model."
+        )
+    return largest
+
+
 @hydra.main(version_base="1.3", config_path="../../conf", config_name="config")
 def main(cfg: DictConfig) -> None:
     """Score a checkpoint's samples against the data distribution."""
@@ -298,19 +387,34 @@ def main(cfg: DictConfig) -> None:
     data_states = torch.cat(state_batches, dim=0)[:num_fields].to(device)
     reference = manifold.to_complex(data_states).cpu()
     _, _, height, width = data_states.shape
-    print(f"Reference: {data_states.shape[0]} fields of {height}x{width}, in the training domain")
+    # Checked, not assumed: the domain is what makes the absolute numbers mean
+    # anything, and it is cheap enough to verify on every run that reports one.
+    peak_modulus = assert_training_domain(reference)
+    print(
+        f"Reference: {data_states.shape[0]} fields of {height}x{width}, "
+        f"in the training domain (peak modulus {peak_modulus:.6g})"
+    )
 
     coupling_name = str(cfg.get("training", {}).get("coupling", "independent"))
     straightness_chunk = settings.get("straightness_batch_size")
-    straightness_value = straightness(
-        model,
-        manifold,
-        data_states,
-        device,
-        device_generator,
-        build_coupling(coupling_name),
-        chunk=None if straightness_chunk is None else int(straightness_chunk),
-    )
+    # Straightness measures how close a predicted velocity is to the displacement
+    # it should equal. An arm regressing a score has no such comparison to make:
+    # the second return of its bridge is -z/sigma, whose scale runs away as sigma
+    # falls, so the ratio would be dominated by the t near 1 end and would sit in
+    # the table looking comparable to the flow arms' path straightness.
+    straightness_value: float | None = None
+    if manifold.predicts_velocity:
+        straightness_value = straightness(
+            model,
+            manifold,
+            data_states,
+            device,
+            device_generator,
+            build_coupling(coupling_name),
+            chunk=None if straightness_chunk is None else int(straightness_chunk),
+        )
+    else:
+        print(f"straightness: not reported for {manifold.name} (its output is not a velocity)")
 
     nfe: Sequence[int] = [int(n) for n in settings.get("nfe", [1, 2, 4, 8, 16, 32, 64, 100])]
     projections = int(settings.get("num_projections", 256))
@@ -321,21 +425,41 @@ def main(cfg: DictConfig) -> None:
         solver = manifold.make_solver(steps)
         generated_batches = []
         remaining = reference.shape[0]
-        probe = _AngularProbe(model, manifold.name)
+        probe = _AngularProbe(model, manifold.name, enabled=manifold.predicts_velocity)
         while remaining > 0:
             size = min(batch_size, remaining)
             prior = manifold.sample_noise(size, height, width, device, generator=device_generator)
+            probe.start_batch()
             with torch.no_grad():
-                generated_batches.append(manifold.to_complex(solver.sample(probe, prior)).cpu())
+                # The generator reaches the sampler too: a stochastic one draws
+                # inside sample(), and without it those draws would come from the
+                # global RNG while the record still claimed a seed.
+                generated_batches.append(
+                    manifold.to_complex(
+                        solver.sample(probe, prior, generator=device_generator)
+                    ).cpu()
+                )
             remaining -= size
-        assert probe.peak_angular is not None and probe.min_amplitude is not None
-        probes[steps] = {
-            "peak_angular_velocity_median": float(probe.peak_angular.median()),
-            "peak_angular_velocity_max": float(probe.peak_angular.max()),
-            "peak_angular_velocity_near_t_half": probe.peak_angular_mid,
-            "min_amplitude_mean": float(probe.min_amplitude.mean()),
-            "min_amplitude_min": float(probe.min_amplitude.min()),
-        }
+        # Recorded only where an angular velocity is defined; the keys are absent
+        # rather than zero for the other arms, so a reader cannot mistake "not
+        # applicable" for "measured, and small".
+        row_probe: dict[str, float] = {}
+        if probe.enabled:
+            assert probe.peak_angular is not None and probe.min_amplitude is not None
+            row_probe = {
+                "peak_angular_velocity_median": float(probe.peak_angular.median()),
+                "peak_angular_velocity_max": float(probe.peak_angular.max()),
+                "peak_angular_velocity_near_t_half": probe.peak_angular_mid,
+                "min_amplitude_mean": float(probe.min_amplitude.mean()),
+                "min_amplitude_min": float(probe.min_amplitude.min()),
+            }
+        # What the sweep's step count actually cost, and what it actually ran.
+        # Heun spends 2n-1 calls and the diffusion sampler (1+M) per step, so the
+        # column header alone does not say whether two rows had the same budget;
+        # and in matched mode the executed step count is not the requested one.
+        row_probe["model_evaluations"] = float(solver.evaluations)
+        row_probe["executed_steps"] = float(solver.num_steps)
+        probes[steps] = row_probe
         generated = torch.cat(generated_batches, dim=0)
         rows.append(
             (steps, distributional_metrics(generated, reference, projections, metric_generator))
@@ -348,13 +472,15 @@ def main(cfg: DictConfig) -> None:
         "w2_phase_circular",
         "dependence_gap",
         "spatial_lag1_gap",
+        "radial_spectrum_gap",
     ]
     print("\n" + "=" * 120)
     print("GENERATIVE EVALUATION")
     print("=" * 120)
     print(format_table(rows, headline))
     print("-" * 120)
-    print(f"straightness ({coupling_name} pairing): {straightness_value:.5f}")
+    if straightness_value is not None:
+        print(f"straightness ({coupling_name} pairing): {straightness_value:.5f}")
     print(
         f"dependence: reference {rows[0][1]['dependence_reference']:.4f}, "
         f"generated {rows[0][1]['dependence_generated']:.4f} at {nfe[0]} step(s)"
@@ -363,18 +489,34 @@ def main(cfg: DictConfig) -> None:
         f"spatial lag-1: reference {rows[0][1]['spatial_lag1_reference']:.4f}, "
         f"generated {rows[0][1]['spatial_lag1_generated']:.4f} at {nfe[0]} step(s)"
     )
-    print("\n" + "-" * 120)
-    print(
-        "ANGULAR VELOCITY ALONG THE PATH   (cylinder is bounded by pi = 3.1416; the plane is not)"
-    )
-    print(f"{'steps':>7}{'NFE':>7}{'median':>12}{'max':>12}{'near t=0.5':>14}{'min |z|':>10}")
-    for steps in nfe:
-        p = probes[steps]
+    # Only for arms whose output is a velocity; for the others the quantity is
+    # undefined and the section is omitted rather than filled with zeros.
+    if manifold.predicts_velocity:
+        print("\n" + "-" * 120)
         print(
-            f"{steps:>7}{2 * steps - 1:>7}"
-            f"{p['peak_angular_velocity_median']:>14.4f}{p['peak_angular_velocity_max']:>12.4f}"
-            f"{p['peak_angular_velocity_near_t_half']:>18.4f}{p['min_amplitude_min']:>10.5f}"
+            "ANGULAR VELOCITY ALONG THE PATH   "
+            "(cylinder is bounded by pi = 3.1416; the plane is not)"
         )
+        print(f"{'steps':>7}{'NFE':>7}{'median':>12}{'max':>12}{'near t=0.5':>14}{'min |z|':>10}")
+        for steps in nfe:
+            p = probes[steps]
+            print(
+                f"{steps:>7}{int(p['model_evaluations']):>7}"
+                f"{p['peak_angular_velocity_median']:>14.4f}{p['peak_angular_velocity_max']:>12.4f}"
+                f"{p['peak_angular_velocity_near_t_half']:>18.4f}{p['min_amplitude_min']:>10.5f}"
+            )
+
+    # Described from what ran, not from a constant: this module serves a Heun
+    # integrator and a stochastic sampler, and a note naming the wrong one is
+    # worse than no note at all.
+    solver_name = type(manifold.make_solver(nfe[0])).__name__
+    note_on_nfe = (
+        "Function evaluations are counted per solver and reported as `nfe` on "
+        "each sweep row, beside the `num_steps` the sweep requested and the "
+        "`executed_steps` actually run. Heun evaluates twice per step less the "
+        "corrector its final step skips (1, 3, 7, 15, 199 for 1, 2, 4, 8, 100); "
+        "a predictor-corrector sampler evaluates 1 + corrector_steps per step."
+    )
 
     output_dir = Path(cfg.get("paths", {}).get("output_dir", "."))
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -387,17 +529,25 @@ def main(cfg: DictConfig) -> None:
         "seed": seed,
         "num_projections": projections,
         "reference_domain": "training transform",
-        "straightness": straightness_value,
-        "straightness_pairing": coupling_name,
-        "solver": "heun",
-        "note_on_nfe": (
-            "The production solver is Heun, a two-evaluation predictor-corrector, "
-            "and the last step skips the corrector. Function evaluations are "
-            "therefore 2 * num_steps - 1, not num_steps: 1, 3, 7, 15, 199 for "
-            "num_steps 1, 2, 4, 8, 100."
-        ),
+        # Evidence for the line above, rather than a restatement of it: the
+        # largest peak modulus in the reference batch, which assert_training_domain
+        # required to be at most one before any metric was computed.
+        "reference_peak_modulus": peak_modulus,
+        # Absent, not null, for an arm where a path's straightness is undefined.
+        **({} if straightness_value is None else {"straightness": straightness_value}),
+        **({} if straightness_value is None else {"straightness_pairing": coupling_name}),
+        "solver": solver_name,
+        "note_on_nfe": note_on_nfe,
+        # `nfe` is the cost actually paid, read off the solver, and `num_steps`
+        # the count the sweep asked for; in matched mode they are not the same
+        # and `executed_steps` in each row says what ran.
         "sweep": [
-            {"num_steps": steps, "nfe": 2 * steps - 1, **values, **probes[steps]}
+            {
+                "num_steps": steps,
+                "nfe": int(probes[steps]["model_evaluations"]),
+                **values,
+                **probes[steps],
+            }
             for steps, values in rows
         ],
     }

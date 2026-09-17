@@ -10,7 +10,13 @@ import pytest
 import torch
 
 from cfm.data.toy_dataset import CylinderToyFieldDataset, CylinderToyIIDDataset
-from cfm.utils.metrics import distributional_metrics, spatial_lag_one, subsample
+from cfm.utils.metrics import (
+    distributional_metrics,
+    radial_power_spectrum,
+    radial_spectrum_gap,
+    spatial_lag_one,
+    subsample,
+)
 
 
 def _fields(dataset: object, count: int) -> torch.Tensor:
@@ -103,6 +109,90 @@ def test_metrics_separate_distributions_that_differ_only_spatially() -> None:
 
     assert values["spatial_lag1_gap"] > 0.8
     assert values["sliced_w2_complex"] < 0.05
+
+
+def test_radial_spectrum_separates_white_from_correlated_fields() -> None:
+    """The property the metric exists for: coarse-versus-fine balance.
+
+    An i.i.d. field is white, so its power is spread evenly across the band; a
+    correlated one is red, concentrated at low frequency. Nothing else in the
+    report distinguishes those two spectra.
+    """
+    iid = _fields(CylinderToyIIDDataset(size=16, crop_size=(64, 64)), 16)
+    field = _fields(CylinderToyFieldDataset(size=16, crop_size=(64, 64)), 16)
+
+    assert radial_spectrum_gap(iid, field) > 0.3
+    assert radial_spectrum_gap(iid, iid) == pytest.approx(0.0, abs=1e-6)
+
+
+def test_radial_spectrum_floor_is_well_below_a_real_difference() -> None:
+    """The number a reported gap has to be read against.
+
+    Comparing a batch with itself is zero by construction and says nothing. Two
+    independent draws of one distribution give the finite-sample floor, and a
+    gap is only evidence of a spectral difference if it clears that.
+    """
+    first = _fields(CylinderToyIIDDataset(size=16, crop_size=(64, 64), seed=0), 16)
+    second = _fields(CylinderToyIIDDataset(size=16, crop_size=(64, 64), seed=1), 16)
+    correlated = _fields(CylinderToyFieldDataset(size=16, crop_size=(64, 64)), 16)
+
+    floor = radial_spectrum_gap(first, second)
+    signal = radial_spectrum_gap(first, correlated)
+    assert floor < 0.1
+    assert signal > 3.0 * floor
+
+
+def test_radial_spectrum_ignores_a_pure_change_of_scale() -> None:
+    """Overall power belongs to w2_amplitude; this metric reports shape only."""
+    fields = _fields(CylinderToyFieldDataset(size=8, crop_size=(32, 32)), 8)
+    assert radial_spectrum_gap(fields, fields * 4.0) == pytest.approx(0.0, abs=1e-6)
+
+
+@pytest.mark.parametrize(
+    "degenerate",
+    [
+        pytest.param(torch.full((4, 1, 32, 32), float("nan"), dtype=torch.complex64), id="nan"),
+        pytest.param(torch.full((4, 1, 32, 32), float("inf"), dtype=torch.complex64), id="inf"),
+        pytest.param(torch.zeros(4, 1, 32, 32, dtype=torch.complex64), id="zeros"),
+        pytest.param(torch.full((4, 1, 32, 32), 0.5 + 0j, dtype=torch.complex64), id="constant"),
+    ],
+)
+def test_radial_spectrum_refuses_to_score_a_diverged_sampler(degenerate: torch.Tensor) -> None:
+    """A field with no usable bin must not earn the value meaning "identical".
+
+    Each of these leaves the usable mask empty. Returning 0.0 there would put a
+    perfect spectral match in metrics.json for the one run that diverged -- on
+    the metric added to catch exactly that -- so the empty case is nan.
+    """
+    torch.manual_seed(0)
+    reference = torch.randn(8, 1, 32, 32, dtype=torch.complex64)
+    assert math.isnan(radial_spectrum_gap(degenerate, reference))
+
+
+def test_radial_spectrum_profile_is_a_ring_average() -> None:
+    """Every bin averages a full ring, so an isotropic field gives a flat profile."""
+    torch.manual_seed(0)
+    white = torch.randn(8, 1, 32, 32, dtype=torch.complex64)
+    profile = radial_power_spectrum(white)
+
+    assert profile.shape == (16,)
+    assert bool((profile[1:] > 0).all())
+    # Flat to within sampling noise: no ring carries an order of magnitude more
+    # power than another, which a mis-binned or corner-folded profile would show.
+    assert float(profile[1:].max() / profile[1:].min()) < 4.0
+
+
+@pytest.mark.parametrize(
+    ("fields", "match"),
+    [
+        (torch.ones(2, 1, 8, 8), r"\[B, 1, H, W\]"),
+        (torch.ones(2, 1, 3, 3, dtype=torch.complex64), "four samples"),
+    ],
+)
+def test_radial_spectrum_validation(fields: torch.Tensor, match: str) -> None:
+    """Shapes too small for a ring average fail loudly rather than return noise."""
+    with pytest.raises(ValueError, match=match):
+        radial_power_spectrum(fields)
 
 
 def test_metrics_are_reproducible_under_a_fixed_generator() -> None:

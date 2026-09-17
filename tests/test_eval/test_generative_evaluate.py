@@ -9,7 +9,7 @@ import pytest
 import torch
 
 from cfm.data.toy_dataset import CylinderToyIIDDataset
-from cfm.evaluate import format_table
+from cfm.evaluate import assert_training_domain, format_table
 
 
 def _generator(seed: int = 0) -> torch.Generator:
@@ -114,6 +114,62 @@ def test_reference_goes_through_the_training_normalisation(geometry: str) -> Non
         assert field.shape == (1, 1, 16, 16)
         assert float(field.abs().max()) == pytest.approx(1.0, abs=1e-5)
         assert float(raw.abs().max()) > 1.0
+
+
+def test_domain_guard_accepts_a_normalised_batch() -> None:
+    """The guard returns the observed peak, which the run's record reports."""
+    fields = torch.ones(3, 1, 8, 8, dtype=torch.complex64)
+    assert assert_training_domain(fields) == pytest.approx(1.0)
+
+
+def test_domain_guard_rejects_un_normalised_fields() -> None:
+    """The defect it exists for: raw fields scored as if they were normalised."""
+    raw = torch.full((2, 1, 8, 8), 3.0 + 0.0j, dtype=torch.complex64)
+    with pytest.raises(ValueError, match="not in the training domain"):
+        assert_training_domain(raw)
+
+
+def test_domain_guard_allows_a_peak_removed_by_the_crop() -> None:
+    """One-sided on purpose.
+
+    Normalisation runs before the crop, so a field whose brightest pixel was
+    cropped away peaks below one and is perfectly valid. A two-sided check would
+    fail those and push someone to normalise after cropping, which would change
+    the protocol.
+    """
+    dim = torch.full((2, 1, 8, 8), 0.4 + 0.0j, dtype=torch.complex64)
+    assert assert_training_domain(dim) == pytest.approx(0.4)
+
+
+def test_probe_accumulates_across_batches_of_different_sizes() -> None:
+    """num_fields need not divide batch_size, so the last batch is short.
+
+    Reducing a short batch elementwise against the previous one would raise, or
+    silently pair two unrelated samples; the extrema are per sample, so batches
+    concatenate.
+    """
+    from cfm.evaluate import _AngularProbe
+
+    probe = _AngularProbe(lambda state, t: torch.ones_like(state), "euclidean")
+    for size in (4, 4, 2):
+        probe.start_batch()
+        for step in (0.0, 0.5):
+            state = torch.ones(size, 2, 4, 4)
+            probe(state, torch.full((size,), step))
+
+    assert probe.peak_angular is not None
+    assert probe.peak_angular.shape[0] == 10
+
+
+def test_probe_records_nothing_when_disabled() -> None:
+    """A score arm has no angular velocity, so there is nothing to report."""
+    from cfm.evaluate import _AngularProbe
+
+    probe = _AngularProbe(lambda state, t: torch.ones_like(state), "euclidean", enabled=False)
+    probe.start_batch()
+    probe(torch.ones(2, 2, 4, 4), torch.zeros(2))
+    assert probe.enabled is False
+    assert probe.peak_angular is None
 
 
 class _ZeroVelocity(torch.nn.Module):

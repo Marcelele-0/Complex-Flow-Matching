@@ -9,25 +9,17 @@ no continuous trigonometric embedding appears anywhere on this path.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
 from typing import Any
 
 import torch
 
 from cfm.core.manifold import BaseManifold
 from cfm.core.registry import MANIFOLDS
-from cfm.data.transforms import (
-    CenterCropModulo,
-    ComplexToEuclideanTransform,
-    Compose,
-    EuclideanNormalize,
-    WindowEuclideanNormalize,
-)
 from cfm.flow.euclidean_bridge import LinearFlowBridge
 from cfm.flow.euclidean_math import EuclideanVelocityLoss
 from cfm.flow.euclidean_solver import EuclideanODESolver
 from cfm.manifolds.cylindrical import sample_cylindrical_noise_correlated
-from cfm.utils.complex_ops import euclidean_to_complex
+from cfm.manifolds.flat import FlatComplexRepresentation
 
 # "uniform" first: it is the default, being the only one that is both free of
 # trigonometry and distributionally identical to the cylindrical prior.
@@ -131,7 +123,7 @@ def sample_gaussian_noise(
 
 
 @MANIFOLDS.register("euclidean")
-class EuclideanManifold(BaseManifold):
+class EuclideanManifold(FlatComplexRepresentation, BaseManifold):
     """Complex pixels as flat 2-vectors, with no manifold structure imposed.
 
     Args:
@@ -196,6 +188,12 @@ class EuclideanManifold(BaseManifold):
         self._loss = self._loss.to(device)
         return self
 
+    # Stays on this class, and must not move to FlatComplexRepresentation with the
+    # rest of the flat geometry: the bound below is read off *this arm's* support.
+    # The complex-diffusion arm shares the representation but not the prior -- its
+    # is N(0, sigma_max^2), not the unit disc -- so inheriting (2.0, 2.0) would give
+    # it a ceiling roughly seventy times too tight. It declares no bound instead,
+    # which is what BaseManifold.velocity_bound raising means.
     @property
     def velocity_bound(self) -> tuple[float, float]:
         """Largest velocity this manifold's own geometry admits, per channel.
@@ -208,15 +206,6 @@ class EuclideanManifold(BaseManifold):
         same decision applied twice. On this side it is slack, which is itself the point.
         """
         return (2.0, 2.0)
-
-    def exp_map(self, x: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
-        """Exponential map on Euclidean space R^2 is vector addition."""
-        return x + v
-
-    def log_map(self, x_0: torch.Tensor, x_1: torch.Tensor) -> torch.Tensor:
-        """Logarithmic map on Euclidean space R^2 is vector difference."""
-        return x_1 - x_0
-
     def geodesic_path(self, x_0: torch.Tensor, x_1: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
         """Straight-line geodesic interpolation in Euclidean space."""
         return (1.0 - t) * x_0 + t * x_1
@@ -226,34 +215,6 @@ class EuclideanManifold(BaseManifold):
     ) -> torch.Tensor:
         del t
         return x_1 - x_0
-
-    def metric_tensor(self, x: torch.Tensor) -> torch.Tensor:
-        """Flat Euclidean metric tensor."""
-        return torch.ones(
-            x.shape[0],
-            self.velocity_channels,
-            x.shape[2],
-            x.shape[3],
-            device=x.device,
-            dtype=x.dtype,
-        )
-
-    def build_transform(self, crop_base: int = 16) -> Callable[[torch.Tensor], torch.Tensor]:
-        # Normalise before cropping, exactly as the cylindrical pipeline does, so
-        # both divide by a peak modulus taken over the same uncropped slice.
-        return Compose(
-            [ComplexToEuclideanTransform(), EuclideanNormalize(), CenterCropModulo(base=crop_base)]
-        )
-
-    def build_window_transforms(
-        self, crop_base: int = 16
-    ) -> tuple[Callable[[torch.Tensor], torch.Tensor], Callable[[torch.Tensor], torch.Tensor]]:
-        # Same split as the cylindrical arm, and the same peak: one scalar over the
-        # whole window, so both geometries hand the 2.5D model the same signal.
-        return (
-            Compose([ComplexToEuclideanTransform()]),
-            Compose([WindowEuclideanNormalize(), CenterCropModulo(base=crop_base)]),
-        )
 
     def sample_noise(
         self,
@@ -292,9 +253,3 @@ class EuclideanManifold(BaseManifold):
 
     def make_solver(self, num_steps: int) -> EuclideanODESolver:
         return EuclideanODESolver(num_steps=num_steps)
-
-    def to_complex(self, state: torch.Tensor) -> torch.Tensor:
-        return euclidean_to_complex(state)
-
-    def from_complex(self, z: torch.Tensor) -> torch.Tensor:
-        return torch.cat([z.real, z.imag], dim=1)

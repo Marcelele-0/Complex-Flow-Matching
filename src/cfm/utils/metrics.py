@@ -21,6 +21,11 @@ every solver step count:
   factorised coupling destroys, so it has to be a number.
 * **The spatial gap**: lag-one autocorrelation of the amplitude field. Every
   metric above pools coefficients and is blind to spatial structure.
+* **The radial spectrum gap**: azimuthally averaged power spectrum of the
+  amplitude field. Lag-one sees only the nearest neighbour, so a model can match
+  it while getting the balance between coarse and fine structure wrong -- which
+  is the failure mode a k-space objective is supposed to fix, and therefore the
+  one the table has to be able to see.
 """
 
 from __future__ import annotations
@@ -35,7 +40,13 @@ from cfm.flow.optimal_transport import (
     sorted_transport_permutation,
 )
 
-__all__ = ["distributional_metrics", "spatial_lag_one", "subsample"]
+__all__ = [
+    "distributional_metrics",
+    "radial_power_spectrum",
+    "radial_spectrum_gap",
+    "spatial_lag_one",
+    "subsample",
+]
 
 # The circular solver searches n cyclic shifts, so its cost is quadratic. Beyond
 # this the marginal metrics are computed on a random subsample, which is stated
@@ -96,6 +107,99 @@ def spatial_lag_one(fields: torch.Tensor) -> float:
     return float((left * right).sum() / denominator)
 
 
+def radial_power_spectrum(fields: torch.Tensor, num_bins: int | None = None) -> torch.Tensor:
+    """Azimuthally averaged power spectrum of the amplitude field.
+
+    Args:
+        fields: Complex fields of shape ``[B, 1, H, W]``.
+        num_bins: Radial bins between zero and Nyquist. Defaults to half the
+            shorter axis, the resolution the grid actually supports.
+
+    Returns:
+        Mean power per radial bin, of shape ``[num_bins]``.
+
+    Raises:
+        ValueError: If ``fields`` is not a 4D complex tensor, either axis is
+            shorter than four samples, or ``num_bins`` is below two.
+    """
+    if fields.ndim != 4 or not fields.is_complex():
+        raise ValueError(f"expected complex [B, 1, H, W], got shape {tuple(fields.shape)}")
+    height, width = fields.shape[-2], fields.shape[-1]
+    if min(height, width) < 4:
+        raise ValueError("a radial spectrum needs at least four samples on each axis")
+
+    bins = min(height, width) // 2 if num_bins is None else int(num_bins)
+    if bins < 2:
+        raise ValueError(f"num_bins must be at least two, got {bins}")
+
+    power = torch.fft.fft2(fields.abs(), norm="ortho").abs().square().mean(dim=(0, 1))
+
+    frequency_y = torch.fft.fftfreq(height, device=fields.device).unsqueeze(1)
+    frequency_x = torch.fft.fftfreq(width, device=fields.device).unsqueeze(0)
+    radius = torch.sqrt(frequency_y * frequency_y + frequency_x * frequency_x)
+
+    # Past Nyquist only the corners of the grid contribute, so those radii are
+    # sampled along some directions and not others. Dropping them keeps every bin
+    # an average over a full ring; folding them into the last bin would not.
+    inside = radius <= 0.5
+    index = (radius[inside] / 0.5 * bins).long().clamp_(max=bins - 1)
+    values = power[inside]
+
+    total = torch.zeros(bins, device=fields.device, dtype=values.dtype)
+    counts = torch.zeros(bins, device=fields.device, dtype=values.dtype)
+    total.scatter_add_(0, index, values)
+    counts.scatter_add_(0, index, torch.ones_like(values))
+    return total / counts.clamp_min(1.0)
+
+
+def radial_spectrum_gap(
+    generated: torch.Tensor,
+    reference: torch.Tensor,
+    num_bins: int | None = None,
+) -> float:
+    """Mean absolute log-ratio between two normalised radial power spectra.
+
+    Reported in dex: zero is an identical spectral shape, and 1.0 means the two
+    spectra differ by a factor of ten in the average bin. The comparison is made
+    in the log because spectral power spans orders of magnitude across the band,
+    so a linear difference would only ever describe the lowest frequencies.
+
+    Args:
+        generated: Complex fields of shape ``[B, 1, H, W]``.
+        reference: Complex fields of shape ``[B', 1, H', W']``.
+        num_bins: Radial bins. Defaults to half the shortest axis of either
+            batch, so unequally sized batches still land on a common grid.
+
+    Returns:
+        The gap, or ``nan`` if no bin carries power in both batches -- a diverged
+        sampler, an all-zero or constant field. Not ``0.0``: that is the value
+        meaning *identical spectrum*, and this metric exists to catch the very
+        runs that would otherwise earn it. ``spatial_lag_one`` propagates ``nan``
+        for the same reason, and it survives the archive's JSON round-trip.
+    """
+    if num_bins is None:
+        shortest = min(
+            generated.shape[-2], generated.shape[-1], reference.shape[-2], reference.shape[-1]
+        )
+        num_bins = shortest // 2
+
+    generated_profile = radial_power_spectrum(generated, num_bins)
+    reference_profile = radial_power_spectrum(reference, num_bins)
+
+    # Bin zero is the field's mean brightness, which w2_amplitude already covers.
+    # Normalising what is left makes this a statement about spectral shape alone,
+    # so it cannot restate a difference in overall power as a spatial finding.
+    generated_profile = generated_profile[1:]
+    reference_profile = reference_profile[1:]
+    usable = (generated_profile > 0) & (reference_profile > 0)
+    if not bool(usable.any()):
+        return float("nan")
+
+    generated_density = generated_profile[usable] / generated_profile[usable].sum()
+    reference_density = reference_profile[usable] / reference_profile[usable].sum()
+    return float((torch.log10(generated_density) - torch.log10(reference_density)).abs().mean())
+
+
 def distributional_metrics(
     generated: torch.Tensor,
     reference: torch.Tensor,
@@ -113,10 +217,13 @@ def distributional_metrics(
     Returns:
         Metric name to value: ``sliced_w2_complex``, ``w2_amplitude``,
         ``w2_phase_circular``, the generated and reference dependence and their
-        gap, and the generated and reference lag-one correlation and their gap.
+        gap, the generated and reference lag-one correlation and their gap, and
+        ``radial_spectrum_gap``.
 
     Raises:
-        ValueError: If either batch is not a complex 4D tensor.
+        ValueError: If either batch is not a complex 4D tensor, or is narrower
+            than four samples on an axis, which the radial spectrum needs to
+            average over a ring.
     """
     if generated.ndim != 4 or reference.ndim != 4:
         raise ValueError("both batches must be [B, 1, H, W]")
@@ -160,6 +267,11 @@ def distributional_metrics(
     generated_dependence = float(circular_linear_correlation(left.abs(), left.angle()))
     reference_dependence = float(circular_linear_correlation(right.abs(), right.angle()))
 
+    # Bound once: each call re-materialises two shifted views of the amplitude
+    # field, which at the fastMRI scale is millions of elements per sweep row.
+    generated_lag_one = spatial_lag_one(generated)
+    reference_lag_one = spatial_lag_one(reference)
+
     return {
         "sliced_w2_complex": sliced,
         "w2_amplitude": amplitude_w2,
@@ -167,7 +279,8 @@ def distributional_metrics(
         "dependence_generated": generated_dependence,
         "dependence_reference": reference_dependence,
         "dependence_gap": abs(generated_dependence - reference_dependence),
-        "spatial_lag1_generated": spatial_lag_one(generated),
-        "spatial_lag1_reference": spatial_lag_one(reference),
-        "spatial_lag1_gap": abs(spatial_lag_one(generated) - spatial_lag_one(reference)),
+        "spatial_lag1_generated": generated_lag_one,
+        "spatial_lag1_reference": reference_lag_one,
+        "spatial_lag1_gap": abs(generated_lag_one - reference_lag_one),
+        "radial_spectrum_gap": radial_spectrum_gap(generated, reference),
     }

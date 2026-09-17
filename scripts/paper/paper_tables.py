@@ -218,12 +218,19 @@ def print_checks(runs: Runs) -> None:
                 print(f"  {LABELS[geometry]:<12} {coupling:<12} {statistics.fmean(values):.3f}")
 
 
-def provenance(name: str, prefix: str) -> dict[str, Any]:
+def provenance(name: str, prefix: str, train_name: str | None = None) -> dict[str, Any]:
     """Hydra overrides of one evaluation and of the training run it evaluated.
 
     Args:
         name: Unprefixed evaluation name, e.g. ``un_cylindrical_ot_scnull_s0_eval``.
         prefix: Run-name prefix the evaluation and its training run were written with.
+        train_name: Unprefixed name of the training run, when it is not ``name``
+            without its ``_eval`` suffix. One checkpoint can be scored more than
+            once -- Table 5's diffusion baseline is evaluated at a matched budget
+            and again in its own many-step regime -- and the second evaluation has
+            no training directory of its own. Pointing it at the checkpoint it
+            actually scored is what keeps its ``train_*`` keys from being silently
+            absent, which would leave that row unverifiable.
 
     Returns:
         ``evaluate_run`` / ``evaluate_overrides`` from the newest evaluation directory
@@ -237,7 +244,8 @@ def provenance(name: str, prefix: str) -> dict[str, Any]:
         run_dir = evaluations[-1].parent
         record["evaluate_run"] = run_dir.name
         record["evaluate_overrides"] = read_overrides(run_dir / ".hydra" / "overrides.yaml")
-    trainings = sorted(TRAININGS.glob(f"{prefix}{name.removesuffix('_eval')}/*/.hydra"))
+    trained = train_name if train_name is not None else name.removesuffix("_eval")
+    trainings = sorted(TRAININGS.glob(f"{prefix}{trained}/*/.hydra"))
     if trainings:
         record["train_run"] = trainings[-1].parent.name
         record["train_overrides"] = read_overrides(trainings[-1] / "overrides.yaml")
