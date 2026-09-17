@@ -29,6 +29,18 @@ class BaseManifold(ABC):
         """Move any internal modules / buffers to device and return self."""
         return self
 
+    @property
+    def velocity_bound(self) -> tuple[float, ...]:
+        """Largest velocity this geometry admits, per tangent channel.
+
+        A head that cannot leave this range loses nothing: the marginal field a
+        flow-matching objective converges to is an expectation of conditional targets,
+        and an expectation of values inside an interval is inside it. Each manifold
+        states its own, from its own metric, so bounding one geometry is not a
+        concession granted to it over the other.
+        """
+        raise NotImplementedError(f"{type(self).__name__} declares no velocity bound")
+
     @abstractmethod
     def exp_map(self, x: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
         """Riemannian exponential map: exp_x(v) advancing point x along tangent vector v.

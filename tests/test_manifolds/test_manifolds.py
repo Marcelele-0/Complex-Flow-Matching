@@ -467,3 +467,55 @@ class TestSideBySideFairness:
             )
 
         assert calls["cylindrical"] == calls["euclidean"] == 2 * 6 - 1
+
+
+def test_a_bounded_head_cannot_leave_the_range_its_geometry_allows() -> None:
+    """The bound is the point of the head, so it is asserted rather than assumed.
+
+    The failure it exists to prevent is silent: an unbounded head predicts angular
+    velocities above pi, which no target ever asks for, and the error only shows up
+    several solver steps later.
+    """
+    import math
+
+    from cfm.models.cylindrical_unet import CylindricalUNet
+
+    model = CylindricalUNet(
+        base_channels=8, in_channels=3, out_channels=2, velocity_bound=(1.0, math.pi)
+    )
+    # Drive the final convolution hard enough that an unbounded head would run away.
+    with torch.no_grad():
+        model.final_conv.weight.mul_(500.0)
+        model.final_conv.bias.fill_(500.0)
+    velocity = model(torch.randn(4, 3, 16, 16), torch.rand(4))
+    # Saturation lands on the float32 representation of the bound, and float32's pi
+    # rounds above the true value, so the comparison is made in that precision.
+    limits = torch.tensor([1.0, math.pi], dtype=torch.float32)
+    assert float(velocity[:, 0].abs().max()) <= float(limits[0])
+    assert float(velocity[:, 1].abs().max()) <= float(limits[1])
+    # And it really is saturating, not merely small.
+    assert float(velocity[:, 1].abs().max()) > 3.0
+
+
+def test_an_unbounded_head_is_left_exactly_as_it_was() -> None:
+    """Omitting the bound must not perturb the existing architecture."""
+    from cfm.models.cylindrical_unet import CylindricalUNet
+
+    torch.manual_seed(0)
+    plain = CylindricalUNet(base_channels=8, in_channels=3, out_channels=2)
+    torch.manual_seed(0)
+    same = CylindricalUNet(base_channels=8, in_channels=3, out_channels=2, velocity_bound=None)
+    state = torch.randn(2, 3, 16, 16)
+    time = torch.rand(2)
+    assert torch.equal(plain(state, time), same(state, time))
+
+
+def test_each_geometry_states_its_own_bound() -> None:
+    """The cylinder's binds and the plane's is slack; that asymmetry is the argument."""
+    import math
+
+    from cfm.manifolds.cylindrical import CylindricalManifold
+    from cfm.manifolds.euclidean import EuclideanManifold
+
+    assert CylindricalManifold().velocity_bound == (1.0, math.pi)
+    assert EuclideanManifold().velocity_bound == (2.0, 2.0)

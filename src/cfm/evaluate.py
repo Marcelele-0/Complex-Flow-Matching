@@ -261,6 +261,11 @@ def main(cfg: DictConfig) -> None:
         device,
         in_channels=manifold.state_channels,
         out_channels=manifold.velocity_channels,
+        velocity_bound=(
+            manifold.velocity_bound
+            if bool(cfg.get("model", {}).get("bounded_velocity", False))
+            else None
+        ),
     )
     load_weights(model, resolve_checkpoint(cfg, "evaluate", hydra.utils.get_original_cwd()), device)
     model.eval()

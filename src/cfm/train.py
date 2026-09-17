@@ -288,6 +288,11 @@ def main(cfg: DictConfig) -> None:
         device,
         in_channels=manifold.state_channels,
         out_channels=manifold.velocity_channels,
+        velocity_bound=(
+            manifold.velocity_bound
+            if bool(cfg.get("model", {}).get("bounded_velocity", False))
+            else None
+        ),
     )
 
     # --- Optimizer & Scheduler ---
