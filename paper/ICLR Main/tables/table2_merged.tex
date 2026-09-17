@@ -3,9 +3,10 @@
     \caption{\textbf{Few-step synthesis, two domains.} Sliced $W_2$ between generated and
     reference complex fields, mean over 5 seeds, evaluated on held-out data. $k$ is the
     number of solver steps; a Heun step costs two function evaluations. $k^\star$ is the
-    first step count at which an arm reaches $E^\star$, the $k=100$ error of the
-    \emph{worse} geometry, which is what stops the comparison from being an artefact of
-    the two converging to different asymptotes. Errors are comparable within a block and
+    first step count at which an arm reaches $E^\star$, the largest $k=100$ error among
+    the arms of its block, which is what stops the comparison from being an artefact of
+    the two converging to different asymptotes. It is the median over seeds, and it is
+    read off a denser step grid than the columns shown. Errors are comparable within a block and
     not across blocks. Each block holds its own protocol fixed across arms -- same architecture, batch, objective, seeds and epoch count --
     but an epoch is not the same amount of optimisation in the two domains: the speech store
     holds $110{,}099$ segments against $8{,}192$ synthetic fields, so forty epochs are
