@@ -1,4 +1,5 @@
 import math
+from collections.abc import Sequence
 
 import torch
 import torch.nn as nn
@@ -91,9 +92,33 @@ class CylindricalUNet(nn.Module):
     """
 
     def __init__(
-        self, base_channels: int = 64, in_channels: int = 3, out_channels: int = 2
+        self,
+        base_channels: int = 64,
+        in_channels: int = 3,
+        out_channels: int = 2,
+        velocity_bound: Sequence[float] | None = None,
     ) -> None:
         super().__init__()
+
+        # Per-channel ceiling on |velocity|, applied as bound * tanh(logit / bound) so the
+        # map is the identity to first order and saturates only where the target cannot
+        # go. Each geometry supplies its own from its own metric, so this is not an
+        # advantage handed to one arm: on the cylinder the angular coordinate lives on a
+        # circle of diameter pi and the bound binds; in the plane the bound is the support
+        # diameter and is slack. The marginal field a flow-matching model converges to is
+        # a conditional expectation of targets that already respect these limits, so the
+        # optimum lies strictly inside and nothing representable is lost.
+        if velocity_bound is None:
+            self.register_buffer("_bound", None)
+        else:
+            bound = torch.tensor(list(velocity_bound), dtype=torch.float32)
+            if bound.numel() != out_channels:
+                raise ValueError(
+                    f"velocity_bound has {bound.numel()} entries for {out_channels} channels"
+                )
+            if not bool((bound > 0).all()):
+                raise ValueError(f"velocity_bound must be positive, got {velocity_bound}")
+            self.register_buffer("_bound", bound.reshape(1, -1, 1, 1))
 
         time_emb_dim = base_channels * 4
         self.time_mlp = nn.Sequential(
@@ -167,4 +192,9 @@ class CylindricalUNet(nn.Module):
         u2 = torch.cat([u2, d1], dim=1)
         u2 = self.up_block2(u2, t_emb)
 
-        return self.final_conv(u2)
+        velocity = self.final_conv(u2)
+        bound = self._bound
+        if bound is None:
+            return velocity
+        assert isinstance(bound, torch.Tensor)
+        return bound * torch.tanh(velocity / bound)

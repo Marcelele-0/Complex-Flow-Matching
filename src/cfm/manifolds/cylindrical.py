@@ -236,6 +236,18 @@ class CylindricalManifold(BaseManifold):
         )
 
     @property
+    def velocity_bound(self) -> tuple[float, float]:
+        """Largest velocity this manifold's own geometry admits, per channel.
+
+        The amplitude target is a difference of two moduli the transform has scaled into
+        ``[0, 1]``, so it lies in ``[-1, 1]``; the angular target is a displacement on a
+        circle, whose diameter is ``pi``. Neither is a modelling choice: the marginal
+        field the objective converges to is an expectation of targets inside these
+        limits, so it is inside them too, and a head that cannot leave them loses nothing.
+        """
+        return (1.0, math.pi)
+
+    @property
     def tangent_weights(self) -> torch.Tensor:
         """Amplitude at unit weight, phase at ``phase_weight``.
 

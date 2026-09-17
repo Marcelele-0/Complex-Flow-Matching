@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import glob
 import os
+from collections.abc import Sequence
 
 import torch
 from omegaconf import DictConfig
@@ -58,6 +59,7 @@ def build_model(
     device: torch.device,
     in_channels: int = 3,
     out_channels: int = 2,
+    velocity_bound: Sequence[float] | None = None,
 ) -> torch.nn.Module:
     """Instantiate the architecture named by ``cfg.model.name``, on ``device``.
 
@@ -128,6 +130,7 @@ def build_model(
                 base_channels=base_channels,
                 in_channels=in_channels,
                 out_channels=out_channels,
+                velocity_bound=velocity_bound,
             ).to(device)
             print(f"Instantiated standard CylindricalUNet with base_channels={base_channels}")
 

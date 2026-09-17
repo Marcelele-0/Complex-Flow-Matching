@@ -196,6 +196,19 @@ class EuclideanManifold(BaseManifold):
         self._loss = self._loss.to(device)
         return self
 
+    @property
+    def velocity_bound(self) -> tuple[float, float]:
+        """Largest velocity this manifold's own geometry admits, per channel.
+
+        Prior and data both lie in the closed unit disc after the transform, so each
+        Cartesian component of ``z_1 - z_0`` lies in ``[-2, 2]``. The counterpart of the
+        cylinder's ``pi`` is therefore the support's diameter, and it is the honest one to
+        impose: giving only the cylinder a ceiling would be handing one arm an
+        architectural gift, while giving each the ceiling its own geometry implies is the
+        same decision applied twice. On this side it is slack, which is itself the point.
+        """
+        return (2.0, 2.0)
+
     def exp_map(self, x: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
         """Exponential map on Euclidean space R^2 is vector addition."""
         return x + v
