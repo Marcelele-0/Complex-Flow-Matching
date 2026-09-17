@@ -30,19 +30,37 @@ class HeunODESolver(BaseODESolver):
             Advanced state tensor [B, C, H, W].
         """
 
+    @property
+    def evaluations(self) -> int:
+        """Two calls per step, less the corrector the final step skips.
+
+        Delegates so the count lives in one place: the diffusion arm matches its
+        budget against :func:`~cfm.flow.diffusion_solver.heun_evaluations`, and a
+        second copy of the rule here is how that match goes quietly wrong.
+        """
+        from cfm.flow.diffusion_solver import heun_evaluations
+
+        return heun_evaluations(self.num_steps)
+
     @torch.no_grad()
     def sample(
-        self, model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor], noise: torch.Tensor
+        self,
+        model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+        noise: torch.Tensor,
+        generator: torch.Generator | None = None,
     ) -> torch.Tensor:
         """Integrate trajectory from t=0 to t=1 using Heun's method.
 
         Args:
             model: Neural velocity field callable (x, t) -> v.
             noise: Initial noise state at t=0 [B, C, H, W].
+            generator: Unused; this integrator is deterministic given ``noise``.
+                Accepted so every sampler presents one interface.
 
         Returns:
             Reconstructed state at t=1 [B, C, H, W].
         """
+        del generator
         device = noise.device
         b = noise.shape[0]
         x_t = noise

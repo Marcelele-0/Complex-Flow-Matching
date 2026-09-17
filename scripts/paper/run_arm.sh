@@ -23,6 +23,12 @@
 #   BATCH        override the experiment's batch size. The protocol's value must be
 #                the same for every arm of a table; this exists for a smaller GPU
 #                and for smoke runs, and a table built with it is not comparable.
+#   EXTRA_OVERRIDES
+#                space-separated Hydra overrides appended to BOTH commands, for
+#                settings an arm needs and the experiment config cannot carry
+#                because they differ between arms of one table (the diffusion
+#                baseline's manifold.nfe_mode and manifold.sigma_max). Applied to
+#                train and evaluate alike, so the two cannot drift apart.
 #
 # LOSS_MODE:
 #   l2u  (default) the fair loss: L2 in both geometries, unweighted phase term
@@ -53,6 +59,7 @@ EXTRA="${EXTRA:-}"
 # Evaluation step grid. The default is the one the paper tables report.
 NFE="${NFE:-[1,2,4,8,100]}"
 BATCH="${BATCH:-}"
+EXTRA_OVERRIDES="${EXTRA_OVERRIDES:-}"
 
 # Everything but geometry, coupling, size and seed lives in conf/experiment/.
 # The archived runs were launched with the equivalent explicit overrides;
@@ -79,6 +86,12 @@ if [ -n "$BATCH" ]; then
 fi
 if [ -n "$DATA_DIR" ]; then
   COMMON+=(dataset.data_dir="$DATA_DIR")
+fi
+# Deliberately unquoted: the variable holds several overrides, and word splitting
+# is how they become several arguments.
+# shellcheck disable=SC2206
+if [ -n "$EXTRA_OVERRIDES" ]; then
+  COMMON+=($EXTRA_OVERRIDES)
 fi
 # dataset.store is set per command, never in COMMON: Hydra refuses the same override
 # twice, so the evaluation cannot simply append its own on top of a shared one.

@@ -1,8 +1,12 @@
 # @package _global_
 # The training protocol behind Table 5: fastMRI knee CORPD at the acquisition's own
-# resolution. This is a protocol config like `paper_unet`, not a paper experiment:
-# it gets a `paper:` block, and an entry in reproduce.py's PAPER_ORDER, once the
-# table's archive exists (issue #79).
+# resolution. Both a protocol config like `paper_unet` and a paper experiment: the
+# `paper:` block at the end of this file puts it in reproduce.py's PAPER_ORDER.
+#
+# Unlike every other paper experiment, reproduce.py does not LAUNCH this grid -- 25
+# training runs on 320x320 fields need a cluster, and scripts/wcss/table5_fastmri.sbatch
+# is what runs them. The `paper:` block covers the steps that follow: collecting the
+# evaluations into the archive, and rendering the table from it.
 #
 # Same objective, schedule and evaluation as `paper_unet`, on real complex data
 # instead of the synthetic copula: knee coronal proton-density volumes without fat
@@ -72,3 +76,21 @@ evaluate:
 
 logging:
   use_wandb: false
+
+# `kind: commands`, not `unet_grid`: the grid itself runs on the cluster (see the
+# header), so what reproduce.py owns is everything downstream of it. The export is
+# `--if-present` so `reproduce.py --all` on a laptop prints what is missing and moves
+# on, rather than stopping the whole sweep at a table whose inputs are not local.
+paper:
+  name: Table 5 -- complex-valued MRI synthesis, fastMRI knee CORPD 320x320
+  section: Table 5 (Section 5.4)
+  runtime: ~15 GPU-h for the 25-task grid on an H100; seconds to export and render
+  kind: commands
+  commands:
+    - [scripts/paper/export_table5.py, --if-present]
+  report:
+    - [scripts/paper/latex_tables.py]
+  expected: |
+    30 evaluations (25 training runs; the diffusion baseline is scored twice)
+    -> docs/reproduce/paper_results/table5_fastmri_metrics.json
+    -> docs/reproduce/paper_results/latex/table5_fastmri.tex

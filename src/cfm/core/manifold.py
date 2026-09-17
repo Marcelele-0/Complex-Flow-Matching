@@ -8,7 +8,7 @@ from typing import Any
 
 import torch
 
-from cfm.core.solver import BaseODESolver
+from cfm.core.solver import Sampler
 
 
 class BaseManifold(ABC):
@@ -19,11 +19,18 @@ class BaseManifold(ABC):
         state_channels: Channels consumed by the state representation
             (e.g. 3 on S^1 x R+, 2 on R^2).
         velocity_channels: Channels emitted as tangent vectors (2 for MRI velocity fields).
+        predicts_velocity: Whether the network's output is a tangent velocity.
+            False for an arm that regresses something else -- a score, say -- for
+            which path diagnostics defined on a velocity field (straightness, the
+            induced angular velocity) have no meaning and must not be reported.
+            The property lives here so a consumer asks the geometry rather than
+            matching on its name, and a new arm cannot be silently misclassified.
     """
 
     name: str
     state_channels: int
     velocity_channels: int = 2
+    predicts_velocity: bool = True
 
     def to(self, device: torch.device) -> BaseManifold:
         """Move any internal modules / buffers to device and return self."""
@@ -180,7 +187,7 @@ class BaseManifold(ABC):
         """
 
     @abstractmethod
-    def make_solver(self, num_steps: int) -> BaseODESolver:
+    def make_solver(self, num_steps: int) -> Sampler:
         """Construct the ODE solver for this manifold geometry."""
 
     @abstractmethod

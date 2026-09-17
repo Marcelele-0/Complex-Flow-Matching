@@ -11,11 +11,13 @@ from omegaconf import DictConfig
 from cfm.core.manifold import BaseManifold
 from cfm.core.registry import MANIFOLDS
 from cfm.manifolds.base import Manifold
+from cfm.manifolds.complex_diffusion import ComplexDiffusionManifold
 from cfm.manifolds.cylindrical import CylindricalManifold
 from cfm.manifolds.euclidean import EuclideanManifold
 
 __all__ = [
     "BaseManifold",
+    "ComplexDiffusionManifold",
     "CylindricalManifold",
     "EuclideanManifold",
     "Manifold",
@@ -82,6 +84,30 @@ def build_manifold(cfg: DictConfig) -> BaseManifold:
                 lambda_hf=lambda_hf,
                 hf_boost_factor=hf_boost_factor,
             )
+
+        case "complex_diffusion":
+            # Only the keys the config actually carries are forwarded, so the
+            # constructor stays the single source of truth for every default. The
+            # branch above re-types its defaults and that is how they drift: this
+            # arm's sigma_max in particular is calibrated to the data, and a second
+            # default here would silently win whenever a config omits it.
+            # The loss group is not read: score matching has no velocity loss type
+            # and no k-space penalty to configure.
+            settings = {
+                key: manifold_cfg[key]
+                for key in (
+                    "sigma_min",
+                    "sigma_max",
+                    "eps",
+                    "likelihood_weighting",
+                    "snr",
+                    "corrector_steps",
+                    "num_steps",
+                    "nfe_mode",
+                )
+                if key in manifold_cfg
+            }
+            manifold = MANIFOLDS.build("complex_diffusion", **settings)
 
         case _:
             manifold = MANIFOLDS.build(name, **manifold_cfg)
