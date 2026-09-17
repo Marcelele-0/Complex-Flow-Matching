@@ -46,6 +46,12 @@ HOLDOUT_ROLE="${HOLDOUT_ROLE:-}"
 EVAL_STORE="${EVAL_STORE:-}"
 TRAIN_STORE="${TRAIN_STORE:-}"
 DATA_DIR="${DATA_DIR:-}"
+# Extra Hydra overrides appended to both commands, space separated. Exists so an
+# ablation can vary one setting without a second copy of this script drifting from
+# the one the tables were produced with.
+EXTRA="${EXTRA:-}"
+# Evaluation step grid. The default is the one the paper tables report.
+NFE="${NFE:-[1,2,4,8,100]}"
 BATCH="${BATCH:-}"
 
 # Everything but geometry, coupling, size and seed lives in conf/experiment/.
@@ -60,6 +66,11 @@ if [ -z "$EXPERIMENT" ]; then
   esac
 fi
 COMMON=(+experiment="$EXPERIMENT" manifold="$M" training.coupling="$C")
+if [ -n "$EXTRA" ]; then
+  # Word splitting is wanted here: EXTRA carries several overrides.
+  # shellcheck disable=SC2206
+  COMMON+=($EXTRA)
+fi
 if [ "$SIDE" != native ]; then
   COMMON+=(dataset.crop_size="[$SIDE,$SIDE]")
 fi
@@ -92,7 +103,7 @@ if [ "$code" -ne 0 ]; then echo "FAILED train $NAME exit=$code"; exit "$code"; f
 echo "[$(date '+%H:%M:%S')] evaluate $NAME"
 uv run --no-sync python -m cfm.evaluate "${COMMON[@]}" ${EVAL_ONLY[@]+"${EVAL_ONLY[@]}"} \
   evaluate.run_name="$NAME" evaluate.num_fields=64 evaluate.seed="$SEED" \
-  evaluate.nfe='[1,2,4,8,100]' logging.experiment_name="${NAME}_eval"
+  evaluate.nfe="$NFE" logging.experiment_name="${NAME}_eval"
 code=$?
 if [ "$code" -ne 0 ]; then echo "FAILED evaluate $NAME exit=$code"; exit "$code"; fi
 echo "[$(date '+%H:%M:%S')] done $NAME"

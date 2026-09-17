@@ -102,7 +102,9 @@ def main() -> None:
     print("1. OT COST REDUCTION vs FIELD SIZE   cylinder_toy_iid rho 0.5, batch 64, white prior")
     print("=" * 96)
     print(f"{'field':>8}{'dim':>7}{'cost drop':>12}{'reordered':>12}{'cost spread':>14}")
-    for side in (1, 2, 4, 8, 16, 32, 64):
+    # 320 is the knee acquisition's own side, and the only size in this table where
+    # a paper table is computed on real data rather than synthetic fields.
+    for side in (1, 2, 4, 8, 16, 32, 64, 128, 320):
         data = manifold.from_complex(
             fields(
                 CylinderToyIIDDataset(coupling=0.5, size=64, crop_size=(side, side), seed=seed), 64
