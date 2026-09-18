@@ -1,17 +1,12 @@
-\begin{table}[h]
+\begin{table}[t]
     \centering
     \caption{\textbf{Few-step synthesis, two domains.} Sliced $W_2$ between generated and
-    reference complex fields, mean over 5 seeds, evaluated on held-out data. $k$ is the
+    reference complex fields, mean over 5 seeds, evaluated on held-out test data. $k$ is the
     number of solver steps; a Heun step costs two function evaluations. $k^\star$ is the
     first step count at which an arm reaches $E^\star$, the largest $k=100$ error among
-    the arms of its block, which is what stops the comparison from being an artefact of
-    the two converging to different asymptotes. It is the median over seeds, and it is
-    read off a denser step grid than the columns shown. Errors are comparable within a block and
-    not across blocks. Each block holds its own protocol fixed across arms -- same architecture, batch, objective, seeds and epoch count --
-    but an epoch is not the same amount of optimisation in the two domains: the speech store
-    holds $110{,}099$ segments against $8{,}192$ synthetic fields, so forty epochs are
-    thirteen times as many gradient steps there. Passes were held fixed, not steps; we say so
-    because more data on one side is not a neutral choice in a comparison between domains.}
+    the arms of its block, stopping comparisons from being an artefact of
+    converging to different asymptotes. It is the median over seeds, read off a dense step grid. Errors are comparable within each block and
+    not across blocks. Each block holds its protocol fixed across arms (same architecture, batch, objective, seeds and epoch count). Passes were held fixed across arms within each domain: Synthetic ($8{,}192$ fields) and Speech STFT ($110{,}099$ segments).}
     \label{tab:unet_baseline}
     \vspace{1mm}
     \resizebox{\linewidth}{!}{

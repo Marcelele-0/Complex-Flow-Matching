@@ -1,7 +1,4 @@
-\section{Appendix}
-\label{sec:appendix}
-
-\subsection{The Cylinder is a Metric Substitution, not an Inherited Geometry}
+\section{The Cylinder is a Metric Substitution, not an Inherited Geometry}
 \label{sec:app_metric_choice}
 
 \begin{lemma}[Amplitude--phase chart and its pullback metric]
@@ -42,7 +39,7 @@ The circle $\{A = r\}$ has length $2\pi r$ under $g_{\mathrm{euc}}$ and length $
 
 This single difference accounts for both of the paper's velocity statements. Under $g_{\mathrm{euc}}$ the circumference available for a phase change shrinks to zero as $r \to 0$, so a path carrying a fixed phase difference through a neighbourhood of the origin must traverse it at ever greater angular speed; this is the $|c| / |z_t|^2$ growth of Proposition~\ref{thm:angular_divergence}. Under $g_{\mathrm{cyl}}$ the circumference is constant, so a half-turn costs the same at every amplitude and an angular displacement of $\pi$ always suffices; this is the bound of Lemma~\ref{lem:bounded_velocity}. The two results are the same fact about the factor $A^2$, read at the two ends of its range.
 
-\subsection{Path-Level Consequences of the Euclidean Metric}
+\section{Path-Level Consequences of the Euclidean Metric}
 \label{sec:app_proofs}
 
 We present the formal proofs for the statements made in the main text about what the inherited Euclidean metric on $(\mathrm{Re}, \mathrm{Im}) \in \mathbb{R}^2$ implies for probability paths and for the regression target.
@@ -166,13 +163,89 @@ $2|\tan(\delta/2)| > x$ iff $|\delta| > 2\arctan(x/2)$, and $|\delta|$ is unifor
 
 Corollary~\ref{cor:pareto_tail} fixes the amplitudes. When they are random as well, the peak is set by a race between a numerator that vanishes linearly in the smaller amplitude and a squared distance that vanishes quadratically: writing $A_0 = 1$ and $A_1 = a$, both $c$ and $d$ are of order $a |\sin \delta|$, so $\sup_t |\dot{\theta}_t| = |c| / d^2$ is of order $1 / (a |\sin \delta|)$ and small amplitudes enlarge the peak rather than shrink it. The index that results depends on the law of the amplitudes near zero and is not fixed by this argument; an exactly vanishing endpoint contributes nothing at all, since $c = 0$ makes the chord radial and its argument never turns. The index near $1$ reported in Table~\ref{tab:bridge_ablation} is therefore an empirical finding rather than a consequence of this corollary. The cylindrical bridge admits no such tail: $\theta_t = \theta_0 + t u_\theta$ turns at the constant rate $u_\theta$, and $|u_\theta| \le \pi$ for every pair of endpoints.
 
-\subsection{Both Geometries under Both Losses}
+\section{Both Geometries under Both Losses}
 \label{sec:app_losses}
 Tables~\ref{tab:unet_baseline} and~\ref{tab:unet_scaling} train both geometries with the same objective, the unweighted squared velocity error. Table~\ref{tab:unet_loss_protocols} repeats the grid with the absolute error as well, so that each geometry can also be compared at its best objective. The best of the four variants is selected on the evaluation itself, so the comparison is post-selection and its nominal $p$-values do not hold; we report it descriptively, as a robustness check rather than as a test.
 
+\input{tables/table3_unet_scaling}
+
 \input{tables/tableA_loss_protocols}
 
-\subsection{The Speech Grid at Two Training Budgets}
+\section{Scaling to Full-Resolution Clinical Matrices: fastMRI Knee at 320\texorpdfstring{$\times$}{x}320}
+\label{sec:app_mri_scaling}
+
+We investigate the scaling behaviour of complex generative flows when scaling from $64\times64$ crops to full-resolution clinical MRI matrices ($320\times320$, $D=102{,}400$ complex dimensions). The cohort comprises coronal proton-density (CORPD) knee wavefields from the fastMRI dataset \citep{zbontar2018fastmri}, coil-combined via ESPIRiT into complex fields $z \in \mathbb{C}^{320\times320}$. We train U-Net backbones for 40 epochs across 5 independent seeds under identical training budgets and evaluate generated fields at solver steps $k \in \{1, 2, 4, 8, 100\}$.
+
+Table~\ref{tab:mri_320_scaling} presents the comprehensive 5-seed benchmark comparing CyFM and Cartesian flows across distributional (sliced $W_2$) and spatial texture metrics: lag-1 spatial autocorrelation gap on amplitude ($\text{spatial\_lag1\_gap}$), circular phase lag-1 gap ($\text{phase\_lag1\_gap}$), and the radial power spectral density gap ($\text{radial\_spectrum\_gap}$).
+
+\begin{table}[t]
+    \centering
+    \caption{\textbf{Scaling to full-resolution clinical matrices ($320\times320$, $D=102{,}400$).} fastMRI Knee CORPD, mean over 5 seeds. Asterisks ($^\star$) indicate separated seeds (5/5). Sliced $W_2$ measures pixelwise distribution fidelity; spatial lag-1, circular phase lag-1, and radial spectrum measure spatial coherence and frequency texture gaps relative to held-out test data ($\downarrow$).}
+    \label{tab:mri_320_scaling}
+    \vspace{1mm}
+    \resizebox{\linewidth}{!}{
+    \begin{tabular}{llccccc}
+        \toprule
+        \textbf{Metric} & \textbf{Arm} & $k=1$ & $k=2$ & $k=4$ & $k=8$ & $k=100$ \\
+        \midrule
+        \multicolumn{7}{l}{\textit{Sliced $W_2$ ($\downarrow$)}} \\
+        & \textbf{Cylindrical + OT (ours)} & \textbf{0.0561}$^\star$ & 0.1228 & 0.1121 & \textbf{0.0821} & 0.0631 \\
+        & Cartesian + OT                   & 0.1203 & \textbf{0.1223} & \textbf{0.1166} & 0.0872 & 0.0720 \\
+        & Cartesian, independent           & 0.1349 & 0.1353 & 0.1256 & 0.0872 & \textbf{0.0629} \\
+        \midrule
+        \multicolumn{7}{l}{\textit{Spatial Lag-1 Gap ($\downarrow$)}} \\
+        & \textbf{Cylindrical + OT (ours)} & 0.5808 & 0.3444 & 0.1295 & 0.0616 & 0.0321 \\
+        & Cartesian + OT                   & \textbf{0.1532}$^\star$ & \textbf{0.0051}$^\star$ & \textbf{0.0072}$^\star$ & \textbf{0.0083}$^\star$ & \textbf{0.0014}$^\star$ \\
+        \midrule
+        \multicolumn{7}{l}{\textit{Circular Phase Lag-1 Gap ($\downarrow$)}} \\
+        & \textbf{Cylindrical + OT (ours)} & 0.7366 & 0.3331 & 0.2304 & 0.1655 & 0.1190 \\
+        & Cartesian, independent           & \textbf{0.0941}$^\star$ & \textbf{0.0297}$^\star$ & \textbf{0.0521}$^\star$ & \textbf{0.0733}$^\star$ & \textbf{0.0671}$^\star$ \\
+        \midrule
+        \multicolumn{7}{l}{\textit{Radial Spectrum Gap ($\downarrow$)}} \\
+        & \textbf{Cylindrical + OT (ours)} & 1.5877 & 1.2927 & 0.8364 & 0.5732 & 0.3882 \\
+        & Cartesian, independent           & \textbf{1.2978}$^\star$ & \textbf{0.2944}$^\star$ & \textbf{0.1372}$^\star$ & \textbf{0.1662}$^\star$ & \textbf{0.0706}$^\star$ \\
+        \bottomrule
+    \end{tabular}
+    }
+    \vspace{1mm}
+\end{table}
+
+\textbf{What the benchmark shows, and what it does not.}
+\begin{enumerate}
+    \item \textbf{The single-step advantage survives the dimension.} At $k=1$ CyFM attains a
+    sliced $W_2$ of $0.0561$, $2.1\times$ lower than Cartesian$+$OT ($0.1203$) and $2.4\times$
+    lower than Cartesian independent ($0.1349$), with all five seeds separated. Bounding the
+    angular target by $\pi$ therefore still buys a single-step advantage at $102{,}400$
+    dimensions.
+    \item \textbf{Every spatial measure prefers the plane, at every step count.} This is the
+    reverse of the $64\times64$ result, and we report it as measured. The Cartesian arm's
+    lag-one coherence does not fall short of the reference but exceeds it, so its advantage on
+    these gaps is the advantage of a smoother field than the data rather than a more faithful
+    one; the gap statistic already charges it for overshooting, and it is still closer.
+    \item \textbf{The coupling is not the cause.} A cylindrical arm trained with no coupling at
+    all reaches $0.3926$ on the radial spectrum gap against $0.3882$ for the OT-coupled arm, and
+    a Cartesian arm trained \emph{with} minibatch OT at the same $102{,}400$ dimensions reaches
+    $0.0756$. The collapse of the transport-cost reduction with dimension
+    (Section~\ref{sec:exp_scaling}) therefore does not explain this, and cannot be offered as an
+    explanation: the failure is a property of the coordinate representation, not of the pairing.
+    \item \textbf{The one measured difference between the two matrices.} At $320\times320$,
+    $16.7\%$ of coefficients are exactly zero, and $\operatorname{atan2}(0,0)$ assigns each of
+    them a phase of $0$ --- a placeholder rather than a measurement. The $64\times64$ crop
+    contains no exactly zero coefficient. Under the decoupled metric the phase term is weighted
+    equally everywhere, so at $320\times320$ roughly one pixel in six contributes a regression
+    target that carries no information, while under the inherited metric the factor $A^2$
+    suppresses exactly those pixels. Consistent with this, weighting the phase term by the
+    amplitude improves the cylindrical phase gap at $320\times320$ ($0.119 \to 0.068$) and
+    \emph{worsens} it on the $64\times64$ crop ($0.106 \to 0.166$), where there is no such
+    background to suppress. We offer this as the candidate the evidence supports, not as a
+    demonstration: it predicts the sign of the weighting effect at both matrices, but it has not
+    been shown to account for the size of the spatial gaps.
+\end{enumerate}
+Separating a genuine non-measurement from a small measurement is therefore the concrete obstacle
+to scaling this geometry to uncropped clinical matrices, and a mask derived from the acquisition
+rather than from an amplitude threshold is the form a fix would take. We leave it open.
+
+\section{The Speech Grid at Two Training Budgets}
 \label{sec:app_audio_epochs}
 The speech block of Table~\ref{tab:unet_baseline} was first run for two epochs, and at that
 budget the Cartesian arm had the lower error at $k=100$. The schedule explains it rather than

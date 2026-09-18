@@ -6,12 +6,10 @@ To remove the amplitude factor from the phase geometry, we formulate \textbf{Cyl
     \mathcal{M}^{H \times W} = \prod_{u=1}^H \prod_{v=1}^W \mathcal{M}_{u, v} = ([0, \infty) \times S^1)^{H \times W}.
 \end{equation}
 
-The fundamental group of a product is the product of the factors', and each factor is homotopy equivalent to $S^1$, so $\pi_1(\mathcal{M}^{H \times W}) = \mathbb{Z}^{HW}$: every pixel wraps independently of the others. This product structure has three consequences:
-\begin{itemize}
-    \item \textbf{Point-wise Separability:} The product Riemannian metric $g = \sum_{u, v} (dA_{u,v}^2 + d\theta_{u,v}^2)$ decomposes completely point-wise. Geodesics, exponential maps, and logarithmic maps require zero spatial inter-pixel coupling in the probability paths, making them embarrassingly parallel.
-    \item \textbf{Vanishing Curvature:} Because each local factor is intrinsically flat (Gaussian curvature $K=0$), the entire product manifold $\mathcal{M}^{H \times W}$ has identically vanishing Riemann curvature ($R \equiv 0$), so the construction carries no curvature-dependent local terms. This is not an advantage over the Cartesian baseline, which is flat as well, and flatness removes neither the $2\pi$ wrap, nor the cut locus at antipodal phase, nor the boundary at $A = 0$.
-    \item \textbf{Architectural Synergy:} Spatial correlations are learned by the neural network backbone, while the geometric probability path bounds the target angular velocity ($|u_\theta| \le \pi$) at every spatial coordinate.
-\end{itemize}
+The fundamental group of a product is the product of the factors', and each factor is homotopy equivalent to $S^1$, so $\pi_1(\mathcal{M}^{H \times W}) = \mathbb{Z}^{HW}$: every pixel wraps independently of the others. This product structure yields three key properties:
+(1)~\textbf{Point-wise Separability:} The product Riemannian metric $g = \sum_{u, v} (dA_{u,v}^2 + d\theta_{u,v}^2)$ decomposes point-wise. Geodesics, exponential maps, and logarithmic maps require zero spatial inter-pixel coupling in probability paths, making them embarrassingly parallel.
+(2)~\textbf{Vanishing Curvature:} Because each local factor is intrinsically flat ($K=0$), the product manifold $\mathcal{M}^{H \times W}$ has identically vanishing Riemann curvature ($R \equiv 0$), carrying no curvature-dependent local terms (neither an advantage over flat Cartesian baselines, nor removing the $2\pi$ wrap or antipodal cut locus).
+(3)~\textbf{Architectural Synergy:} Spatial correlations are learned entirely by the neural backbone, while the geometric probability path bounds target angular velocity ($|u_\theta| \le \pi$) at every coordinate.
 
 \subsection{Geodesic Probability Paths and Bounded Target Velocities}
 Given a prior sample $x_0 = (A_0, \theta_0) \sim p_0$ (e.g., standard uniform noise) and a ground-truth complex target $x_1 = (A_1, \theta_1) \sim p_1$, the geodesic flow path on $\mathcal{M}$ interpolates amplitude along $[0, \infty)$ and phase along $S^1$:
@@ -26,11 +24,7 @@ The phase target velocity $u_\theta$ is computed via the Riemannian logarithmic 
 
 \begin{lemma}[Bounded Angular Velocity]
 \label{lem:bounded_velocity}
-For any pair of configurations $(x_0, x_1) \in \mathcal{M} \times \mathcal{M}$, the target angular velocity under Cylindrical Flow Matching is globally bounded:
-\begin{equation}
-    |u_\theta| \le \pi.
-\end{equation}
-In contrast, wherever $z_t \ne 0$ the induced angular velocity under Cartesian flow $z_t = (1-t)z_0 + t z_1$ is:
+For any pair of configurations $(x_0, x_1) \in \mathcal{M} \times \mathcal{M}$, the target angular velocity under Cylindrical Flow Matching is globally bounded: $|u_\theta| \le \pi$. In contrast, wherever $z_t \ne 0$ the induced angular velocity under Cartesian flow $z_t = (1-t)z_0 + t z_1$ is:
 \begin{equation}
     \dot{\theta}_{\mathrm{Cart}} = \frac{x_t \dot{y}_t - y_t \dot{x}_t}{|z_t|^2} = \frac{A_0 A_1 \sin(\theta_1 - \theta_0)}{|z_t|^2},
 \end{equation}
