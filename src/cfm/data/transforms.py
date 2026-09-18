@@ -7,6 +7,7 @@ from collections.abc import Callable
 import torch
 
 from cfm.utils.complex_ops import complex_to_cylinder, complex_to_euclidean
+from cfm.utils.fft import fft2c, ifft2c
 
 
 class ComplexToCylinderTransform:
@@ -246,6 +247,74 @@ class CenterCropOrPad:
             imag = torch.nn.functional.pad(x.imag, pads)
             return torch.complex(real, imag)
         return torch.nn.functional.pad(x, (pad_left, pad_right, pad_top, pad_bottom))
+
+
+class KSpaceCenterCrop:
+    """Reduces resolution by keeping only the centre of k-space.
+
+    This is a lower-resolution acquisition, not a resampled image. The stores this runs on
+    hold images *after* ESPIRiT coil combination, so the transform has to return to k-space
+    itself: :func:`~cfm.utils.fft.fft2c`, keep the centre block about DC, then
+    :func:`~cfm.utils.fft.ifft2c`. Truncating the spectrum is what a scanner does when it
+    acquires a smaller matrix. Cropping the image instead would shrink the field of view,
+    and interpolating it would invent detail the measurement never contained.
+
+    The block is anchored to the DC bin at ``H // 2`` rather than to the array centre,
+    which is the convention :mod:`cfm.data.masks` uses for the ACS lines. The two agree
+    whenever both sizes are even, and the DC-anchored form stays symmetric about DC for odd
+    ones as well.
+
+    An orthonormal transform cropped from ``N`` to ``M`` leaves the image scaled by
+    ``N / M``, since the forward transform normalises by ``N`` and the inverse by ``M``.
+    Nothing here corrects that, because every pipeline using this divides by the field's own
+    peak modulus afterwards (:class:`AmplitudeNormalize`, :class:`EuclideanNormalize`) and a
+    global factor is removed there. A correction would be counted twice.
+
+    Args:
+        size: Target ``(H, W)``, or a single int for a square output.
+
+    Raises:
+        ValueError: If ``size`` is not positive.
+    """
+
+    def __init__(self, size: int | tuple[int, int] | list[int]) -> None:
+        if isinstance(size, int):
+            height, width = size, size
+        else:
+            height, width = int(size[0]), int(size[1])
+        if height < 1 or width < 1:
+            raise ValueError(f"crop size must be positive, got {(height, width)}")
+        self.height = height
+        self.width = width
+
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        """Keep the centre of the spectrum and transform back to the image domain.
+
+        Args:
+            x: Complex image-domain tensor ``[..., H, W]``, centered.
+
+        Returns:
+            Complex tensor ``[..., self.height, self.width]``.
+
+        Raises:
+            ValueError: If ``x`` is not complex, or the target exceeds its spatial shape.
+        """
+        if not x.is_complex():
+            raise ValueError(f"k-space crop needs a complex field, got {x.dtype}")
+
+        h, w = x.shape[-2], x.shape[-1]
+        if self.height > h or self.width > w:
+            raise ValueError(
+                f"cannot enlarge {(h, w)} to {(self.height, self.width)}: zero-filling "
+                "k-space interpolates rather than measures"
+            )
+        if self.height == h and self.width == w:
+            return x
+
+        top = h // 2 - self.height // 2
+        left = w // 2 - self.width // 2
+        kept = fft2c(x)[..., top : top + self.height, left : left + self.width]
+        return ifft2c(kept)
 
 
 class Compose:

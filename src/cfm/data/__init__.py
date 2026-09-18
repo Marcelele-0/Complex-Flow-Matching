@@ -33,6 +33,7 @@ from cfm.data.transforms import (
     ComplexToEuclideanTransform,
     Compose,
     EuclideanNormalize,
+    KSpaceCenterCrop,
     WindowAmplitudeNormalize,
     WindowEuclideanNormalize,
 )
@@ -134,6 +135,7 @@ __all__ = [
     "CylinderToyIIDDataset",
     "EuclideanNormalize",
     "FastMRIDataset",
+    "KSpaceCenterCrop",
     "KneeStoreDataset",
     "StftStoreDataset",
     "StftProtocol",

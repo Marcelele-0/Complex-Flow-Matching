@@ -68,6 +68,19 @@ SIGMA_MAX="${SIGMA_MAX:-140.0}"
 # renderer cannot find.
 NATIVE_STEPS="${NATIVE_STEPS:-1000}"
 
+# Resolution reduction, empty for the store's own 320x320. Set KSPACE_CROP=64 to keep
+# only the centre of k-space (see conf/dataset/fastmri_knee_pd.yaml). It has to reach all
+# THREE launch paths below -- the flow arms, the diffusion matched pass and the diffusion
+# many-step re-evaluation -- because a crop that reaches training but not scoring trains
+# at one matrix and scores at another, which is the TRAIN_STORE mistake wearing a
+# different hat. Use a distinct PREFIX per matrix: an arm's size is recoverable only from
+# its directory name.
+KSPACE_CROP="${KSPACE_CROP:-}"
+CROP_OVERRIDE=()
+if [ -n "$KSPACE_CROP" ]; then
+  CROP_OVERRIDE=(dataset.kspace_crop="$KSPACE_CROP")
+fi
+
 TASKS=()
 for M in $GEOMS; do
   for C in $COUPLINGS; do
@@ -123,7 +136,8 @@ COMMON_ENV=(
 )
 
 if [ "$M" != "$DIFFUSION" ]; then
-  env "${COMMON_ENV[@]}" bash scripts/paper/run_arm.sh "$NAME" native "$M" "$C" "$SEED" 40
+  env "${COMMON_ENV[@]}" EXTRA_OVERRIDES="${CROP_OVERRIDE[*]}" \
+    bash scripts/paper/run_arm.sh "$NAME" native "$M" "$C" "$SEED" 40
   exit $?
 fi
 
@@ -136,7 +150,7 @@ MATCHED_NAME="${PREFIX}${DIFFUSION}_heun_independent_s${SEED}"
 NATIVE_NAME="${PREFIX}${DIFFUSION}_native_independent_s${SEED}"
 EXTRA=(manifold.sigma_max="$SIGMA_MAX")
 
-env "${COMMON_ENV[@]}" EXTRA_OVERRIDES="manifold.nfe_mode=heun ${EXTRA[*]}" \
+env "${COMMON_ENV[@]}" EXTRA_OVERRIDES="manifold.nfe_mode=heun ${EXTRA[*]} ${CROP_OVERRIDE[*]}" \
   bash scripts/paper/run_arm.sh "$MATCHED_NAME" native "$DIFFUSION" independent "$SEED" 40
 code=$?
 if [ "$code" -ne 0 ]; then echo "FAILED matched $MATCHED_NAME exit=$code"; exit "$code"; fi
@@ -149,5 +163,6 @@ uv run --no-sync python -m cfm.evaluate +experiment=table5_fastmri \
   manifold="$DIFFUSION" manifold.nfe_mode=native "${EXTRA[@]}" \
   training.coupling=independent \
   dataset.data_dir="$STAGE" dataset.store=val.h5 dataset.role=all \
+  ${CROP_OVERRIDE[@]+"${CROP_OVERRIDE[@]}"} \
   evaluate.run_name="$MATCHED_NAME" evaluate.num_fields=64 evaluate.seed="$SEED" \
   evaluate.nfe="[$NATIVE_STEPS]" logging.experiment_name="${NATIVE_NAME}_eval"

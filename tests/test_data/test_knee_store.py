@@ -91,3 +91,35 @@ def test_volume_role_is_stable() -> None:
     assert _volume_role("file000", 0.5, 0) == _volume_role("file000", 0.5, 0)
     roles = {_volume_role(f"file{i:03d}", 0.5, 0) for i in range(20)}
     assert roles == {"fit", "holdout"}
+
+
+def test_kspace_crop_runs_before_the_transform(tmp_path: pathlib.Path) -> None:
+    """The crop reduces the matrix, and the transform sees the reduced field."""
+    write_store(tmp_path)
+
+    assert KneeStoreDataset(tmp_path, role="all")[0].shape == (1, 4, 4)
+
+    cropped = KneeStoreDataset(tmp_path, role="all", kspace_crop=2)
+    item = cropped[0]
+    assert item.shape == (1, 2, 2)
+    assert item.is_complex()
+
+    seen: list[tuple[int, ...]] = []
+
+    def record(x: torch.Tensor) -> torch.Tensor:
+        seen.append(tuple(x.shape))
+        return x
+
+    KneeStoreDataset(tmp_path, role="all", kspace_crop=2, transform=record)[0]
+    assert seen == [(1, 2, 2)]
+
+
+def test_kspace_crop_defaults_to_no_crop(tmp_path: pathlib.Path) -> None:
+    """Omitting the key leaves every existing arm byte-identical."""
+    write_store(tmp_path)
+
+    assert KneeStoreDataset(tmp_path, role="all").kspace_crop is None
+    torch.testing.assert_close(
+        KneeStoreDataset(tmp_path, role="all")[0],
+        KneeStoreDataset(tmp_path, role="all", kspace_crop=None)[0],
+    )

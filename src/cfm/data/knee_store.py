@@ -26,6 +26,7 @@ import torch
 
 from cfm.core.dataset import BaseComplexDataset
 from cfm.core.registry import DATASETS
+from cfm.data.transforms import KSpaceCenterCrop
 
 __all__ = ["KneeStoreDataset"]
 
@@ -67,6 +68,10 @@ class KneeStoreDataset(BaseComplexDataset):
         split_seed: Salt for the volume-level assignment.
         transform: Applied to each complex field before it is returned; the entry
             points pass the manifold's representation pipeline here.
+        kspace_crop: Target ``(H, W)``, or a single int, for a k-space centre crop applied
+            *before* ``transform``. ``None`` keeps the store's own matrix. This is a
+            resolution reduction rather than a field-of-view change, so it is not the same
+            knob as the entry point's ``crop_size``; see :class:`~cfm.data.transforms.KSpaceCenterCrop`.
 
     Raises:
         FileNotFoundError: If the store is absent. Training deliberately does not
@@ -83,11 +88,14 @@ class KneeStoreDataset(BaseComplexDataset):
         holdout_fraction: float = 0.2,
         split_seed: int = 0,
         transform: Callable[[torch.Tensor], torch.Tensor] | None = None,
+        kspace_crop: int | tuple[int, int] | list[int] | None = None,
     ) -> None:
         if role not in ROLES:
             raise ValueError(f"role must be one of {ROLES}, got {role!r}")
         if not 0.0 <= holdout_fraction < 1.0:
             raise ValueError(f"holdout_fraction must be in [0, 1), got {holdout_fraction}")
+
+        self.kspace_crop = None if kspace_crop is None else KSpaceCenterCrop(kspace_crop)
 
         self.path = pathlib.Path(data_dir) / store
         if not self.path.is_file():
@@ -152,4 +160,6 @@ class KneeStoreDataset(BaseComplexDataset):
             raise IndexError(f"index {idx} out of range for {len(self.rows)} slices")
         raw = np.asarray(self._images()[self.rows[idx]], dtype=np.complex64)
         field = torch.from_numpy(raw).unsqueeze(0)
+        if self.kspace_crop is not None:
+            field = self.kspace_crop(field)
         return field if self.transform is None else self.transform(field)

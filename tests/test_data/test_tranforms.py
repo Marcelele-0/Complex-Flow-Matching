@@ -9,9 +9,11 @@ from cfm.data.transforms import (
     ComplexToEuclideanTransform,
     Compose,
     EuclideanNormalize,
+    KSpaceCenterCrop,
     WindowAmplitudeNormalize,
     WindowEuclideanNormalize,
 )
+from cfm.utils.fft import fft2c
 
 
 def test_center_crop_or_pad_crops_to_fixed_shape() -> None:
@@ -267,3 +269,64 @@ def test_both_pipelines_normalize_by_the_same_factor() -> None:
 
     euc_modulus = torch.sqrt(euc[0] ** 2 + euc[1] ** 2)
     assert torch.allclose(cyl[0], euc_modulus, atol=1e-5)
+
+
+def test_kspace_center_crop_reduces_the_matrix() -> None:
+    """The output carries the requested matrix and stays complex."""
+    out = KSpaceCenterCrop(64)(torch.randn(1, 320, 320, dtype=torch.complex64))
+
+    assert out.shape == (1, 64, 64)
+    assert out.dtype == torch.complex64
+
+
+def test_kspace_center_crop_at_full_size_is_the_identity() -> None:
+    """Asking for the matrix the field already has skips the round trip entirely."""
+    x = torch.randn(2, 1, 32, 32, dtype=torch.complex64)
+
+    assert torch.equal(KSpaceCenterCrop((32, 32))(x), x)
+
+
+def test_kspace_center_crop_keeps_dc_centered() -> None:
+    """DC stays at [h // 2, w // 2], the convention cfm.utils.fft asserts."""
+    out = KSpaceCenterCrop(8)(torch.ones(1, 32, 32, dtype=torch.complex64))
+    spectrum = fft2c(out)
+    peak = int(spectrum.abs().argmax())
+
+    assert divmod(peak, out.shape[-1]) == (out.shape[-2] // 2, out.shape[-1] // 2)
+
+
+def test_kspace_center_crop_is_a_low_pass_not_a_roll() -> None:
+    """A constant field survives as a constant field, with no half-FOV shift."""
+    out = KSpaceCenterCrop(8)(torch.ones(1, 32, 32, dtype=torch.complex64))
+
+    torch.testing.assert_close(out.abs().std(), torch.tensor(0.0), atol=1e-5, rtol=0.0)
+    assert out.abs().mean().item() > 0.0
+
+
+def test_kspace_center_crop_preserves_the_kept_energy() -> None:
+    """Parseval, restricted to the block that was kept: the crop loses nothing else."""
+    x = torch.randn(1, 32, 32, dtype=torch.complex64)
+    kept = fft2c(x)[..., 12:20, 12:20]
+    out = KSpaceCenterCrop(8)(x)
+
+    torch.testing.assert_close(
+        out.abs().square().sum(), kept.abs().square().sum(), atol=1e-4, rtol=1e-4
+    )
+
+
+def test_kspace_center_crop_refuses_to_enlarge() -> None:
+    """Zero-filling k-space would interpolate, which is the thing this is not."""
+    with pytest.raises(ValueError, match="cannot enlarge"):
+        KSpaceCenterCrop(64)(torch.randn(1, 32, 32, dtype=torch.complex64))
+
+
+def test_kspace_center_crop_rejects_a_real_field() -> None:
+    """A 2-channel real state would transform into something meaningless."""
+    with pytest.raises(ValueError, match="needs a complex field"):
+        KSpaceCenterCrop(8)(torch.randn(2, 32, 32))
+
+
+def test_kspace_center_crop_rejects_nonpositive_size() -> None:
+    """A zero or negative target is a config error."""
+    with pytest.raises(ValueError, match="crop size must be positive"):
+        KSpaceCenterCrop((0, 64))

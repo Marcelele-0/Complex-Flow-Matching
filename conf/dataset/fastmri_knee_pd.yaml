@@ -26,3 +26,14 @@ split: null
 # The store is already cropped to 320x320 at build time; leaving crop_size null keeps
 # the entry points from cropping a second time.
 crop_size: null
+
+# Resolution reduction, off by default. Set to 64 (or [64, 64]) to keep only the centre
+# of k-space: the store holds images after ESPIRiT, so the transform FFTs back, truncates
+# the spectrum about DC and inverts. That is a smaller acquisition matrix, not a cropped
+# field of view and not an interpolated image -- which is why it is a separate key from
+# crop_size above. Per-arm override: EXTRA=dataset.kspace_crop=64 through run_arm.sh.
+#
+# Truncating the spectrum convolves the image with a sinc kernel, so the 17.6% of
+# coefficients that are exactly zero at 320x320 do not survive it. Measure that before
+# reading anything into a result at a reduced size: scripts/kspace_crop_amplitudes.py.
+kspace_crop: null
