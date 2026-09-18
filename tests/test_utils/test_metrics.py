@@ -12,6 +12,7 @@ import torch
 from cfm.data.toy_dataset import CylinderToyFieldDataset, CylinderToyIIDDataset
 from cfm.utils.metrics import (
     distributional_metrics,
+    measured_pair_fraction,
     phase_lag_one,
     radial_power_spectrum,
     radial_spectrum_gap,
@@ -299,3 +300,50 @@ def test_phase_lag_one_rejects_bad_input(fields: torch.Tensor, match: str) -> No
     """Shape and dtype errors are config errors, not silent zeros."""
     with pytest.raises(ValueError, match=match):
         phase_lag_one(fields)
+
+
+def test_matched_support_removes_the_air_bias() -> None:
+    """The property the geometry comparison rests on: air must not decide the verdict.
+
+    A network never emits an exact zero, so scoring it on every pair scores it partly on
+    air. Smoothly blurred air earns coherence from nothing while uncorrelated air loses
+    it, which manufactures a gap between two fields whose tissue phase is identical.
+    Scoring the generated batch on the reference's measured share removes it.
+    """
+    size = 64
+    axis = torch.linspace(0.0, 3.0, size)
+    phase = axis[None, :] + axis[:, None]
+    amplitude = torch.zeros(size, size)
+    amplitude[16:48, 16:48] = 1.0
+
+    reference = torch.polar(amplitude, phase)[None, None]
+    share = measured_pair_fraction(reference)
+
+    air = amplitude.clone()
+    air[air == 0.0] = 1e-5
+    smooth_air = torch.polar(air, phase)[None, None]
+
+    noisy = phase.clone()
+    background = amplitude == 0.0
+    noisy[background] = (
+        torch.rand(int(background.sum()), generator=torch.Generator().manual_seed(0)) * 2 - 1
+    ) * math.pi
+    noisy_air = torch.polar(air, noisy)[None, None]
+
+    # Unmatched, the air alone separates two fields with identical tissue.
+    assert phase_lag_one(smooth_air) - phase_lag_one(noisy_air) > 0.5
+
+    # Matched to the reference's share, both are scored on tissue and agree.
+    matched_smooth = phase_lag_one(smooth_air, keep_fraction=share)
+    matched_noisy = phase_lag_one(noisy_air, keep_fraction=share)
+    assert abs(matched_smooth - matched_noisy) < 0.01
+    torch.testing.assert_close(matched_noisy, phase_lag_one(reference), atol=0.01, rtol=0.0)
+
+
+def test_keep_fraction_is_validated() -> None:
+    """A share outside (0, 1] is a caller error, not a silent clamp."""
+    field = torch.ones(1, 1, 8, 8, dtype=torch.complex64)
+    with pytest.raises(ValueError, match="keep_fraction must be in"):
+        phase_lag_one(field, keep_fraction=0.0)
+    with pytest.raises(ValueError, match="keep_fraction must be in"):
+        phase_lag_one(field, keep_fraction=1.5)
