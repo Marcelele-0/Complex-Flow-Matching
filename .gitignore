@@ -56,6 +56,7 @@ notebooks/presentation
 *.fdb_latexmk
 *.synctex.gz
 *.out
+*.pdf
 
 # Review worktrees
 .review-*
