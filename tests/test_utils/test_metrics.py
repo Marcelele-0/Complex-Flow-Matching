@@ -12,6 +12,7 @@ import torch
 from cfm.data.toy_dataset import CylinderToyFieldDataset, CylinderToyIIDDataset
 from cfm.utils.metrics import (
     distributional_metrics,
+    phase_lag_one,
     radial_power_spectrum,
     radial_spectrum_gap,
     spatial_lag_one,
@@ -245,3 +246,56 @@ def test_subsample_takes_exactly_the_limit_above_it() -> None:
     taken = subsample(values, 20, _generator())
     assert taken.numel() == 20
     assert set(taken.tolist()).issubset(set(values.tolist()))
+
+
+def test_phase_lag_one_separates_a_smooth_field_from_white_phase() -> None:
+    """One for phase that varies smoothly, zero for phase that does not."""
+    axis = torch.linspace(0.0, 2.0, 32)
+    ramp = axis[None, :] + axis[:, None]
+    smooth = torch.polar(torch.ones(32, 32), ramp)[None, None]
+    white = torch.polar(
+        torch.ones(1, 1, 32, 32),
+        (torch.rand(1, 1, 32, 32, generator=torch.Generator().manual_seed(0)) * 2 - 1) * math.pi,
+    )
+
+    assert phase_lag_one(smooth) > 0.99
+    assert abs(phase_lag_one(white)) < 0.1
+
+
+def test_phase_lag_one_is_minus_one_under_alternation() -> None:
+    """Phase flipping by pi between neighbours is maximal anti-coherence."""
+    flip = torch.polar(torch.ones(1, 1, 8, 8), (torch.arange(8).float() * math.pi).expand(8, 8))
+    torch.testing.assert_close(phase_lag_one(flip), -1.0, atol=1e-6, rtol=0.0)
+
+
+def test_phase_lag_one_drops_pairs_touching_a_zero_amplitude() -> None:
+    """atan2(0, 0) is a placeholder, so a zero background must not earn coherence."""
+    white = torch.polar(
+        torch.ones(1, 1, 16, 16),
+        (torch.rand(1, 1, 16, 16, generator=torch.Generator().manual_seed(0)) * 2 - 1) * math.pi,
+    )
+    padded = white.clone()
+    padded[..., 8:] = 0.0  # a background of exact zeros, all reporting phase 0.0
+
+    unmasked = float((padded[..., 1:].angle() - padded[..., :-1].angle()).cos().mean())
+    assert unmasked > 0.4
+    assert abs(phase_lag_one(padded)) < 0.15
+
+
+def test_phase_lag_one_is_nan_when_no_phase_was_measured() -> None:
+    """An all-zero field has no phase at all, which is not the same as no coherence."""
+    assert math.isnan(phase_lag_one(torch.zeros(2, 1, 8, 8, dtype=torch.complex64)))
+
+
+@pytest.mark.parametrize(
+    ("fields", "match"),
+    [
+        (torch.ones(2, 1, 8, 8), "expected complex"),
+        (torch.ones(2, 8, 8, dtype=torch.complex64), "expected complex"),
+        (torch.ones(2, 1, 8, 1, dtype=torch.complex64), "width of at least two"),
+    ],
+)
+def test_phase_lag_one_rejects_bad_input(fields: torch.Tensor, match: str) -> None:
+    """Shape and dtype errors are config errors, not silent zeros."""
+    with pytest.raises(ValueError, match=match):
+        phase_lag_one(fields)

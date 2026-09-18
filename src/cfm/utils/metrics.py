@@ -44,6 +44,7 @@ __all__ = [
     "distributional_metrics",
     "radial_power_spectrum",
     "radial_spectrum_gap",
+    "phase_lag_one",
     "spatial_lag_one",
     "subsample",
 ]
@@ -73,6 +74,51 @@ def subsample(values: torch.Tensor, limit: int, generator: torch.Generator) -> t
         return values
     picks = torch.randperm(values.numel(), generator=generator)[:limit]
     return values[picks]
+
+
+def phase_lag_one(fields: torch.Tensor) -> float:
+    """Circular coherence of horizontally adjacent phases, averaged over fields.
+
+    Nothing else in this module sees the *spatial* arrangement of phase. The pooled
+    metrics compare marginals, ``w2_phase_circular`` compares a marginal, and
+    :func:`spatial_lag_one` reads amplitudes. A model that reproduced a phase field
+    exactly but shifted its marginal, and one that emitted spatially white phase with
+    the right marginal, are indistinguishable without this.
+
+    The statistic is the mean resultant of the phase increment,
+    ``E[cos(theta_{i+1} - theta_i)]``: one for a field whose phase varies smoothly,
+    zero for phase that is spatially independent, negative for alternation. No
+    wrapping is needed because the cosine already identifies angles modulo ``2 pi``,
+    which is what makes this the natural circular counterpart of a lag-one
+    correlation rather than a linear correlation of angles.
+
+    **Pairs touching a zero amplitude are dropped.** ``atan2(0, 0)`` returns ``0.0``,
+    a placeholder rather than a measurement, and knee MRI carries about 17% of those:
+    two adjacent background pixels would both report phase zero and contribute perfect
+    coherence drawn from nothing. Each batch is therefore measured on the support where
+    its phase exists, which is also why the generated and reference values are reported
+    separately rather than only as a gap.
+
+    Args:
+        fields: Complex fields of shape ``[B, 1, H, W]``.
+
+    Returns:
+        The coherence, or ``nan`` if no adjacent pair has two nonzero amplitudes.
+
+    Raises:
+        ValueError: If ``fields`` is not a 4D complex tensor with width above 1.
+    """
+    if fields.ndim != 4 or not fields.is_complex():
+        raise ValueError(f"expected complex [B, 1, H, W], got shape {tuple(fields.shape)}")
+    if fields.shape[-1] < 2:
+        raise ValueError("lag-one coherence needs a width of at least two")
+
+    left, right = fields[..., :-1], fields[..., 1:]
+    keep = (left.abs() > 0) & (right.abs() > 0)
+    if not bool(keep.any()):
+        return float("nan")
+    increment = right.angle()[keep] - left.angle()[keep]
+    return float(increment.cos().mean())
 
 
 def spatial_lag_one(fields: torch.Tensor) -> float:
@@ -271,6 +317,8 @@ def distributional_metrics(
     # field, which at the fastMRI scale is millions of elements per sweep row.
     generated_lag_one = spatial_lag_one(generated)
     reference_lag_one = spatial_lag_one(reference)
+    generated_phase_lag = phase_lag_one(generated)
+    reference_phase_lag = phase_lag_one(reference)
 
     return {
         "sliced_w2_complex": sliced,
@@ -282,5 +330,8 @@ def distributional_metrics(
         "spatial_lag1_generated": generated_lag_one,
         "spatial_lag1_reference": reference_lag_one,
         "spatial_lag1_gap": abs(generated_lag_one - reference_lag_one),
+        "phase_lag1_generated": generated_phase_lag,
+        "phase_lag1_reference": reference_phase_lag,
+        "phase_lag1_gap": abs(generated_phase_lag - reference_phase_lag),
         "radial_spectrum_gap": radial_spectrum_gap(generated, reference),
     }
