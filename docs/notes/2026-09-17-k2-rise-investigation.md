@@ -80,3 +80,41 @@ reduction minibatch OT achieves is known to shrink with field dimension, and kne
 still works. If the pairing is effectively random at that size, the OT arm should behave
 like the independent one -- which is what the table shows. Measuring the cost reduction
 on the knee store against the synthetic one needs no training.
+
+## Which metrics the rise is on, measured 2026-09-19
+
+The rise is confined to the **distributional** metrics. On every metric that sees spatial
+arrangement the second step *improves* the field, monotonically, at both resolutions.
+
+```
+knee 320, cyl + OT            k=1      k=2
+sliced_w2 (pooled)          0.0561   0.1228    rises 2.19x
+w2_amplitude                0.0794   0.1676    rises 2.11x
+w2_phase_circular           0.2518   0.3650    rises 1.45x
+spatial_lag1_gap            0.5808   0.3444    FALLS
+phase_lag1_gap              0.7366   0.3331    FALLS
+radial_spectrum_gap         1.5877   1.2927    FALLS
+```
+
+So the second step makes the field **more correct structurally and less correct
+distributionally**. That is a trade, not a fault, and it is consistent with the amplitude
+account: the cylinder's linear amplitude bridge means one Euler step lands on the conditional
+mean of $A$ almost exactly, while the phase has barely moved (coherence 0.19 against a
+reference of 0.915). The second step starts building spatial structure and gives up the exact
+marginal landing.
+
+**Where it happens.** Never on speech (0.0454 → 0.0403). On synthetic only under independent
+coupling (0.1214 → 0.1478); joint OT removes it (0.1174 → 0.1141). On knee always: both
+couplings, both resolutions, both objectives. Amplitude weighting softens it at 64x64
+(2.02x → 1.62x) and marginally worsens it at 320x320.
+
+**The asymmetry.** The Cartesian arm does not do it: its amplitude at 320 goes 0.1653 → 0.1702,
+flat, because its $k=1$ is already poor --- $|z|$ of a conditional mean in Re/Im is not the
+conditional mean of $|z|$, which is the midpoint attenuation of Section 3.3 --- so it has
+nothing to lose. And the cylinder's $k=2$ amplitude (0.1676) is essentially the Cartesian's
+(0.1702). **The rise is a fall back to the Cartesian level from an unusually good single step**,
+not a degradation below it.
+
+**Also excluded: the midpoint velocity.** The Cartesian arm's $|v_\theta|$ at $t=0.5$ is about
+500 times the cylinder's (2276 against 4.22 at 320) and it shows no rise, so a large midpoint
+angular velocity cannot be the cause.
