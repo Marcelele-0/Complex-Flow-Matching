@@ -1,6 +1,6 @@
 \begin{table}[t]
     \centering
-    \caption{\textbf{Physical field synthesis: fastMRI Knee ($64\times64$).} Mean over 5 seeds on held-out test slices. Asterisks ($^\star$) indicate strictly separated seeds across arms (5/5, $p=0.008$). While Cartesian oversmoothing yields a lower pixelwise marginal distance (Sliced $W_2$) at convergence, domain-specific spatial metrics reveal that CyFM preserves double the anatomical amplitude texture ($2.0\times$, all $k \ge 4$) and sharper phase structure ($1.6\times$).}
+    \caption{\textbf{Physical field synthesis: fastMRI Knee ($64\times64$).} Mean over 5 seeds on held-out test slices. Asterisks ($^\star$) indicate strictly separated seeds across arms (5/5, $p=0.008$). While Cartesian oversmoothing yields a lower pixelwise marginal distance (Sliced $W_2$) at convergence, domain-specific spatial metrics reveal that CyFM preserves double the anatomical amplitude texture ($2.0\times$, all $k \ge 4$) and sharper phase structure ($1.6\times$). The score-based row is a variance-exploding SDE \citep{song2020score} trained on the same cohort, budget and seeds and scored at matched model calls; it is reported because two parameterisations of flow matching are not a baseline family, and not as a few-step method. At $k \le 2$ its output is still the prior, whose scale is $\sigma_{\max} = 53.4$, and at $k=4$ a reverse SDE truncated to three steps injects noise three times and ends worse than not sampling at all. Swept in its own many-step regime at $1000$ steps it reaches $0.0881$, which no flow arm needs more than $100$ steps to beat.}
     \label{tab:mri_64}
     \vspace{1mm}
     \resizebox{\linewidth}{!}{
@@ -13,6 +13,7 @@
         & Cylindrical, independent         & 0.0604 & 0.1338 & 0.1064 & 0.0756 & 0.0677 \\
         & Cartesian + OT                   & 0.1062 & \textbf{0.1120}$^\star$ & \textbf{0.0872} & 0.0614$^\star$ & 0.0617 \\
         & Cartesian, independent           & 0.1518 & 0.1432 & 0.1054 & \textbf{0.0582} & \textbf{0.0563} \\
+        & Complex diffusion (VE-SDE)       & 53.18 & 53.16 & 429.50 & 67.44 & 0.0771 \\
         \midrule
         \multicolumn{7}{l}{\textit{Spatial Lag-1 Gap ($\downarrow$) -- amplitude texture autocorrelation}} \\
         & \textbf{Cylindrical + OT (ours)} & 0.2971 & 0.1598 & \textbf{0.0339}$^\star$ & \textbf{0.0235}$^\star$ & \textbf{0.0153}$^\star$ \\

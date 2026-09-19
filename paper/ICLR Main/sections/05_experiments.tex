@@ -23,11 +23,34 @@ While the analytical bridges characterise the two regression targets exactly, pr
 
 Table~\ref{tab:unet_baseline} presents the few-step synthesis results across synthetic fields and speech STFT at $64\times64$ under pooled sliced $W_2$. On these domains, the complex values are smoothly distributed without acquisition boundaries; sliced $W_2$ directly measures the fidelity of the joint 2D marginal pushforward $(\mathrm{Re}, \mathrm{Im})$. Across both domains, CyFM with the joint coupling has the lowest error at every $k \le 8$, with all seeds separated from the best Cartesian arm: on synthetic fields it reaches $0.117$ at $k=1$, a $3\times$ reduction against the best Cartesian arm's $0.376$, and converges to $0.040$ at $k=100$ where we detect no significant difference ($p=0.15$); on speech it reaches $E^\star$ at $k^\star = 4$ against $100$ for both Cartesian arms ($25\times$ acceleration to asymptote).
 
-\textbf{Physical wavefields: spatial structure beyond marginals on Knee MRI.} While pooled sliced $W_2$ provides an exact distributional test on synthetic fields and continuous spectrograms, clinical MRI wavefields carry anatomical correlations and phase coherence that pixel-independent marginal projections obscure (Section~\ref{sec:exp_factorized}). In this domain, Cartesian interpolation regresses $(\mathrm{Re}, \mathrm{Im})$ directly, which numerically averages high-frequency details towards zero (oversmoothing). On a spatial-blind metric like pooled $W_2$, a blurred field with correct Gaussian-like marginals achieves an artificially low error at convergence ($0.0563$ vs $0.0722$). However, medical imaging demands sharp anatomical edges, not blurred marginals.
+\textbf{Physical wavefields: spatial structure beyond marginals on Knee MRI.} Pooled sliced $W_2$ is an exact distributional test on synthetic fields and on continuous spectrograms, whose complex values carry no acquisition boundary. Knee wavefields do: they carry anatomical correlations and a spatially smooth phase field, and a metric that pools coefficients is blind to both by construction (Section~\ref{sec:exp_factorized}). Table~\ref{tab:mri_64} therefore reports the pooled distance alongside two measures that see spatial arrangement.
 
 \input{tables/table5_fastmri64}
 
-To prevent cherry-picking and provide full transparency, Table~\ref{tab:mri_64} reports both Sliced $W_2$ and domain-specific spatial metrics on fastMRI knee fields ($64\times64$). At a single step ($k=1$), CyFM preserves its distributional advantage, cutting sliced $W_2$ error by $1.8\times$ ($0.0593$ against $0.1062$ for Cartesian+OT, separated 5/5 seeds). Moving to spatial structure metrics exposes the Cartesian oversmoothing artifact and reverses the convergence ordering: on amplitude texture autocorrelation ($\text{spatial\_lag1\_gap}$), CyFM outperforms Cartesian at all $k \ge 4$ ($0.0339$ vs $0.0561$ at $k=4$, $0.0235$ vs $0.0404$ at $k=8$, and $0.0153$ vs $0.0305$ at $k=100$, a $2.0\times$ reduction, separated 5/5 seeds). On circular phase spatial coherence ($\text{phase\_lag1\_gap}$), CyFM at $k=100$ achieves $0.1057$ vs $0.1712$ for Cartesian ($1.6\times$ sharper phase, separated 5/5 seeds). Crucially, on these $64\times64$ crops whose central region is dominated by tissue so that no coefficient is exactly zero, the unweighted metric $\mathrm{d}A^2 + \mathrm{d}\theta^2$ strictly outperforms amplitude-weighted loss on all spatial metrics ($0.0153$ vs $0.0219$ on amplitude, $0.1057$ vs $0.1656$ on phase).
+At a single step ($k=1$) CyFM cuts the pooled error by $1.8\times$, $0.0593$ against $0.1062$ for the best Cartesian arm, with all five seeds separated. That advantage does not extend: at $k=2$ the Cartesian arm is lower, also with separated seeds ($0.1120$ against $0.1200$), and it stays lower at $k=4$ and at convergence. On the two structural measures the ordering reverses from $k=4$ on: on amplitude texture autocorrelation ($\text{spatial\_lag1\_gap}$), CyFM outperforms Cartesian at all $k \ge 4$ ($0.0339$ vs $0.0561$ at $k=4$, $0.0235$ vs $0.0404$ at $k=8$, and $0.0153$ vs $0.0305$ at $k=100$, a $2.0\times$ reduction, separated 5/5 seeds). On circular phase spatial coherence ($\text{phase\_lag1\_gap}$), CyFM at $k=100$ achieves $0.1057$ vs $0.1712$ for Cartesian ($1.6\times$ sharper phase, separated 5/5 seeds). Crucially, on these $64\times64$ crops whose central region is dominated by tissue so that no coefficient is exactly zero, the unweighted metric $\mathrm{d}A^2 + \mathrm{d}\theta^2$ strictly outperforms amplitude-weighted loss on all spatial metrics ($0.0153$ vs $0.0219$ on amplitude, $0.1057$ vs $0.1656$ on phase).
+
+\textbf{A score-based reference, and the transition at $k=2$.} Two parameterisations of
+flow matching are not a baseline family, so Table~\ref{tab:mri_64} also carries a
+variance-exploding SDE \citep{song2020score} over the same complex fields, trained on the same
+cohort, budget and seeds. At a single model call CyFM is three orders of magnitude ahead
+($0.0593$ against $53.18$), which is not a close contest but a statement about the regime: one
+step of a reverse SDE from $\sigma_{\max}$ leaves the prior essentially untouched, and the
+score-based arm is not a few-step method. Scored at matched cost it needs $100$ steps to reach
+$0.0771$, which every flow arm beats at $k=100$ and three of the four beat at $k=8$.
+
+The cylindrical curve is not monotone on this domain: the error rises from $k=1$ to $k=2$ and
+falls again. We report it as an open observation and list what it is not. Undertraining is
+excluded, since both arms plateau by epoch 40 with the learning rate at its floor. The
+zero-amplitude background is excluded as a scoring effect, since masking it out of the metric
+moves the error by $0.005$. The learned field leaving its own bound is excluded: a $\pi\tanh$
+head binds the measured angular velocity from $9.886$ to $3.142$ and the rise is unchanged
+($0.0561 \to 0.1225$ against $0.0588 \to 0.1261$, seeds overlapping). Field dimension is
+excluded, because the rise survives the $64\times64$ crop where minibatch OT still reduces
+transport cost by $2.8\%$ rather than $0.5\%$ (Section~\ref{sec:exp_scaling}). And the bimodal
+amplitude law with its spike at the origin is excluded by the same crop, which leaves no
+coefficient exactly zero and does not remove the rise. What remains is that a single Euler step
+on the cylinder transports the amplitude marginal almost exactly while the phase barely moves,
+and that this cannot be the whole account; we do not offer one.
 
 \subsection{Dimensionality Scaling and the Joint OT Coupling}
 \label{sec:exp_scaling}
