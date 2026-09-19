@@ -36,7 +36,7 @@ cohort, budget and seeds. At a single model call CyFM is three orders of magnitu
 ($0.0593$ against $53.18$), which is not a close contest but a statement about the regime: one
 step of a reverse SDE from $\sigma_{\max}$ leaves the prior essentially untouched, and the
 score-based arm is not a few-step method. Scored at matched cost it needs $100$ steps to reach
-$0.0771$, which every flow arm beats at $k=100$ and three of the four beat at $k=8$.
+$0.0771$, which every flow arm beats at $k=100$ and three of the four beat at $k=8$. That converged error is the block's worst, which makes it the natural target: on a dense step grid CyFM reaches it at $k^\star = 1$ and both Cartesian arms at $k^\star = 8$, with no variation across the five seeds in any arm.
 
 The cylindrical curve is not monotone on this domain: the error rises from $k=1$ to $k=2$ and
 falls again. We report it as an open observation and list what it is not. Undertraining is
