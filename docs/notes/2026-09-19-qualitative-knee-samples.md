@@ -62,3 +62,29 @@ actually shows "this backbone at this budget does not synthesise knees".
 
 If a reviewer asks for samples, this is the honest answer to hand them, together with the
 budget: 40 epochs, 5324 slices, one 64-channel U-Net.
+
+## If a reviewer asks for *better* samples --- decline, and say why
+
+Marcel's position, recorded so the rebuttal does not improvise it. The request is refused,
+not accommodated, on two independent grounds:
+
+1. **It asks for a different paper's experiment.** Getting knee anatomy out of an
+   unconditional generator needs a backbone sized for that task and a training budget to
+   match --- a bigger network, more epochs, probably an architecture chosen for images rather
+   than the one deliberately held fixed across every arm of every table here. That is a
+   capacity result, and it would say nothing about the cylinder. Offer it as the obvious
+   extension, not as a missing control.
+2. **Sample quality is not the claim.** What stands or falls in this paper is a *controlled
+   comparison* of two coordinate systems: one backbone, one schedule, one budget, one
+   coupling protocol, five seeds, and the only difference between the arms is whether the
+   bridge runs in $(\mathrm{Re}, \mathrm{Im})$ or on $[0,\infty) \times S^1$. Both arms are
+   equally limited by the backbone, which is what makes the difference between them
+   attributable. This is not a MICCAI submission; there is no diagnostic endpoint, no
+   reconstruction task and no clinical claim anywhere in it.
+
+**The one condition that keeps this defence honest:** it holds only while the text never
+claims sample quality. Relative, measured statements are fine --- "reproduces the reference's
+amplitude texture twice as closely" is a number from a table. An unmeasured qualitative
+assertion is not, and the over-smoothing claim is exactly that. Leave it in and a reviewer
+can answer "you made a claim about how the pictures look; show the pictures", and then the
+refusal above no longer works. Dropping it is what buys the right to decline.
