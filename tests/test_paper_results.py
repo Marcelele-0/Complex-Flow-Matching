@@ -209,9 +209,7 @@ table5_needs_archive = pytest.mark.skipif(
 
 def table5_expected() -> dict[str, tuple[str, int]]:
     """Every Table 5 evaluation name, mapped to its arm key and seed."""
-    return {
-        f"t5_{arm}_s{seed}_eval": (arm, seed) for arm in TABLE5_ARMS for seed in SEEDS
-    }
+    return {f"t5_{arm}_s{seed}_eval": (arm, seed) for arm in TABLE5_ARMS for seed in SEEDS}
 
 
 @table5_needs_archive
@@ -293,6 +291,255 @@ def test_table5_training_config_equals_the_documented_experiment() -> None:
                 *(
                     f"{key}={given[key]}"
                     for key in ("dataset.data_dir", "dataset.store", "manifold.sigma_max")
+                    if key in given
+                ),
+                *(
+                    [f"manifold.nfe_mode={given['manifold.nfe_mode']}"]
+                    if "manifold.nfe_mode" in given
+                    else []
+                ),
+                f"training.epochs={given['training.epochs']}",
+                f"training.seed={seed}",
+                f"logging.experiment_name={given['logging.experiment_name']}",
+            ]
+            launched = compose(config_name="config", overrides=recorded)
+            described = compose(config_name="config", overrides=documented)
+            assert OmegaConf.to_container(launched, resolve=False) == OmegaConf.to_container(
+                described, resolve=False
+            ), name
+
+
+# --- Table 5 (main text): fastMRI knee CORPD at 64x64 -----------------------
+#
+# The block above is Appendix D, at the acquisition's own 320x320. This one is the
+# table in the main text, run on a reduced acquisition matrix (dataset.kspace_crop=64,
+# a k-space truncation rather than a crop of the field of view).
+#
+# It is drawn from TWO sweeps of the same twenty-five checkpoints and the archive keeps
+# both, because which number came from which is not recoverable from the printed table.
+# `cfm.evaluate` consumes one seeded generator down its NFE list, so a step count draws
+# a different prior depending on its position: the two sweeps agree byte-for-byte on
+# their shared prefix 1, 2, 4, 8 and differ at k=100. The printed columns are the
+# five-point sweep; the eleven-point one is what the caption's k* is read off, and k* is
+# 1, 1, 8, 8 on both. These tests hold that split in place -- a later re-export that
+# quietly took k=100 from the dense sweep would move four numbers in the paper.
+
+TABLE5C64_ARCHIVE = "table5_fastmri64_metrics.json"
+TABLE5C64_SIDE = 64
+TABLE5C64_DENSE_STEPS = [1, 2, 4, 8, 12, 16, 24, 32, 48, 64, 100]
+
+# name prefix -> (manifold, coupling, overrides that arm adds, swept steps, scored arm).
+# The key is the evaluation name without its seed, so a prefix is part of the identity:
+# `p5_` and `dense_` are the same checkpoints under two NFE lists.
+TABLE5C64_ARMS: dict[str, tuple[str, str, dict[str, str], list[int], str]] = {
+    "p5_t5c64_cylindrical_ot": ("cylindrical", "ot", {}, STEPS, "cylindrical_ot"),
+    "p5_t5c64_cylindrical_independent": (
+        "cylindrical",
+        "independent",
+        {},
+        STEPS,
+        "cylindrical_independent",
+    ),
+    "p5_t5c64_euclidean_ot": ("euclidean", "ot", {}, STEPS, "euclidean_ot"),
+    "p5_t5c64_euclidean_independent": (
+        "euclidean",
+        "independent",
+        {},
+        STEPS,
+        "euclidean_independent",
+    ),
+    "t5c64_complex_diffusion_heun_independent": (
+        "complex_diffusion",
+        "independent",
+        {"manifold.nfe_mode": "heun"},
+        STEPS,
+        "complex_diffusion_heun_independent",
+    ),
+    "t5c64_complex_diffusion_native_independent": (
+        "complex_diffusion",
+        "independent",
+        {"manifold.nfe_mode": "native"},
+        TABLE5_NATIVE_STEPS,
+        "complex_diffusion_heun_independent",
+    ),
+    "dense_t5c64_cylindrical_ot": (
+        "cylindrical",
+        "ot",
+        {},
+        TABLE5C64_DENSE_STEPS,
+        "cylindrical_ot",
+    ),
+    "dense_t5c64_cylindrical_independent": (
+        "cylindrical",
+        "independent",
+        {},
+        TABLE5C64_DENSE_STEPS,
+        "cylindrical_independent",
+    ),
+    "dense_t5c64_euclidean_ot": (
+        "euclidean",
+        "ot",
+        {},
+        TABLE5C64_DENSE_STEPS,
+        "euclidean_ot",
+    ),
+    "dense_t5c64_euclidean_independent": (
+        "euclidean",
+        "independent",
+        {},
+        TABLE5C64_DENSE_STEPS,
+        "euclidean_independent",
+    ),
+}
+
+# Which arms moved the evaluation seed with the training seed. The flow arms did not:
+# every one of their five runs was scored with ``evaluate.seed=0``, so their seeds differ
+# in TRAINING only and all five sample from the same prior draw. The diffusion rows did.
+#
+# Both are defensible and they are not the same measurement. A flow-versus-flow
+# comparison is paired on the prior and so lower-variance -- which is what the separation
+# criterion in the table relies on, and every asterisk there is flow against flow -- while
+# the five-seed spread of a flow arm measures training variance alone. Asserted rather
+# than described because the printed table shows a spread without saying which it is.
+TABLE5C64_EVAL_SEED_FOLLOWS_TRAINING = frozenset(
+    {
+        "t5c64_complex_diffusion_heun_independent",
+        "t5c64_complex_diffusion_native_independent",
+    }
+)
+
+table5c64_needs_archive = pytest.mark.skipif(
+    not (RESULTS / TABLE5C64_ARCHIVE).exists(),
+    reason=f"{TABLE5C64_ARCHIVE} not present; run the cluster grid and export_table5c64.py",
+)
+
+
+def table5c64_eval_seed(arm: str, seed: int) -> int:
+    """The prior seed one arm's evaluation was launched with."""
+    return seed if arm in TABLE5C64_EVAL_SEED_FOLLOWS_TRAINING else 0
+
+
+def table5c64_expected() -> dict[str, tuple[str, int]]:
+    """Every 64x64 evaluation name, mapped to its arm key and seed."""
+    return {f"{arm}_s{seed}_eval": (arm, seed) for arm in TABLE5C64_ARMS for seed in SEEDS}
+
+
+@table5c64_needs_archive
+def test_table5c64_archive_holds_both_sweeps() -> None:
+    """Fifty evaluations: the six printed rows plus the four flow arms swept densely."""
+    assert set(load(TABLE5C64_ARCHIVE)) == set(table5c64_expected())
+
+
+@table5c64_needs_archive
+def test_table5c64_entries_match_their_names() -> None:
+    """Each entry is the arm and the sweep its name claims, on the reduced matrix."""
+    expected = table5c64_expected()
+    for name, run in load(TABLE5C64_ARCHIVE).items():
+        arm, seed = expected[name]
+        manifold, _, _, steps, _ = TABLE5C64_ARMS[arm]
+        assert run["field_shape"] == [TABLE5C64_SIDE, TABLE5C64_SIDE], name
+        assert run["manifold"] == manifold, name
+        # `seed` in a metrics.json is the EVALUATION seed, which for the flow arms is 0
+        # on all five runs; the training seed lives in the provenance record.
+        assert run["seed"] == table5c64_eval_seed(arm, seed), name
+        assert run["num_fields"] == 64, name
+        assert run["reference_domain"] == "training transform", name
+        # The sweep's identity: this is what separates the two grids, and taking a
+        # k=100 from the wrong one is a silent change to the printed table.
+        assert [row["num_steps"] for row in run["sweep"]] == steps, name
+        assert run["reference_peak_modulus"] <= 1.0 + 1e-4, name
+
+
+@table5c64_needs_archive
+def test_table5c64_shared_prefix_is_identical_across_the_two_sweeps() -> None:
+    """The grids agree where the generator has drawn the same priors.
+
+    1, 2, 4, 8 open both NFE lists, so they consume the same draws; k=100 sits fifth in
+    one list and eleventh in the other and must not be asserted equal. This is the
+    evidence that the two sweeps are one protocol rather than two, which is what lets
+    the caption read k* off the grid the columns do not come from.
+
+    The tolerance is float noise, not slack: two runs of the same draw agree to about
+    4e-9 here, while the two grids differ at k=100 by 0.009 -- six orders of magnitude
+    apart, so no real difference in the draw can hide under it.
+    """
+    runs = load(TABLE5C64_ARCHIVE)
+    for arm, coupling in (
+        ("cylindrical", "ot"),
+        ("cylindrical", "independent"),
+        ("euclidean", "ot"),
+        ("euclidean", "independent"),
+    ):
+        for seed in SEEDS:
+            short = runs[f"p5_t5c64_{arm}_{coupling}_s{seed}_eval"]["sweep"]
+            dense = runs[f"dense_t5c64_{arm}_{coupling}_s{seed}_eval"]["sweep"]
+            for steps in (1, 2, 4, 8):
+                a = next(row for row in short if row["num_steps"] == steps)
+                b = next(row for row in dense if row["num_steps"] == steps)
+                assert a["sliced_w2_complex"] == pytest.approx(b["sliced_w2_complex"], abs=1e-6), (
+                    arm,
+                    coupling,
+                    seed,
+                    steps,
+                )
+
+
+@table5c64_needs_archive
+def test_table5c64_recorded_overrides_carry_the_protocol() -> None:
+    """Every row was launched on the reduced matrix, and scored its own checkpoint."""
+    expected = table5c64_expected()
+    for name, run in load(TABLE5C64_ARCHIVE).items():
+        arm, seed = expected[name]
+        manifold, coupling, extra, _, scored = TABLE5C64_ARMS[arm]
+        record = run["provenance"]
+        for key in ("train_overrides", "evaluate_overrides"):
+            given = overrides_to_dict(record[key])
+            for field in ("+experiment", "manifold", "training.coupling", "dataset.kspace_crop"):
+                assert field in given, (name, key, field)
+            assert given["+experiment"] == "table5_fastmri", (name, key)
+            assert given["manifold"] == manifold, (name, key)
+            assert given["training.coupling"] == coupling, (name, key)
+            # The reduction is in k-space, and it is the whole point of this block:
+            # an image-domain crop would cut the field of view instead of lowering
+            # the acquisition matrix, and would not be the experiment the table names.
+            assert given["dataset.kspace_crop"] == "64", (name, key)
+            assert "dataset.crop_size" not in given, (name, key)
+        train = overrides_to_dict(record["train_overrides"])
+        assert train["training.seed"] == str(seed), name
+        assert train["training.epochs"] == "40", name
+        evaluate = overrides_to_dict(record["evaluate_overrides"])
+        assert evaluate["evaluate.seed"] == str(table5c64_eval_seed(arm, seed)), name
+        assert evaluate["dataset.role"] == "all", name
+        assert evaluate["dataset.store"] == "val.h5", name
+        assert evaluate["evaluate.num_fields"] == "64", name
+        for field, value in extra.items():
+            assert evaluate[field] == value, (name, field)
+        assert evaluate["evaluate.run_name"] == train["logging.experiment_name"], name
+        assert train["logging.experiment_name"] == f"t5c64_{scored}_s{seed}", name
+
+
+@table5c64_needs_archive
+def test_table5c64_training_config_equals_the_documented_experiment() -> None:
+    """The recorded launch and ``+experiment=table5_fastmri`` compose to one config."""
+    expected = table5c64_expected()
+    with initialize_config_dir(config_dir=str(CONF), version_base="1.3"):
+        for name, run in load(TABLE5C64_ARCHIVE).items():
+            arm, seed = expected[name]
+            manifold, coupling, _, _, _ = TABLE5C64_ARMS[arm]
+            recorded = run["provenance"]["train_overrides"]
+            given = overrides_to_dict(recorded)
+            documented = [
+                "+experiment=table5_fastmri",
+                f"manifold={manifold}",
+                f"training.coupling={coupling}",
+                *(
+                    f"{key}={given[key]}"
+                    for key in (
+                        "dataset.data_dir",
+                        "dataset.store",
+                        "dataset.kspace_crop",
+                        "manifold.sigma_max",
+                    )
                     if key in given
                 ),
                 *(

@@ -326,8 +326,52 @@ TABLE5_ROWS = (
 # Rows the bolding rule may consider. The many-step row is not a matched-cost
 # comparison, so it can neither win a column nor block another row from winning
 # one; leaving it in would let a number from a different budget decide the bold.
-TABLE5_MATCHED_ROWS = tuple(
-    index for index, row in enumerate(TABLE5_ROWS) if row[4] == STEPS
+TABLE5_MATCHED_ROWS = tuple(index for index, row in enumerate(TABLE5_ROWS) if row[4] == STEPS)
+
+# The 64x64 knee block -- Table 5 of the main text, where the 320x320 grid above is
+# Appendix D. It is drawn from TWO sweeps of the same checkpoints, and which number
+# came from which is not recoverable from the printed table, so it is pinned here.
+#
+# `cfm.evaluate` consumes one seeded generator sequentially down its NFE list, so a
+# step count draws a different prior depending on where it sits in the list. The two
+# sweeps share the prefix 1, 2, 4, 8 and those columns are byte-identical between
+# them; k=100 sits fifth in the short list and eleventh in the dense one, and there
+# the cylindrical OT mean is 0.0722 against 0.0631. Both are honest estimates over 64
+# fields -- the dense sweep's own interior is non-monotone by more than that spread --
+# but they are different draws and a table must not mix them across its columns.
+#
+# So: the printed columns are the five-point sweep (`p5_` prefix), and the dense
+# eleven-point sweep (`dense_`) is what the caption's k* is read off. k* is 1, 1, 8, 8
+# on both grids, which is why the two can coexist in one table; the archive keeps both
+# so that stays checkable rather than remembered.
+TABLE5C64_ARCHIVE = "table5_fastmri64_metrics.json"
+TABLE5C64_NAME = "{prefix}t5c64_{arm}_{coupling}_s{seed}_eval"
+TABLE5C64_DENSE_STEPS = (1, 2, 4, 8, 12, 16, 24, 32, 48, 64, 100)
+TABLE5C64_DENSE_PREFIX = "dense_"
+
+# Six lines, five arms, as in TABLE5_ROWS: the diffusion baseline is scored twice from
+# one checkpoint. The third field is the evaluation-name prefix -- the diffusion rows
+# were never re-swept and carry none -- and the sixth the step counts of that sweep.
+TABLE5C64_ROWS = (
+    ("cylindrical", "ot", "p5_", "Cylindrical (Ours)", "Minibatch OT", STEPS),
+    ("cylindrical", "independent", "p5_", "Cylindrical (Ours)", "Independent", STEPS),
+    ("euclidean", "ot", "p5_", r"Cartesian ($\mathbb{R}^2$)", "Minibatch OT", STEPS),
+    ("euclidean", "independent", "p5_", r"Cartesian ($\mathbb{R}^2$)", "Independent", STEPS),
+    ("complex_diffusion_heun", "independent", "", "Complex Diffusion", "Matched NFE", STEPS),
+    (
+        "complex_diffusion_native",
+        "independent",
+        "",
+        "Complex Diffusion",
+        rf"{TABLE5_NATIVE_STEPS} steps$^\dagger$",
+        (TABLE5_NATIVE_STEPS,),
+    ),
+)
+
+# The flow arms again, on the dense grid, for the caption's k*. Same checkpoints and
+# same protocol as the rows above; only the NFE list differs.
+TABLE5C64_DENSE_ARMS = tuple(
+    (arm, coupling) for arm, coupling, prefix, _, _, _ in TABLE5C64_ROWS if prefix == "p5_"
 )
 
 
@@ -377,20 +421,24 @@ def table5(runs: Runs) -> str:
     # against the lowest-mean rival, not against every rival at once.
     bold: dict[int, int] = {}
     for column, step in enumerate(STEPS):
-        candidates = [
-            index for index in TABLE5_MATCHED_ROWS if entries_per_row[index][column] is not None
-        ]
-        leader = min(candidates, key=lambda index: entries_per_row[index][column])
+        # Bound to the value rather than looked up inside the key function: a row is a
+        # candidate exactly when its cell is not a dash, so the mapping is total over
+        # `candidates` and neither `min` below can be handed a None to order.
+        column_values = {
+            index: value
+            for index in TABLE5_MATCHED_ROWS
+            if (value := entries_per_row[index][column]) is not None
+        }
+        candidates = list(column_values)
+        leader = min(candidates, key=lambda index: column_values[index])
         leader_family = TABLE5_ROWS[leader][0].split("_")[0]
         low = table5_values(runs, TABLE5_ROWS[leader][0], TABLE5_ROWS[leader][1], step, METRIC)
         rivals = [
-            index
-            for index in candidates
-            if TABLE5_ROWS[index][0].split("_")[0] != leader_family
+            index for index in candidates if TABLE5_ROWS[index][0].split("_")[0] != leader_family
         ]
         if not rivals:
             continue
-        closest = min(rivals, key=lambda index: entries_per_row[index][column])
+        closest = min(rivals, key=lambda index: column_values[index])
         rival = table5_values(runs, TABLE5_ROWS[closest][0], TABLE5_ROWS[closest][1], step, METRIC)
         if separated(low, rival):
             bold[step] = leader
