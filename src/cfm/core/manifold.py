@@ -186,6 +186,28 @@ class BaseManifold(ABC):
             Tuple (total_loss, components_dict).
         """
 
+    def wrap_model(
+        self, model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
+    ) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
+        """Adapt a network's raw output to the field this geometry regresses.
+
+        The identity for every geometry whose network predicts the target directly.
+        A score-based arm overrides it, because a network cannot be asked to emit a
+        quantity whose scale spans the noise schedule; see
+        :meth:`~cfm.manifolds.complex_diffusion.ComplexDiffusionManifold.wrap_model`.
+
+        Returns a plain callable rather than a module on purpose: the optimiser and
+        the checkpoint keep seeing the bare network, so no state dict gains a prefix
+        and no existing checkpoint stops loading.
+
+        Args:
+            model: Callable mapping ``(state, time)`` to the network's raw output.
+
+        Returns:
+            A callable with the same signature, emitting this geometry's target.
+        """
+        return model
+
     @abstractmethod
     def make_solver(self, num_steps: int) -> Sampler:
         """Construct the ODE solver for this manifold geometry."""

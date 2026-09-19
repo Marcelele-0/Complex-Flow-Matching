@@ -51,7 +51,7 @@ because they need the model and the manifold.
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -92,7 +92,7 @@ class _AngularProbe:
     an argument into a number.
 
     Args:
-        network: The velocity field to wrap.
+        network: The velocity field to wrap, as any callable of ``(state, time)``.
         geometry: ``"euclidean"`` to induce the angular velocity, ``"cylindrical"``
             to read it off the prediction.
         mid_window: Half-width of the band around ``t = 0.5`` reported separately,
@@ -101,7 +101,7 @@ class _AngularProbe:
 
     def __init__(
         self,
-        network: torch.nn.Module,
+        network: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
         geometry: str,
         mid_window: float = 0.1,
         enabled: bool = True,
@@ -425,7 +425,9 @@ def main(cfg: DictConfig) -> None:
         solver = manifold.make_solver(steps)
         generated_batches = []
         remaining = reference.shape[0]
-        probe = _AngularProbe(model, manifold.name, enabled=manifold.predicts_velocity)
+        probe = _AngularProbe(
+            manifold.wrap_model(model), manifold.name, enabled=manifold.predicts_velocity
+        )
         while remaining > 0:
             size = min(batch_size, remaining)
             prior = manifold.sample_noise(size, height, width, device, generator=device_generator)

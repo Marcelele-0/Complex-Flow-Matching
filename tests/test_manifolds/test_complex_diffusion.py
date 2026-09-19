@@ -647,6 +647,38 @@ class TestPaperIntegration:
                 overrides=["+experiment=table5_fastmri", "manifold=complex_diffusion"],
             )
         manifold = build_manifold(cfg)
+        assert isinstance(manifold, ComplexDiffusionManifold)
         assert manifold.name == "complex_diffusion"
         assert manifold.sigma_max == DEFAULT_SIGMA_MAX_320
         assert manifold.predicts_velocity is False
+
+
+def test_wrap_model_divides_by_the_state_noise_scale() -> None:
+    """The network emits a unit-scale residual; the 1/sigma belongs outside it.
+
+    The score of the perturbation kernel is -z/sigma, whose magnitude runs over the
+    whole schedule, and a network asked to emit it directly does not train. The factor
+    is sigma(1 - t) because that is the scale the bridge gives the state at time t.
+    """
+    manifold = ComplexDiffusionManifold(sigma_min=0.01, sigma_max=20.0)
+    raw = torch.randn(4, 2, 8, 8)
+    wrapped = manifold.wrap_model(lambda x, t: raw)
+
+    for value in (0.1, 0.5, 0.9):
+        t = torch.full((4,), value)
+        expected = raw / manifold.sigma(1.0 - t).reshape(-1, 1, 1, 1)
+        torch.testing.assert_close(wrapped(torch.zeros_like(raw), t), expected)
+
+
+def test_wrap_model_is_the_identity_for_a_velocity_geometry() -> None:
+    """Only a score arm needs the adaptation; the flow arms predict their target."""
+    from omegaconf import OmegaConf
+
+    from cfm.manifolds import build_manifold
+
+    for name in ("cylindrical", "euclidean"):
+        manifold = build_manifold(
+            OmegaConf.create({"manifold": {"name": name}, "training": {"loss": {}}})
+        )
+        sentinel = object()
+        assert manifold.wrap_model(sentinel) is sentinel  # type: ignore[arg-type]

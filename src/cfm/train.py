@@ -384,6 +384,10 @@ def main(cfg: DictConfig) -> None:
     else:
         print_main("torch.compile disabled (training.compile=false).")
 
+    # After DDP and compile, so the wrapper sees the module that actually runs, and
+    # after the optimiser, which stays bound to the bare parameters.
+    score_model = manifold.wrap_model(model)
+
     # Clipping is NOT scale-invariant, and the two losses differ ~4x in magnitude
     # (the cylindrical total carries an O(pi) angular term). AdamW is otherwise
     # scale-invariant, so this is the one place the difference leaks in: at a
@@ -475,7 +479,7 @@ def main(cfg: DictConfig) -> None:
 
             # --- Forward Pass ---
             optimizer.zero_grad()
-            pred_v = model(x_t, t_model)
+            pred_v = score_model(x_t, t_model)
 
             # --- Loss ---
             loss, components = manifold.loss(pred_v, target_v, target_x1=x_1_sup, t=t_model)
