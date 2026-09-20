@@ -108,6 +108,7 @@ def circular_linear_correlation(amplitude: torch.Tensor, phase: torch.Tensor) ->
     denominator = (1.0 - r_cs**2).clamp_min(_EPS)
     return (numerator / denominator).clamp(0.0, 1.0).sqrt()
 
+
 def subsample(values: torch.Tensor, limit: int, generator: torch.Generator) -> torch.Tensor:
     """Take at most ``limit`` entries, uniformly and reproducibly.
 
