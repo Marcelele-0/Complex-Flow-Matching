@@ -23,6 +23,7 @@ import hashlib
 import json
 import pathlib
 from collections.abc import Callable
+from typing import Self
 
 import h5py
 import numpy as np
@@ -31,7 +32,7 @@ import torch
 from cyfm.core.dataset import BaseComplexDataset
 from cyfm.core.registry import DATASETS, register_dataset
 
-__all__ = ["StftStoreDataset"]
+__all__ = ["AudioStoreDataset", "StftStoreDataset"]
 
 ROLES = ("all", "fit", "holdout")
 
@@ -159,3 +160,26 @@ class StftStoreDataset(BaseComplexDataset):
         raw = np.asarray(self._frames()[self.rows[idx]], dtype=np.complex64)
         field = torch.from_numpy(raw).unsqueeze(0)
         return field if self.transform is None else self.transform(field)
+
+    def close(self) -> None:
+        """Close the underlying HDF5 file handle if open."""
+        handle = getattr(self, "_handle", None)
+        if handle is not None:
+            try:
+                handle.close()
+            except Exception:
+                pass
+            finally:
+                self._handle = None
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        self.close()
+
+
+AudioStoreDataset = StftStoreDataset

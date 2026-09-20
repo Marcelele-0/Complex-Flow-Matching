@@ -14,7 +14,7 @@ from cyfm.core.registry import DATASETS
 from cyfm.data.espirit import compute_espirit_maps, ensure_espirit_maps, process_h5_file
 from cyfm.data.fastmri import FastMRIDataset
 from cyfm.data.splits import load_split_file_names, select_indices
-from cyfm.data.stores.audio import StftStoreDataset
+from cyfm.data.stores.audio import AudioStoreDataset, StftStoreDataset
 from cyfm.data.stores.hdf5 import WorkerHDF5Manager
 from cyfm.data.stores.knee import KneeStoreDataset
 from cyfm.data.stores.stft import DEFAULT_STFT, StftProtocol, forward_stft, inverse_stft
@@ -129,6 +129,7 @@ __all__ = [
     "FastMRIDataset",
     "KSpaceCenterCrop",
     "KneeStoreDataset",
+    "AudioStoreDataset",
     "StftStoreDataset",
     "StftProtocol",
     "DEFAULT_STFT",

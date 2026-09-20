@@ -12,8 +12,11 @@ from __future__ import annotations
 
 import pytest
 import torch
+from torch.utils.data import Dataset
 
+from cyfm.manifolds.euclidean import EuclideanManifold
 from cyfm.pipelines.evaluation import (
+    EvaluationPipeline,
     assert_training_domain,
     format_table,
     render_report,
@@ -133,3 +136,56 @@ class TestTrainingPipelineTransform:
         pipeline = training_pipeline({"crop_size": [16, 16]}, manifold)
         state = pipeline(5.0 * (torch.randn(1, 20, 20) + 1j * torch.randn(1, 20, 20)))
         assert_training_domain(manifold.to_complex(state.unsqueeze(0)))
+
+
+class TestEvaluationPipelineTeardown:
+    def test_teardown_clears_references_and_cache(self) -> None:
+        pipeline = EvaluationPipeline.__new__(EvaluationPipeline)
+        pipeline.data_states = torch.zeros(2, 2, 4, 4)
+        pipeline.reference = torch.zeros(2, 1, 4, 4, dtype=torch.complex64)
+
+        pipeline.teardown()
+
+        assert pipeline.data_states is None
+        assert pipeline.reference is None
+
+    def test_load_reference_calls_dataset_close(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        closed = False
+
+        class ClosableDataset(Dataset):
+            def __len__(self) -> int:
+                return 4
+
+            def __getitem__(self, idx: int) -> torch.Tensor:
+                return torch.zeros(2, 16, 16)
+
+            def close(self) -> None:
+                nonlocal closed
+                closed = True
+
+        monkeypatch.setattr(
+            "cyfm.pipelines.evaluation.build_dataset",
+            lambda *args, **kwargs: ClosableDataset(),
+        )
+
+        pipeline = EvaluationPipeline.__new__(EvaluationPipeline)
+        pipeline.config = type(  # type: ignore[assignment]
+            "Config",
+            (),
+            {
+                "evaluate": type(
+                    "Eval",
+                    (),
+                    {"batch_size": 2, "num_workers": 0, "num_fields": 2},
+                )()
+            },
+        )()
+        pipeline.dataset_cfg = {}
+        pipeline.manifold = EuclideanManifold()
+        pipeline.device = torch.device("cpu")
+
+        pipeline._load_reference()
+
+        assert closed
+        assert pipeline.data_states is not None
+        assert pipeline.reference is not None

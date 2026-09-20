@@ -154,6 +154,8 @@ class EvaluationPipeline(BasePipeline[dict[str, Any]]):
         self.orig_cwd = orig_cwd
         self.config = RunConfig.from_config(cfg)
         self.dataset_cfg = as_plain_dict(cfg.get("dataset"))
+        self.data_states: torch.Tensor | None = None
+        self.reference: torch.Tensor | None = None
 
     @classmethod
     def from_config(cls, cfg: Mapping[str, Any], orig_cwd: str = ".") -> Self:
@@ -221,6 +223,8 @@ class EvaluationPipeline(BasePipeline[dict[str, Any]]):
             collected += batch.shape[0]
             if collected >= settings.num_fields:
                 break
+        if hasattr(dataset, "close") and callable(dataset.close):
+            dataset.close()
         if not batches:
             raise ValueError("dataset yielded no samples to evaluate against")
 
@@ -245,6 +249,8 @@ class EvaluationPipeline(BasePipeline[dict[str, Any]]):
             The payload written to ``metrics.json``, with the families this arm
             cannot report absent rather than null.
         """
+        if self.reference is None or self.data_states is None:
+            raise RuntimeError("EvaluationPipeline.setup() must be run before execute().")
         straightness_value = self._straightness()
         rows, probes = self._sweep()
         settings = self.config.evaluate
@@ -308,6 +314,10 @@ class EvaluationPipeline(BasePipeline[dict[str, Any]]):
         falls, so the ratio would be dominated by the ``t`` near 1 end and would
         sit in the table looking comparable to the flow arms' path straightness.
         """
+        if self.data_states is None:
+            raise RuntimeError(
+                "EvaluationPipeline.setup() must be run before measuring straightness."
+            )
         if not self.manifold.predicts_velocity:
             print(
                 f"straightness: not reported for {self.manifold.name} "
@@ -332,6 +342,8 @@ class EvaluationPipeline(BasePipeline[dict[str, Any]]):
             ``(rows, probes)``: the distributional metrics per step count, and
             the path probe plus cost for each.
         """
+        if self.reference is None:
+            raise RuntimeError("EvaluationPipeline.setup() must be run before sweeping solvers.")
         settings = self.config.evaluate
         rows: list[tuple[int, dict[str, float]]] = []
         probes: dict[int, dict[str, float]] = {}
@@ -397,6 +409,13 @@ class EvaluationPipeline(BasePipeline[dict[str, Any]]):
             print(f"  steps={steps:<4} sliced_w2={rows[-1][1]['sliced_w2_complex']:.5f}")
 
         return rows, probes
+
+    def teardown(self) -> None:
+        """Release reference tensors and clear cached CUDA memory."""
+        self.data_states = None
+        self.reference = None
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
 
 def render_report(payload: Mapping[str, Any]) -> str:

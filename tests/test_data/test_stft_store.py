@@ -12,7 +12,7 @@ import pytest
 import soundfile
 import torch
 
-from cyfm.data.stores.audio import StftStoreDataset
+from cyfm.data.stores.audio import AudioStoreDataset, StftStoreDataset
 from cyfm.data.stores.stft import (
     DEFAULT_STFT,
     StftProtocol,
@@ -266,3 +266,34 @@ def test_the_builder_can_delete_each_utterance_as_it_is_consumed(
     assert done.returncode == 0, done.stderr
     assert list(raw.rglob("*.flac")) == []
     assert np.asarray(json.loads(out.with_suffix(".json").read_text())["segments"]).size
+
+
+def test_stft_store_close_and_context_manager(tmp_path: pathlib.Path) -> None:
+    """close() releases the HDF5 handle and context manager cleans up."""
+    out = _build(tmp_path)
+    dataset = AudioStoreDataset(data_dir=out.parent, store=out.name, role="all")
+    assert dataset._handle is None
+
+    _ = dataset[0]
+    assert dataset._handle is not None
+    assert dataset._handle.id.valid
+
+    dataset.close()
+    assert dataset._handle is None
+    # Idempotent close
+    dataset.close()
+    assert dataset._handle is None
+
+    # Context manager closes handle on exit
+    with AudioStoreDataset(data_dir=out.parent, store=out.name, role="all") as ds:
+        _ = ds[0]
+        assert ds._handle is not None
+        assert ds._handle.id.valid
+    assert ds._handle is None
+
+    # __del__ invokes close()
+    ds_del = StftStoreDataset(data_dir=out.parent, store=out.name, role="all")
+    _ = ds_del[0]
+    assert ds_del._handle is not None
+    ds_del.__del__()
+    assert ds_del._handle is None

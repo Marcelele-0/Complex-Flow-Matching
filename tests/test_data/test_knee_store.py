@@ -123,3 +123,34 @@ def test_kspace_crop_defaults_to_no_crop(tmp_path: pathlib.Path) -> None:
         KneeStoreDataset(tmp_path, role="all")[0],
         KneeStoreDataset(tmp_path, role="all", kspace_crop=None)[0],
     )
+
+
+def test_knee_store_close_and_context_manager(tmp_path: pathlib.Path) -> None:
+    """close() releases the HDF5 handle and context manager cleans up."""
+    write_store(tmp_path)
+    dataset = KneeStoreDataset(tmp_path, role="all")
+    assert dataset._handle is None
+
+    _ = dataset[0]
+    assert dataset._handle is not None
+    assert dataset._handle.id.valid
+
+    dataset.close()
+    assert dataset._handle is None
+    # Idempotent close
+    dataset.close()
+    assert dataset._handle is None
+
+    # Context manager closes handle on exit
+    with KneeStoreDataset(tmp_path, role="all") as ds:
+        _ = ds[0]
+        assert ds._handle is not None
+        assert ds._handle.id.valid
+    assert ds._handle is None
+
+    # __del__ invokes close()
+    ds_del = KneeStoreDataset(tmp_path, role="all")
+    _ = ds_del[0]
+    assert ds_del._handle is not None
+    ds_del.__del__()
+    assert ds_del._handle is None
