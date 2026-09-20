@@ -1,9 +1,10 @@
-"""Model construction and checkpoint loading shared by the inference entry points.
+"""Model construction and checkpoint loading shared by the entry points.
 
-``evaluate.py`` both need to build the configured architecture
-and load a trained checkpoint. Keeping that in one place means a new architecture
-is registered once in :func:`build_model` rather than in every entry point, and it
-makes the logic unit-testable without standing up a Hydra ``main()``.
+``train.py`` and ``evaluate.py`` both need to build the configured architecture,
+and ``evaluate.py`` additionally has to find and load a trained checkpoint.
+Keeping that in one place means a new architecture is reached once through the
+MODELS registry rather than in every entry point, and it makes the logic
+unit-testable without standing up a Hydra ``main()``.
 """
 
 from __future__ import annotations
@@ -23,36 +24,6 @@ from cyfm.core.registry import MODELS
 # guarantee it rather than leaving each entry point to remember.
 import cyfm.models  # noqa: F401,E402  isort:skip
 
-# Models that train but cannot yet drive an ODE solver, mapped to why.
-SAMPLING_UNSUPPORTED_MODELS = {
-    "c_unet_cross_slice": (
-        "predicts a center-slice velocity [B, 2, H, W] from a slice window "
-        "[B, S, C, H, W]. A solver advances a state with a velocity of matching "
-        "shape, so it cannot step a multi-slice state from this output. Training "
-        "is supported on either geometry; sampling needs all-slice decoding, "
-        "which is not implemented yet."
-    ),
-}
-
-
-def reject_unsupported_sampling_model(cfg: DictConfig) -> None:
-    """Fail early when the configured model cannot be sampled from.
-
-    Called by the sampling entry points before any checkpoint or data work, so the
-    limitation is stated plainly instead of surfacing as a shape error inside the
-    solver.
-
-    Args:
-        cfg: Full Hydra config; reads ``model.name``.
-
-    Raises:
-        NotImplementedError: If the configured model cannot drive the solver.
-    """
-    model_name = cfg.get("model", {}).get("name", "c_unet")
-    reason = SAMPLING_UNSUPPORTED_MODELS.get(model_name)
-    if reason is not None:
-        raise NotImplementedError(f"model={model_name} {reason}")
-
 
 def build_model(
     cfg: DictConfig,
@@ -66,9 +37,7 @@ def build_model(
     Uses the MODELS registry to resolve and instantiate architectures.
 
     Args:
-        cfg: Full Hydra config. Reads ``model.name``, ``model.base_channels`` and,
-            for the attention variant, ``channel_mults`` / ``use_attention`` /
-            ``attn_heads``.
+        cfg: Full Hydra config. Reads ``model.name`` and ``model.base_channels``.
         device: Device to move the instantiated model to.
         in_channels: Width of the state the model consumes, normally
             ``Manifold.state_channels``. Defaults to the cylindrical 3 so a
@@ -95,35 +64,6 @@ def build_model(
         )
 
     match model_name:
-        case "c_unet_attention" | "cylindrical_unet_attention":
-            channel_mults = cfg.get("model", {}).get("channel_mults", [1, 2, 4, 8, 8])
-            use_attention = cfg.get("model", {}).get("use_attention", True)
-            attn_heads = cfg.get("model", {}).get("attn_heads", 4)
-
-            model: torch.nn.Module = MODELS.build(
-                model_name,
-                base_channels=base_channels,
-                channel_mults=list(channel_mults),
-                use_attention=use_attention,
-                attn_heads=attn_heads,
-                in_channels=in_channels,
-                out_channels=out_channels,
-            ).to(device)
-            print(f"Instantiated CylindricalUNetAttention with base_channels={base_channels}")
-
-        case "c_unet_cross_slice" | "cylindrical_unet_cross_slice":
-            channel_mults = cfg.get("model", {}).get("channel_mults", [1, 2, 4, 8, 8])
-            attn_heads = cfg.get("model", {}).get("attn_heads", 4)
-
-            model = MODELS.build(
-                model_name,
-                base_channels=base_channels,
-                channel_mults=list(channel_mults),
-                attn_heads=attn_heads,
-                in_channels=in_channels,
-            ).to(device)
-            print(f"Instantiated CylindricalUNetCrossSlice with base_channels={base_channels}")
-
         case "c_unet" | "cylindrical_unet":
             model = MODELS.build(
                 model_name,

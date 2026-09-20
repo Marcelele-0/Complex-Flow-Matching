@@ -7,4 +7,4 @@
 # checkpoints and outputs land.
 use_wandb: false
 project_name: "complex_flow_matching"
-experiment_name: "c_unet_attention_run"
+experiment_name: "cyfm_run"

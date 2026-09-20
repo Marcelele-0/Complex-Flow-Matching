@@ -1,10 +1,10 @@
 defaults:
   - hydra: default
   - paths: default
-  - dataset: fastmri_local
+  - dataset: cylinder_toy_field
   - manifold: cylindrical
   - logging: default
-  - model: c_unet_attention
+  - model: c_unet
   - training: default
   - evaluate: default
   - _self_

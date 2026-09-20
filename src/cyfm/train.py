@@ -133,24 +133,16 @@ def main(cfg: DictConfig) -> None:
     # --- Data Pipeline ---
     data_dir = cfg.get("dataset", {}).get("data_dir", None)
     num_slices = cfg.get("dataset", {}).get("num_slices", 1)
-    model_name = cfg.get("model", {}).get("name", "c_unet")
 
-    # Model and dataloader must agree on the slice layout. Checked before the
-    # dataset is opened so a config mistake fails immediately, rather than after
-    # every .h5 in data_dir has been scanned; the mismatch would otherwise surface
-    # as an opaque shape error deep inside a convolution.
-    needs_slice_window = model_name == "c_unet_cross_slice"
-    if needs_slice_window and (num_slices == 1 or num_slices % 2 == 0):
+    # Slice windows were consumed by exactly one architecture, c_unet_cross_slice,
+    # which could train but never sample and went with the other reconstruction-era
+    # models. Nothing in the package takes a 5D input now, so a window is a config
+    # error rather than a mode. Checked before the dataset is opened, so it fails
+    # immediately instead of after every .h5 in data_dir has been scanned.
+    if num_slices > 1:
         raise ValueError(
-            f"model={model_name} consumes slice windows but dataset.num_slices={num_slices}. "
-            "Set dataset.num_slices to an odd value > 1, e.g. "
-            f"'uv run src/cyfm/train.py model={model_name} dataset.num_slices=3'."
-        )
-    if not needs_slice_window and num_slices > 1:
-        raise ValueError(
-            f"dataset.num_slices={num_slices} produces 5D slice windows, but "
-            f"model={model_name} is a 2D model expecting [B, C, H, W]. "
-            "Use model=c_unet_cross_slice, or set dataset.num_slices=1."
+            f"dataset.num_slices={num_slices} produces 5D slice windows, which no "
+            "model in this package consumes. Set dataset.num_slices=1."
         )
 
     # Validated here rather than at first use: the alternative is discovering an
@@ -167,20 +159,12 @@ def main(cfg: DictConfig) -> None:
     # the regression target an average of conflicting velocities.
     coupling_name = str(cfg.get("training", {}).get("coupling", "independent"))
     coupling = build_coupling(coupling_name)
+    # Whether the coupling permutes the batch, which the loop below reports once.
     reorders = coupling_name not in ("independent", "none")
-    if reorders and num_slices > 1:
-        raise ValueError(
-            f"training.coupling={coupling_name!r} pairs whole samples, but "
-            f"dataset.num_slices={num_slices} spreads one sample across a window. "
-            "Set dataset.num_slices=1."
-        )
     print_main(f"Coupling: {coupling_name}")
 
-    # The manifold owns the transform either way, so x_1 arrives in whatever
-    # representation the selected geometry trains on and everything downstream is
-    # shape-agnostic. 2.5D splits the pipeline in two: normalisation needs the whole
-    # stacked window at once (one peak for the window, not one per slice), so it
-    # moves post-stack, still ahead of the crop.
+    # The manifold owns the transform, so x_1 arrives in whatever representation
+    # the selected geometry trains on and everything downstream is shape-agnostic.
     #
     # dataset.crop_size runs first, on the complex slice: cohorts whose volumes do
     # not share a matrix size cannot be collated without it, and cropping before
@@ -190,12 +174,7 @@ def main(cfg: DictConfig) -> None:
     geometry = build_geometry_transform(dataset_cfg.get("crop_size"), crop_base=16)
 
     slice_pipeline: Callable[[torch.Tensor], torch.Tensor]
-    if num_slices > 1:
-        slice_pipeline, window_pipeline = manifold.build_window_transforms(crop_base=16)
-    else:
-        slice_pipeline = manifold.build_transform(crop_base=16)
-        window_pipeline = None
-    slice_pipeline = Compose([geometry, slice_pipeline])
+    slice_pipeline = Compose([geometry, manifold.build_transform(crop_base=16)])
 
     # Rank 0 downloads the dataset if needed, and all other ranks wait at the barrier,
     # preventing race conditions on concurrent downloads or extractions under DDP.
@@ -222,7 +201,6 @@ def main(cfg: DictConfig) -> None:
         dataset_cfg,
         data_dir=data_dir,
         transform=slice_pipeline,
-        window_transform=window_pipeline,
         num_slices=num_slices,
     )
 

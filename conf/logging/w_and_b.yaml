@@ -5,4 +5,4 @@
 # logging does not move the run's output directory. See the note there.
 use_wandb: true
 project_name: "complex_flow_matching"
-experiment_name: "c_unet_attention_run"
+experiment_name: "cyfm_run"

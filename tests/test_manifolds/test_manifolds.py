@@ -373,7 +373,7 @@ class TestSideBySideFairness:
 
         assert torch.any(modulus > 1.0)
 
-    @pytest.mark.parametrize("model_name", ["c_unet", "c_unet_attention", "c_unet_cross_slice"])
+    @pytest.mark.parametrize("model_name", ["c_unet"])
     def test_only_the_input_width_differs_between_the_two_architectures(
         self, model_name: str
     ) -> None:
@@ -401,7 +401,7 @@ class TestSideBySideFairness:
         differing = {n for n in cyl_params if cyl_params[n] != euc_params[n]}
         assert differing == {"init_conv.weight"}
 
-    @pytest.mark.parametrize("model_name", ["c_unet", "c_unet_attention", "c_unet_cross_slice"])
+    @pytest.mark.parametrize("model_name", ["c_unet"])
     def test_one_seed_gives_both_arms_identical_weights_outside_init_conv(
         self, model_name: str
     ) -> None:

@@ -120,8 +120,7 @@ def test_core_registries_populated() -> None:
 
     # MODELS
     assert "c_unet" in MODELS
-    assert "c_unet_attention" in MODELS
-    assert "c_unet_cross_slice" in MODELS
+    assert "mlp" in MODELS
 
     # SOLVERS
     assert "cylindrical" in SOLVERS
