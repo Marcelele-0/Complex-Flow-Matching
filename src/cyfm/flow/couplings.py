@@ -41,44 +41,30 @@ was never needed.
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-
 import numpy as np
 import torch
 from scipy.optimize import linear_sum_assignment
 
 from cyfm.core.manifold import BaseManifold
+from cyfm.core.protocols import Coupling
 from cyfm.core.registry import COUPLINGS
 
-__all__ = ["BaseCoupling", "IndependentCoupling", "OptimalTransportCoupling", "build_coupling"]
+__all__ = [
+    "COUPLING_IMPLEMENTATIONS",
+    "Coupling",
+    "IndependentCoupling",
+    "OptimalTransportCoupling",
+    "build_coupling",
+]
 
 # Above this the dense assignment stops being free and the caller should say so
 # deliberately rather than discover it as a stall.
 _MAX_BATCH = 4096
 
 
-class BaseCoupling(ABC):
-    """Reorders a batch of data endpoints against a batch of prior samples."""
-
-    @abstractmethod
-    def __call__(
-        self, prior: torch.Tensor, data: torch.Tensor, manifold: BaseManifold
-    ) -> torch.Tensor:
-        """Return the data batch reordered to pair with the prior batch.
-
-        Args:
-            prior: Prior states ``[B, state_channels, H, W]``.
-            data: Data states ``[B, state_channels, H, W]``.
-            manifold: The geometry whose metric the pairing is judged in.
-
-        Returns:
-            The data batch, permuted along the batch dimension.
-        """
-
-
 @COUPLINGS.register("independent")
 @COUPLINGS.register("none")
-class IndependentCoupling(BaseCoupling):
+class IndependentCoupling:
     """Pair whatever the dataloader happened to draw together.
 
     The baseline, and what flow matching does by default. Trajectories cross, so
@@ -105,7 +91,7 @@ class IndependentCoupling(BaseCoupling):
 
 @COUPLINGS.register("optimal_transport")
 @COUPLINGS.register("ot")
-class OptimalTransportCoupling(BaseCoupling):
+class OptimalTransportCoupling:
     """Exact minibatch optimal transport in the manifold's own metric.
 
     The cost between two samples is the squared geodesic displacement summed over
@@ -192,7 +178,19 @@ class OptimalTransportCoupling(BaseCoupling):
         return data[permutation]
 
 
-def build_coupling(name: str, **kwargs: object) -> BaseCoupling:
+# Conformance, checked statically at the definition site. The abstract base class
+# these two used to inherit bought exactly one thing -- a wrong signature was an
+# error at definition time -- and this annotation buys it back at type-check time
+# without requiring anyone else's coupling to subclass ours. It is a real tuple
+# rather than a `TYPE_CHECKING` no-op because the registry test iterates it to
+# assert that every registered key resolves to one of these.
+COUPLING_IMPLEMENTATIONS: tuple[type[Coupling], ...] = (
+    IndependentCoupling,
+    OptimalTransportCoupling,
+)
+
+
+def build_coupling(name: str, **kwargs: object) -> Coupling:
     """Resolve a coupling by name through the registry.
 
     Args:
@@ -207,5 +205,5 @@ def build_coupling(name: str, **kwargs: object) -> BaseCoupling:
     """
     if not COUPLINGS.contains(name):
         raise ValueError(f"Unknown coupling {name!r}. Available: {COUPLINGS.list()}.")
-    coupling: BaseCoupling = COUPLINGS.build(name, **kwargs)
+    coupling: Coupling = COUPLINGS.build(name, **kwargs)
     return coupling

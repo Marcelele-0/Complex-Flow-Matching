@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from cyfm.flow.couplings import (
-    BaseCoupling,
+    COUPLING_IMPLEMENTATIONS,
+    Coupling,
     IndependentCoupling,
     OptimalTransportCoupling,
     build_coupling,
@@ -17,7 +18,8 @@ from cyfm.flow.couplings import (
 BRIDGE_ENDPOINTS = ("noise",)
 
 __all__ = [
-    "BaseCoupling",
+    "COUPLING_IMPLEMENTATIONS",
+    "Coupling",
     "IndependentCoupling",
     "OptimalTransportCoupling",
     "build_coupling",

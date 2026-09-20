@@ -1,56 +1,45 @@
-"""Base solvers for Riemannian Flow Matching, and what the sweep asks of one."""
+"""Base solvers for Riemannian Flow Matching, and what the sweep asks of one.
+
+The :class:`~cyfm.core.protocols.Sampler` protocol these classes satisfy now lives
+in :mod:`cyfm.core.protocols` with the other structural contracts; it is
+re-exported here because that is where the solvers look for it.
+"""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
-from typing import Any, Protocol, runtime_checkable
+from typing import Any
 
 import torch
 
+from cyfm.core.protocols import Sampler, VelocityField
 
-@runtime_checkable
-class Sampler(Protocol):
-    """All the evaluation sweep requires: a prior in, a sample out.
-
-    Deliberately weaker than :class:`BaseODESolver`. A flow arm integrates a
-    velocity with a fixed ``dt`` and so has a meaningful ``step``; the diffusion
-    baseline's predictor moves between noise levels and has no velocity and no
-    ``dt`` to take. Typing the manifold's factory to this protocol lets both be
-    returned without pretending the second is an ODE solver.
-    """
-
-    num_steps: int
-
-    @property
-    def evaluations(self) -> int:
-        """Model calls one :meth:`sample` makes.
-
-        Required, not optional. Probing for it and falling back to Heun's count
-        would report a wrong cost for any sampler that forgot to declare one,
-        silently, which is the mislabelling the reported figure exists to stop.
-        """
-        ...
-
-    def sample(
-        self,
-        model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-        noise: torch.Tensor,
-        generator: torch.Generator | None = None,
-    ) -> torch.Tensor:
-        """Integrate from the prior at t=0 to data at t=1.
-
-        ``generator`` is accepted by every sampler so the caller can seed one
-        without knowing which it holds; a deterministic solver ignores it.
-        """
-        ...
+__all__ = ["BaseODESolver", "BaseSDESolver", "Sampler"]
 
 
 class BaseODESolver(ABC):
-    """Abstract base class for ordinary differential equation (ODE) solvers."""
+    """Abstract base class for ordinary differential equation (ODE) solvers.
+
+    Declares every member of :class:`~cyfm.core.protocols.Sampler`, so an ODE
+    solver satisfies that protocol by virtue of this class rather than by each
+    subclass happening to add the missing pieces. It did not before: ``sample``
+    omitted ``generator`` and nothing here declared ``evaluations``, so a new
+    subclass could be accepted by the type checker and then fail at the call site
+    in the evaluation sweep.
+    """
 
     def __init__(self, num_steps: int = 50) -> None:
         self.num_steps = num_steps
+
+    @property
+    @abstractmethod
+    def evaluations(self) -> int:
+        """Model calls one :meth:`sample` makes.
+
+        Abstract rather than defaulting to Heun's ``2n-1``: the reported cost of a
+        few-step method is the number this returns, and a default would let a
+        solver with a different budget report someone else's.
+        """
 
     @abstractmethod
     def step(self, x_t: torch.Tensor, v_t: torch.Tensor, dt: float) -> torch.Tensor:
@@ -68,14 +57,18 @@ class BaseODESolver(ABC):
     @abstractmethod
     def sample(
         self,
-        model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+        model: VelocityField,
         noise: torch.Tensor,
+        generator: torch.Generator | None = None,
     ) -> torch.Tensor:
         """Integrate trajectory from t=0 (noise) to t=1 (data).
 
         Args:
-            model: Neural network parameterizing velocity field (x, t) -> v.
+            model: Velocity field (x, t) -> v.
             noise: Initial state at t=0 [B, C, H, W].
+            generator: Optional RNG. Declared for every sampler so the caller can
+                seed one without knowing which it holds; a deterministic
+                integrator ignores it.
 
         Returns:
             Reconstructed state at t=1 [B, C, H, W].
@@ -102,6 +95,11 @@ class BaseSDESolver(ABC):
         self.num_steps = num_steps
         self.sigma_min = sigma_min
         self.sigma_max = sigma_max
+
+    @property
+    @abstractmethod
+    def evaluations(self) -> int:
+        """Model calls one :meth:`sample` makes; see :class:`BaseODESolver`."""
 
     @abstractmethod
     def diffusion(self, t: float | torch.Tensor) -> torch.Tensor:
@@ -130,8 +128,16 @@ class BaseSDESolver(ABC):
     @abstractmethod
     def sample(
         self,
-        model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+        model: VelocityField,
         noise: torch.Tensor,
+        generator: torch.Generator | None = None,
         **kwargs: Any,
     ) -> torch.Tensor:
-        """Integrate SDE trajectory from t=0 to t=1."""
+        """Integrate SDE trajectory from t=0 to t=1.
+
+        Args:
+            model: The field the predictor calls; a score, for this baseline.
+            noise: Prior draw [B, C, H, W].
+            generator: Optional RNG, so a reported sample is reproducible.
+            **kwargs: Implementation-specific options.
+        """

@@ -17,7 +17,7 @@ from typing import Any
 
 import torch
 
-from cyfm.core.solver import Sampler
+from cyfm.core.protocols import Sampler
 
 
 class BaseManifold(ABC):

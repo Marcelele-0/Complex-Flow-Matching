@@ -62,7 +62,7 @@ from torch.utils.data import DataLoader
 
 from cyfm.data import build_dataset, build_geometry_transform
 from cyfm.data.transforms import Compose
-from cyfm.flow.couplings import BaseCoupling, build_coupling
+from cyfm.flow.couplings import Coupling, build_coupling
 from cyfm.manifolds import build_manifold
 from cyfm.utils.inference import build_model, load_weights, resolve_checkpoint
 from cyfm.utils.metrics import distributional_metrics
@@ -193,7 +193,7 @@ def straightness(
     data_states: torch.Tensor,
     device: torch.device,
     generator: torch.Generator,
-    coupling: BaseCoupling | None = None,
+    coupling: Coupling | None = None,
     chunk: int | None = None,
 ) -> float:
     """Regression residual of the conditional velocity, normalised.
