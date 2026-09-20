@@ -32,7 +32,7 @@ from tqdm import tqdm
 from cyfm.core.dataset import BaseComplexDataset
 from cyfm.data import build_dataset, build_geometry_transform
 from cyfm.data.splits import load_split_file_names, select_indices
-from cyfm.data.transforms import Compose
+from cyfm.data.transforms import Compose, slice_transform
 from cyfm.flow import BRIDGE_ENDPOINTS
 from cyfm.flow.couplings import build_coupling
 from cyfm.manifolds import build_manifold
@@ -174,7 +174,7 @@ def main(cfg: DictConfig) -> None:
     geometry = build_geometry_transform(dataset_cfg.get("crop_size"), crop_base=16)
 
     slice_pipeline: Callable[[torch.Tensor], torch.Tensor]
-    slice_pipeline = Compose([geometry, manifold.build_transform(crop_base=16)])
+    slice_pipeline = Compose([geometry, slice_transform(manifold, crop_base=16)])
 
     # Rank 0 downloads the dataset if needed, and all other ranks wait at the barrier,
     # preventing race conditions on concurrent downloads or extractions under DDP.

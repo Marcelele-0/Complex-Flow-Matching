@@ -30,6 +30,8 @@ from cyfm.data.transforms import (
     KSpaceCenterCrop,
     WindowAmplitudeNormalize,
     WindowEuclideanNormalize,
+    slice_transform,
+    window_transforms,
 )
 from cyfm.config.resolve import as_plain_dict
 
@@ -144,4 +146,6 @@ __all__ = [
     "load_split_file_names",
     "process_h5_file",
     "select_indices",
+    "slice_transform",
+    "window_transforms",
 ]

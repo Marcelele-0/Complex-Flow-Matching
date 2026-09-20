@@ -11,20 +11,12 @@ geometry could not change the behaviour of the first.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
 from typing import Any
 
 import torch
 
-from cyfm.core.manifold import BaseManifold
+from cyfm.core.manifold import BaseManifold, Representation
 from cyfm.core.registry import MANIFOLDS
-from cyfm.data.transforms import (
-    AmplitudeNormalize,
-    CenterCropModulo,
-    ComplexToCylinderTransform,
-    Compose,
-    WindowAmplitudeNormalize,
-)
 from cyfm.flow.bridges import GeodesicFlowBridge
 from cyfm.flow.losses import DecoupledCylindricalLoss
 from cyfm.flow.solvers import CylindricalODESolver
@@ -197,6 +189,7 @@ class CylindricalManifold(BaseManifold):
     name = "cylindrical"
     state_channels = 3
     velocity_channels = 2
+    representation = Representation.CYLINDER
 
     def __init__(
         self,
@@ -315,21 +308,6 @@ class CylindricalManifold(BaseManifold):
             x.shape[3],
             device=x.device,
             dtype=x.dtype,
-        )
-
-    def build_transform(self, crop_base: int = 16) -> Callable[[torch.Tensor], torch.Tensor]:
-        return Compose(
-            [ComplexToCylinderTransform(), AmplitudeNormalize(), CenterCropModulo(base=crop_base)]
-        )
-
-    def build_window_transforms(
-        self, crop_base: int = 16
-    ) -> tuple[Callable[[torch.Tensor], torch.Tensor], Callable[[torch.Tensor], torch.Tensor]]:
-        # AmplitudeNormalize would divide each slice by its own peak; the window
-        # variant divides the whole stack by one, keeping inter-slice brightness.
-        return (
-            Compose([ComplexToCylinderTransform()]),
-            Compose([WindowAmplitudeNormalize(), CenterCropModulo(base=crop_base)]),
         )
 
     def sample_noise(

@@ -21,6 +21,7 @@ from omegaconf import OmegaConf
 from cyfm.core.manifold import BaseManifold
 from cyfm.core.registry import MANIFOLDS, SOLVERS
 from cyfm.core.solver import BaseSDESolver
+from cyfm.data.transforms import slice_transform, window_transforms
 from cyfm.flow.solvers import (
     PredictorCorrectorSolver,
     heun_evaluations,
@@ -362,7 +363,7 @@ class TestManifoldInterface:
         """
         manifold = ComplexDiffusionManifold()
         z = _dummy_complex_slice(b=1, h=40, w=40).squeeze(0)
-        tf = manifold.build_transform(crop_base=16)
+        tf = slice_transform(manifold, crop_base=16)
         state = tf(z)
         assert state.shape == (2, 32, 32)
         z_out = manifold.to_complex(state.unsqueeze(0))
@@ -372,7 +373,7 @@ class TestManifoldInterface:
 
     def test_transforms_window(self) -> None:
         manifold = ComplexDiffusionManifold()
-        slice_tf, window_tf = manifold.build_window_transforms(crop_base=16)
+        slice_tf, window_tf = window_transforms(manifold, crop_base=16)
         slices = [_dummy_complex_slice(b=1, h=40, w=40).squeeze(0) * (i + 1) for i in range(3)]
         stack = torch.stack([slice_tf(s) for s in slices])
         out = window_tf(stack)
@@ -391,8 +392,8 @@ class TestManifoldInterface:
 
         field = _dummy_complex_slice(b=1, h=40, w=40).squeeze(0) * 3.0
         assert torch.equal(
-            euclidean.build_transform(crop_base=16)(field.clone()),
-            diffusion.build_transform(crop_base=16)(field.clone()),
+            slice_transform(euclidean, crop_base=16)(field.clone()),
+            slice_transform(diffusion, crop_base=16)(field.clone()),
         )
 
     def test_bridge_and_geodesic(self) -> None:
@@ -614,7 +615,7 @@ class TestPaperIntegration:
         default was 378.0, which belongs to data of a different scale.
         """
         manifold = ComplexDiffusionManifold()
-        pipeline = manifold.build_transform(crop_base=16)
+        pipeline = slice_transform(manifold, crop_base=16)
         torch.manual_seed(0)
         fields = torch.stack(
             [pipeline(torch.randn(1, 320, 320, dtype=torch.complex64) * 3) for _ in range(8)]

@@ -61,7 +61,7 @@ from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
 from cyfm.data import build_dataset, build_geometry_transform
-from cyfm.data.transforms import Compose
+from cyfm.data.transforms import Compose, slice_transform
 from cyfm.flow.couplings import Coupling, build_coupling
 from cyfm.manifolds import build_manifold
 from cyfm.utils.inference import build_model, load_weights, resolve_checkpoint
@@ -286,7 +286,7 @@ def training_pipeline(dataset_cfg: Any, manifold: Any) -> Compose:
     return Compose(
         [
             build_geometry_transform(dataset_cfg.get("crop_size"), crop_base=16),
-            manifold.build_transform(crop_base=16),
+            slice_transform(manifold, crop_base=16),
         ]
     )
 

@@ -13,11 +13,39 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from enum import Enum
 from typing import Any
 
 import torch
 
 from cyfm.core.protocols import Sampler
+
+
+class Representation(Enum):
+    """How a geometry wants a complex field laid out in channels.
+
+    A geometry declares one; :func:`cyfm.data.transforms.slice_transform` turns
+    the declaration into the pipeline. Deliberately not the manifold's ``name``:
+    the complex-diffusion baseline is a different geometry from the Cartesian
+    flow arm but holds its pixels the same way, and one enum member covers both.
+
+    This replaced a pair of ``build_transform`` / ``build_window_transforms``
+    methods on this class. They put the composition inside each geometry, which
+    cost two things. The geometry package had to import the data package, so the
+    contract the paper's comparison rests on depended on the loader. And the
+    composition -- normalise before cropping, one peak per window, the same crop
+    base -- was written out twice, which is precisely the drift the comparison
+    cannot survive: a normalisation that differed between arms would move every
+    absolute number in the tables without failing a test. Declaring the
+    representation and composing it in one place makes that impossible rather
+    than merely discouraged.
+    """
+
+    CYLINDER = "cylinder"
+    """Amplitude and wrapped phase as ``(m, cos phi, sin phi)`` on R+ x S^1."""
+
+    PLANE = "plane"
+    """Real and imaginary parts as ``(Re z, Im z)`` on R^2."""
 
 
 class BaseManifold(ABC):
@@ -28,6 +56,9 @@ class BaseManifold(ABC):
         state_channels: Channels consumed by the state representation
             (e.g. 3 on S^1 x R+, 2 on R^2).
         velocity_channels: Channels emitted as tangent vectors (2 for MRI velocity fields).
+        representation: How this geometry lays a complex field out in channels.
+            Read by :func:`cyfm.data.transforms.slice_transform`, which owns the
+            composition; see :class:`Representation`.
         predicts_velocity: Whether the network's output is a tangent velocity.
             False for an arm that regresses something else -- a score, say -- for
             which path diagnostics defined on a velocity field (straightness, the
@@ -40,6 +71,7 @@ class BaseManifold(ABC):
     state_channels: int
     velocity_channels: int = 2
     predicts_velocity: bool = True
+    representation: Representation
 
     def to(self, device: torch.device) -> BaseManifold:
         """Move any internal modules / buffers to device and return self."""
@@ -228,13 +260,3 @@ class BaseManifold(ABC):
     @abstractmethod
     def from_complex(self, z: torch.Tensor) -> torch.Tensor:
         """Map complex tensor [B, 1, H, W] to manifold state [B, state_channels, H, W]."""
-
-    @abstractmethod
-    def build_transform(self, crop_base: int = 16) -> Callable[[torch.Tensor], torch.Tensor]:
-        """Build data preprocessing transform for single slices."""
-
-    @abstractmethod
-    def build_window_transforms(
-        self, crop_base: int = 16
-    ) -> tuple[Callable[[torch.Tensor], torch.Tensor], Callable[[torch.Tensor], torch.Tensor]]:
-        """Build 2.5D slice and window preprocessing transforms."""

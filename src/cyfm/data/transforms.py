@@ -1,4 +1,11 @@
-"""Preprocessing and transformation pipelines for complex MRI tensors."""
+"""Preprocessing and transformation pipelines for complex MRI tensors.
+
+The two functions at the foot of this module are the *only* place a geometry's
+representation pipeline is composed. Each geometry declares a
+:class:`~cyfm.core.manifold.Representation` and nothing more, which is what keeps
+the two arms of the paper's comparison sharing a preprocessing chain by
+construction rather than by two implementations agreeing to.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +13,7 @@ from collections.abc import Callable
 
 import torch
 
+from cyfm.core.manifold import BaseManifold, Representation
 from cyfm.utils.complex_ops import complex_to_cylinder, complex_to_euclidean
 from cyfm.utils.fft import fft2c, ifft2c
 
@@ -339,3 +347,74 @@ class Compose:
         for t in self.transforms:
             x = t(x)
         return x
+
+
+# What each representation swaps in. Only three parts differ between the arms:
+# the channel layout, the per-slice normaliser and its per-window counterpart.
+# The ordering around them -- normalise before cropping, one peak per window,
+# the same crop base -- is shared, and is stated once below.
+_Transform = Callable[[torch.Tensor], torch.Tensor]
+_TransformFactory = Callable[[], _Transform]
+
+_PIPELINES: dict[Representation, tuple[_TransformFactory, _TransformFactory, _TransformFactory]] = {
+    Representation.CYLINDER: (
+        ComplexToCylinderTransform,
+        AmplitudeNormalize,
+        WindowAmplitudeNormalize,
+    ),
+    Representation.PLANE: (
+        ComplexToEuclideanTransform,
+        EuclideanNormalize,
+        WindowEuclideanNormalize,
+    ),
+}
+
+
+def slice_transform(
+    manifold: BaseManifold, crop_base: int = 16
+) -> Callable[[torch.Tensor], torch.Tensor]:
+    """Build the preprocessing pipeline for single complex slices.
+
+    Normalisation runs before the crop, so every arm divides by a peak modulus
+    taken over the same uncropped slice. Cropping first would give each geometry
+    a different peak and move every absolute number in the tables.
+
+    Args:
+        manifold: The geometry, read only for its
+            :class:`~cyfm.core.manifold.Representation`.
+        crop_base: Divisibility the model's downsampling depth requires.
+
+    Returns:
+        A callable mapping a complex ``[1, H, W]`` slice to a manifold state.
+
+    Raises:
+        KeyError: If the geometry declares a representation with no pipeline.
+    """
+    to_state, normalize, _ = _PIPELINES[manifold.representation]
+    return Compose([to_state(), normalize(), CenterCropModulo(base=crop_base)])
+
+
+def window_transforms(
+    manifold: BaseManifold, crop_base: int = 16
+) -> tuple[Callable[[torch.Tensor], torch.Tensor], Callable[[torch.Tensor], torch.Tensor]]:
+    """Build the 2.5D pair: a per-slice stage and a per-window stage.
+
+    Split where it has to be. The per-slice normaliser would divide each slice by
+    its own peak and flatten the inter-slice brightness the window exists to
+    carry; the window stage takes one peak over the whole stack instead.
+
+    Args:
+        manifold: The geometry, read only for its representation.
+        crop_base: Divisibility the model's downsampling depth requires.
+
+    Returns:
+        ``(slice_stage, window_stage)``, applied in that order.
+
+    Raises:
+        KeyError: If the geometry declares a representation with no pipeline.
+    """
+    to_state, _, window_normalize = _PIPELINES[manifold.representation]
+    return (
+        Compose([to_state()]),
+        Compose([window_normalize(), CenterCropModulo(base=crop_base)]),
+    )

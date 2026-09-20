@@ -36,6 +36,7 @@ import torch
 from omegaconf import OmegaConf
 
 from cyfm.data.stores.knee import KneeStoreDataset
+from cyfm.data.transforms import slice_transform
 from cyfm.manifolds import build_manifold
 from cyfm.utils.metrics import circular_linear_correlation
 
@@ -97,7 +98,7 @@ def amplitudes_and_phases(
         store=args.store,
         role=args.role,
         kspace_crop=size,
-        transform=manifold.build_transform(crop_base=16),
+        transform=slice_transform(manifold, crop_base=16),
     )
     step = max(1, len(dataset) // args.num_fields)
     states = torch.stack([dataset[i] for i in range(0, len(dataset), step)][: args.num_fields])

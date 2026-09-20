@@ -6,26 +6,23 @@ regresses a velocity along a straight bridge, the other a score along a
 variance-exploding SDE -- and in nothing else.
 
 The representation is therefore factored out here rather than written twice.
-``manifolds/base.py`` states the property the side-by-side experiment rests on:
-anything that is not a member of the interface is shared by construction and
-cannot drift between arms. A second copy of ``build_transform`` would be exactly
-such a drift risk, and a silent one: a normalisation that differed between two
-arms would move every absolute number in the table without failing a test.
+:class:`~cyfm.core.manifold.BaseManifold` states the property the side-by-side
+experiment rests on: anything that is not a member of the interface is shared by
+construction and cannot drift between arms.
+
+The preprocessing pipeline used to be built here, and that was the same drift
+risk one level down -- a normalisation differing between two arms would move
+every absolute number in the table without failing a test. It is now declared
+(``representation``) and composed once in
+:func:`cyfm.data.transforms.slice_transform`, so there is no second copy to
+disagree with.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 import torch
 
-from cyfm.data.transforms import (
-    CenterCropModulo,
-    ComplexToEuclideanTransform,
-    Compose,
-    EuclideanNormalize,
-    WindowEuclideanNormalize,
-)
+from cyfm.core.manifold import Representation
 from cyfm.utils.complex_ops import euclidean_to_complex
 
 
@@ -38,6 +35,7 @@ class FlatComplexRepresentation:
     """
 
     velocity_channels: int
+    representation = Representation.PLANE
 
     def exp_map(self, x: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
         """Exponential map on Euclidean space R^2 is vector addition."""
@@ -56,23 +54,6 @@ class FlatComplexRepresentation:
             x.shape[3],
             device=x.device,
             dtype=x.dtype,
-        )
-
-    def build_transform(self, crop_base: int = 16) -> Callable[[torch.Tensor], torch.Tensor]:
-        # Normalise before cropping, exactly as the cylindrical pipeline does, so
-        # every arm divides by a peak modulus taken over the same uncropped slice.
-        return Compose(
-            [ComplexToEuclideanTransform(), EuclideanNormalize(), CenterCropModulo(base=crop_base)]
-        )
-
-    def build_window_transforms(
-        self, crop_base: int = 16
-    ) -> tuple[Callable[[torch.Tensor], torch.Tensor], Callable[[torch.Tensor], torch.Tensor]]:
-        # Same split as the cylindrical arm, and the same peak: one scalar over the
-        # whole window, so every arm hands the 2.5D model the same signal.
-        return (
-            Compose([ComplexToEuclideanTransform()]),
-            Compose([WindowEuclideanNormalize(), CenterCropModulo(base=crop_base)]),
         )
 
     def to_complex(self, state: torch.Tensor) -> torch.Tensor:

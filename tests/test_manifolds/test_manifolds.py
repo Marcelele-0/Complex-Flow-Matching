@@ -14,6 +14,7 @@ import torch
 from omegaconf import OmegaConf
 
 from cyfm.core.manifold import BaseManifold
+from cyfm.data.transforms import slice_transform, window_transforms
 from cyfm.manifolds import (
     CylindricalManifold,
     EuclideanManifold,
@@ -118,7 +119,7 @@ class TestManifoldContract:
 
     def test_transform_produces_state_channels(self, manifold_cls: type) -> None:
         manifold = manifold_cls()
-        state = manifold.build_transform(crop_base=16)(_complex_slice(40, 40))
+        state = slice_transform(manifold, crop_base=16)(_complex_slice(40, 40))
         # 40 -> 32 under the modulo-16 crop.
         assert state.shape == (manifold.state_channels, 32, 32)
 
@@ -127,7 +128,7 @@ class TestManifoldContract:
     ) -> None:
         """PSNR's data_range=1.0 is only meaningful if this holds for every geometry."""
         manifold = manifold_cls()
-        state = manifold.build_transform(crop_base=16)(_complex_slice(32, 32, seed=1))
+        state = slice_transform(manifold, crop_base=16)(_complex_slice(32, 32, seed=1))
         modulus = torch.abs(manifold.to_complex(state.unsqueeze(0)))
 
         assert torch.all(modulus >= 0.0)
@@ -144,7 +145,7 @@ class TestManifoldContract:
         signal cross-slice attention exists to read.
         """
         manifold = manifold_cls()
-        slice_tf, window_tf = manifold.build_window_transforms(crop_base=16)
+        slice_tf, window_tf = window_transforms(manifold, crop_base=16)
 
         # Deliberately unequal slice brightness, brightest last.
         stack = torch.stack([slice_tf(_complex_slice(40, 40, seed=i) * (i + 1)) for i in range(3)])
@@ -229,8 +230,8 @@ class TestSideBySideFairness:
         cyl = CylindricalManifold()
         euc = EuclideanManifold()
 
-        cyl_state = cyl.build_transform(crop_base=16)(slice_.clone())
-        euc_state = euc.build_transform(crop_base=16)(slice_.clone())
+        cyl_state = slice_transform(cyl, crop_base=16)(slice_.clone())
+        euc_state = slice_transform(euc, crop_base=16)(slice_.clone())
 
         cyl_z = cyl.to_complex(cyl_state.unsqueeze(0))
         euc_z = euc.to_complex(euc_state.unsqueeze(0))
@@ -249,7 +250,7 @@ class TestSideBySideFairness:
         slices = [_complex_slice(40, 40, seed=i) * (i + 1) for i in range(3)]
 
         def run(manifold: BaseManifold) -> torch.Tensor:
-            slice_tf, window_tf = manifold.build_window_transforms(crop_base=16)
+            slice_tf, window_tf = window_transforms(manifold, crop_base=16)
             return window_tf(torch.stack([slice_tf(z.clone()) for z in slices]))
 
         cyl, euc = CylindricalManifold(), EuclideanManifold()

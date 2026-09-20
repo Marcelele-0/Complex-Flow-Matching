@@ -1,6 +1,7 @@
 import pytest
 import torch
 
+from cyfm.core.manifold import BaseManifold
 from cyfm.data.transforms import (
     AmplitudeNormalize,
     CenterCropModulo,
@@ -13,6 +14,9 @@ from cyfm.data.transforms import (
     WindowAmplitudeNormalize,
     WindowEuclideanNormalize,
 )
+from cyfm.manifolds.complex_diffusion import ComplexDiffusionManifold
+from cyfm.manifolds.cylindrical import CylindricalManifold
+from cyfm.manifolds.euclidean import EuclideanManifold
 from cyfm.utils.fft import fft2c
 
 
@@ -330,3 +334,53 @@ def test_kspace_center_crop_rejects_nonpositive_size() -> None:
     """A zero or negative target is a config error."""
     with pytest.raises(ValueError, match="crop size must be positive"):
         KSpaceCenterCrop((0, 64))
+
+
+class TestRepresentationPipelines:
+    """Every geometry's declaration must resolve, and resolve to one chain.
+
+    ``slice_transform`` replaced a ``build_transform`` method on each manifold.
+    The gain is that the composition exists once; the new failure mode it
+    introduces is a geometry declaring a representation nothing maps, which would
+    be a ``KeyError`` at the first batch rather than at import. These close that.
+    """
+
+    def test_every_representation_has_a_pipeline(self) -> None:
+        from cyfm.core.manifold import Representation
+        from cyfm.data.transforms import _PIPELINES
+
+        assert set(Representation) == set(_PIPELINES)
+
+    @pytest.mark.parametrize(
+        "manifold_cls", [CylindricalManifold, EuclideanManifold, ComplexDiffusionManifold]
+    )
+    def test_every_manifold_declares_a_mapped_representation(
+        self, manifold_cls: type[BaseManifold]
+    ) -> None:
+        from cyfm.data.transforms import _PIPELINES
+
+        assert manifold_cls.representation in _PIPELINES
+
+    def test_the_two_flat_arms_share_one_representation(self) -> None:
+        """The Cartesian flow arm and the diffusion baseline hold pixels alike.
+
+        This is why the declaration is a representation rather than the
+        manifold's ``name``: two different geometries, one channel layout.
+        """
+        assert EuclideanManifold.representation is ComplexDiffusionManifold.representation
+
+    @pytest.mark.parametrize("manifold_cls", [CylindricalManifold, EuclideanManifold])
+    def test_slice_pipeline_normalises_before_cropping(
+        self, manifold_cls: type[BaseManifold]
+    ) -> None:
+        """Order is the whole point of composing in one place.
+
+        Cropping first would take the peak modulus over a different field of view
+        for each geometry, which moves every absolute number in the tables.
+        """
+        from cyfm.data.transforms import CenterCropModulo, slice_transform
+
+        pipeline = slice_transform(manifold_cls(), crop_base=16)
+        stages = pipeline.transforms  # type: ignore[attr-defined]
+        assert isinstance(stages[-1], CenterCropModulo)
+        assert len(stages) == 3
