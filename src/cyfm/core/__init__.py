@@ -7,7 +7,6 @@ from cyfm.core.manifold import BaseManifold
 from cyfm.core.registry import (
     DATASETS,
     MANIFOLDS,
-    MASKS,
     MODELS,
     SOLVERS,
     Registry,
@@ -20,7 +19,6 @@ __all__ = [
     "MODELS",
     "SOLVERS",
     "DATASETS",
-    "MASKS",
     "BaseManifold",
     "BaseODESolver",
     "BaseComplexDataset",

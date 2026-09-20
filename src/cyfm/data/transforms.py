@@ -260,7 +260,7 @@ class KSpaceCenterCrop:
     and interpolating it would invent detail the measurement never contained.
 
     The block is anchored to the DC bin at ``H // 2`` rather than to the array centre,
-    which is the convention :mod:`cyfm.data.masks` uses for the ACS lines. The two agree
+    which is the convention k-space centre cropping uses. The two agree
     whenever both sizes are even, and the DC-anchored form stays symmetric about DC for odd
     ones as well.
 

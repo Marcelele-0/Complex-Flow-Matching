@@ -1,4 +1,4 @@
-"""Dataset download and verification utilities for SKM-TEA and fastMRI."""
+"""Dataset download and verification utilities for fastMRI."""
 
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ def ensure_dataset_exists(
     """Ensure that the required dataset files exist locally, downloading if absent.
 
     Args:
-        dataset_name: Dataset identifier ('skm_tea', 'skm-tea-mini', or 'fastmri').
+        dataset_name: Dataset identifier; only 'fastmri' is supported.
         data_dir: Path to directory where dataset files should reside.
         mode: Optional sub-mode or split configuration ('local' or 'full' for fastMRI).
 
@@ -70,31 +70,7 @@ def ensure_dataset_exists(
     path = Path(data_dir)
     canonical_name = dataset_name.lower().replace("-", "_")
 
-    if canonical_name in ("skm_tea", "skm_tea_mini"):
-        if path.exists() and len(list(path.glob("*.h5"))) > 0:
-            return
-
-        if snapshot_download is None:
-            raise ImportError(
-                "huggingface_hub is required to download SKM-TEA data. "
-                "Please install it via `pip install huggingface_hub`."
-            )
-
-        logger.info("No SKM-TEA data found in %s. Downloading from Hugging Face Hub...", path)
-        print(
-            f"[Auto-Download] Missing SKM-TEA data in {path}. "
-            "Downloading from Hugging Face Hub..."
-        )
-        target_dir = str(path.parent) if path.name == "v1-release" else str(path)
-        snapshot_download(
-            repo_id="arjundd/skm-tea-mini",
-            repo_type="dataset",
-            local_dir=target_dir,
-        )
-        logger.info("SKM-TEA download complete.")
-        print(f"[Auto-Download] SKM-TEA dataset successfully downloaded to {path}.")
-
-    elif canonical_name == "fastmri":
+    if canonical_name == "fastmri":
         if path.exists() and len(list(path.glob("**/*.h5"))) > 0:
             return
 
@@ -155,17 +131,8 @@ def ensure_dataset_exists(
     else:
         raise ValueError(
             f"Unsupported dataset for auto-download: {dataset_name!r}. "
-            "Supported datasets are 'skm_tea' and 'fastmri'."
+            "The only supported dataset is 'fastmri'."
         )
-
-
-def ensure_skm_tea_mini(data_dir: str | Path) -> None:
-    """Ensure SKM-TEA-mini dataset is downloaded and available.
-
-    Args:
-        data_dir: Directory where dataset files should reside.
-    """
-    ensure_dataset_exists(dataset_name="skm_tea", data_dir=data_dir)
 
 
 def ensure_fastmri(data_dir: str | Path, mode: str = "local") -> None:

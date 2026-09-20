@@ -9,7 +9,6 @@ import pytest
 from cyfm.data.download import (
     ensure_dataset_exists,
     ensure_fastmri,
-    ensure_skm_tea_mini,
     load_env,
 )
 
@@ -40,21 +39,6 @@ class TestDownloadUtilities:
     def test_ensure_dataset_exists_unsupported(self, tmp_path) -> None:
         with pytest.raises(ValueError, match="Unsupported dataset"):
             ensure_dataset_exists("invalid_cohort", tmp_path)
-
-    def test_ensure_skm_tea_existing_data_skips(self, tmp_path) -> None:
-        (tmp_path / "slice_001.h5").touch()
-        with patch("cyfm.data.download.snapshot_download") as mock_hf:
-            ensure_dataset_exists("skm_tea", tmp_path)
-            mock_hf.assert_not_called()
-
-    def test_ensure_skm_tea_calls_snapshot_download(self, tmp_path) -> None:
-        with patch("cyfm.data.download.snapshot_download") as mock_hf:
-            ensure_dataset_exists("skm_tea", tmp_path)
-            mock_hf.assert_called_once_with(
-                repo_id="arjundd/skm-tea-mini",
-                repo_type="dataset",
-                local_dir=str(tmp_path),
-            )
 
     def test_ensure_fastmri_existing_data_skips(self, tmp_path) -> None:
         sub = tmp_path / "subdir"
@@ -95,10 +79,6 @@ class TestDownloadUtilities:
 
     def test_backward_compatible_wrappers(self, tmp_path) -> None:
         (tmp_path / "dummy.h5").touch()
-        with patch("cyfm.data.download.ensure_dataset_exists") as mock_ensure:
-            ensure_skm_tea_mini(tmp_path)
-            mock_ensure.assert_called_once_with(dataset_name="skm_tea", data_dir=tmp_path)
-
         with patch("cyfm.data.download.ensure_dataset_exists") as mock_ensure:
             ensure_fastmri(tmp_path, mode="full")
             mock_ensure.assert_called_once_with(

@@ -131,7 +131,7 @@ def main(cfg: DictConfig) -> None:
     manifold = build_manifold(cfg).to(device)
 
     # --- Data Pipeline ---
-    data_dir = cfg.get("dataset", {}).get("data_dir", "../data/skm-tea-mini/v1-release")
+    data_dir = cfg.get("dataset", {}).get("data_dir", None)
     num_slices = cfg.get("dataset", {}).get("num_slices", 1)
     model_name = cfg.get("model", {}).get("name", "c_unet")
 
@@ -204,9 +204,7 @@ def main(cfg: DictConfig) -> None:
             from cyfm.data.download import ensure_dataset_exists
 
             data_dir_str = str(data_dir)
-            if "skm-tea-mini" in data_dir_str:
-                ensure_dataset_exists("skm_tea", data_dir)
-            elif "fastmri_local" in data_dir_str:
+            if "fastmri_local" in data_dir_str:
                 ensure_dataset_exists("fastmri", data_dir, mode="local")
             elif "fastmri_full" in data_dir_str:
                 ensure_dataset_exists("fastmri", data_dir, mode="full")

@@ -11,13 +11,11 @@ from cyfm.core.manifold import BaseManifold
 from cyfm.core.registry import (
     DATASETS,
     MANIFOLDS,
-    MASKS,
     MODELS,
     SOLVERS,
     Registry,
 )
 from cyfm.core.solver import BaseODESolver
-from cyfm.data.masks import BaseMaskGenerator
 
 
 def test_registry_basic_operations() -> None:
@@ -107,9 +105,7 @@ def test_registry_missing_key_error() -> None:
 
 def test_core_registries_populated() -> None:
     """Verify built-in CFM components are registered in their respective registries."""
-    import cyfm.data.dataset  # noqa: F401
     import cyfm.data.fastmri  # noqa: F401
-    import cyfm.data.masks  # noqa: F401
     import cyfm.flow.euclidean_solver  # noqa: F401
     import cyfm.flow.solver  # noqa: F401
     import cyfm.manifolds.cylindrical  # noqa: F401
@@ -134,13 +130,6 @@ def test_core_registries_populated() -> None:
     assert issubclass(cast(type, SOLVERS.get("euclidean")), BaseODESolver)
 
     # DATASETS
-    assert "skm_tea" in DATASETS
-    assert issubclass(cast(type, DATASETS.get("skm_tea")), BaseComplexDataset)
     assert "fastmri" in DATASETS
     assert issubclass(cast(type, DATASETS.get("fastmri")), BaseComplexDataset)
 
-    # MASKS
-    assert "cartesian" in MASKS
-    assert "poisson_disc" in MASKS
-    assert issubclass(cast(type, MASKS.get("cartesian")), BaseMaskGenerator)
-    assert issubclass(cast(type, MASKS.get("poisson_disc")), BaseMaskGenerator)

@@ -23,7 +23,7 @@ def load_split_file_names(
     """Read the COCO-style manifest for ``split`` and return its ``.h5`` basenames.
 
     Args:
-        data_dir: Dataset root, the same one handed to :class:`SKMTEADataset`.
+        data_dir: Dataset root, the same one handed to the dataset.
         split: Manifest name (``"train"``, ``"val"``, ``"test"``), or ``None`` for
             every file in ``data_dir``, the escape hatch for a directory with no
             ``annotations/``.
@@ -75,7 +75,7 @@ def select_indices(
     """Pick the dataset indices belonging to a split.
 
     Args:
-        slice_map: :attr:`SKMTEADataset.slice_map`, one ``(file_path, slice_idx)``
+        slice_map: A dataset's ``slice_map``, one ``(file_path, slice_idx)``
             per slice in dataset order.
         file_names: ``.h5`` basenames to keep, or ``None`` to keep everything.
         max_samples: Optional cap, applied by striding rather than truncation.

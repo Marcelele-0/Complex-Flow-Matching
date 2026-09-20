@@ -1,4 +1,4 @@
-"""Data loading, caching, transforms, and splits for complex MRI datasets."""
+"""Data loading, caching, transforms and splits for complex-valued fields."""
 
 from __future__ import annotations
 
@@ -10,16 +10,10 @@ import torch
 
 from cyfm.core.dataset import BaseComplexDataset
 from cyfm.core.registry import DATASETS
-from cyfm.data.dataset import SKMTEADataset
 from cyfm.data.espirit import compute_espirit_maps, ensure_espirit_maps, process_h5_file
 from cyfm.data.fastmri import FastMRIDataset
 from cyfm.data.knee_store import KneeStoreDataset
 from cyfm.data.hdf5_manager import WorkerHDF5Manager
-from cyfm.data.masks import (
-    BaseMaskGenerator,
-    CartesianMaskGenerator,
-    PoissonDiscMaskGenerator,
-)
 from cyfm.data.splits import load_split_file_names, select_indices
 from cyfm.data.stft import DEFAULT_STFT, StftProtocol, forward_stft, inverse_stft
 from cyfm.data.stft_store import StftStoreDataset
@@ -43,7 +37,7 @@ from cyfm.utils.config import as_plain_dict
 # rather than passed to the dataset constructor.
 _ENTRY_POINT_KEYS = frozenset({"name", "split", "crop_size"})
 
-DEFAULT_DATASET = "skm_tea"
+DEFAULT_DATASET = "cylinder_toy_field"
 
 
 def build_geometry_transform(
@@ -53,8 +47,7 @@ def build_geometry_transform(
     """Build the shape-only transform every entry point applies to complex slices.
 
     Kept separate from the manifold's representation pipeline because it has to run
-    on the complex tensor, and because in reconstruction mode it is handed to the
-    dataset as ``pre_transform``, where the sensitivity maps are cropped to match it.
+    on the complex tensor, before the geometry decides how to represent it.
 
     Args:
         crop_size: Fixed ``(H, W)`` output, or ``None`` to only enforce divisibility.
@@ -77,7 +70,7 @@ def build_dataset(
     """Instantiate the configured dataset through the :data:`DATASETS` registry.
 
     Every entry point resolves its dataset here so that ``dataset=<group>`` selects
-    the same class in ``train.py``, ``evaluate.py`` and ``reconstruct.py``, and so
+    the same class in ``train.py`` and ``evaluate.py``, and so
     that registering a class is what makes it reachable rather than a hardcoded
     branch that has to be updated in three places.
 
@@ -122,9 +115,6 @@ def build_dataset(
 
 __all__ = [
     "DEFAULT_DATASET",
-    "BaseMaskGenerator",
-    "CartesianMaskGenerator",
-    "PoissonDiscMaskGenerator",
     "AmplitudeNormalize",
     "CenterCropModulo",
     "CenterCropOrPad",
@@ -142,7 +132,6 @@ __all__ = [
     "DEFAULT_STFT",
     "forward_stft",
     "inverse_stft",
-    "SKMTEADataset",
     "WindowAmplitudeNormalize",
     "WindowEuclideanNormalize",
     "WorkerHDF5Manager",
