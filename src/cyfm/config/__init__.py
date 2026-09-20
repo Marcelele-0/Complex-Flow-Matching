@@ -11,5 +11,22 @@ from __future__ import annotations
 
 from cyfm.config.adapters import manifold_from_config
 from cyfm.config.resolve import as_plain_dict
+from cyfm.config.schema import (
+    EvaluateConfig,
+    LoggingConfig,
+    PathsConfig,
+    RunConfig,
+    SchedulerConfig,
+    TrainingConfig,
+)
 
-__all__ = ["as_plain_dict", "manifold_from_config"]
+__all__ = [
+    "EvaluateConfig",
+    "LoggingConfig",
+    "PathsConfig",
+    "RunConfig",
+    "SchedulerConfig",
+    "TrainingConfig",
+    "as_plain_dict",
+    "manifold_from_config",
+]
