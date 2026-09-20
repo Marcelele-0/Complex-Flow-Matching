@@ -34,8 +34,6 @@ data/*
 # Output files
 outputs/
 wandb/
-manim/outputs/
-manim/media/
 
 # Editors / IDE
 .idea/

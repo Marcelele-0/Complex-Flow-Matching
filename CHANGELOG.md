@@ -24,10 +24,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   packages the still-eager import graph forces (`h5py`, `hydra-core`, `tqdm`,
   `python-dotenv`). Everything else moved behind extras (`mri`, `fastmri`, `espirit`,
   `audio`, `logging`, `viz`) or into dependency groups.
-- Moved `manim` out of the default development group into the `viz` extra. It pulls in
-  `pycairo`, which needs a system `cairo` and `pkg-config`; on a machine without them
-  `uv sync` failed outright, so the project could not be installed at all. `manim` is
-  imported nowhere outside `manim/`.
 - Moved the Jupyter stack into its own `notebooks` group: the jupytext pre-commit hooks
   need it, the test suite does not.
 
@@ -63,6 +59,15 @@ reconstruction problem. None of it backed a number in the paper.
 - `torchvision` and `torchdiffeq` from the dependencies. Neither is imported anywhere
   in the repository.
 - `plotly` from the development group, for the same reason.
+- **The `manim` figure pipeline**: `manim/scenes/flow_viz.py`, which draws the two
+  panels of the teaser schematic, `manim/scripts/crop_figures.py`, which trims and
+  size-matches them, and both `manim.cfg` files. With them go the `manim` and `pillow`
+  dependencies; `manim` pulls in `pycairo`, which needs a system `cairo` and
+  `pkg-config`, so its removal is also what lets the project install on a machine that
+  has neither. The rendered panels themselves stay: `paper/ICLR Main/figures/`
+  continues to hold `EuclideanFlow_cropped.png` and `CylindricalFlow_cropped.png`, so
+  the paper still builds, but Figure 1 no longer has a generator in this repository and
+  can only be edited as an image.
 
 ### Fixed
 
@@ -76,8 +81,6 @@ reconstruction problem. None of it backed a number in the paper.
   filed fastMRI under "Not part of the paper", while the paper rests on three domains.
   `conf/experiment/README.md` omitted both real-data experiments, and
   `docs/reproduce/paper_results/README.md` omitted both knee archives.
-- Declared `pillow`, which `manim/scripts/crop_figures.py` imports and which was
-  previously pulled in only transitively through `matplotlib`.
 - Dropped two `ruff` exclusions naming `scripts/generate_figure2*.py` and
   `scripts/glue_figure2*.py`; neither file exists.
 - Pinned the `ruff` pre-commit hook to v0.16.5, the version the project resolves. The

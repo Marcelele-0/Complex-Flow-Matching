@@ -91,14 +91,10 @@ audio = [
 logging = [
     "wandb>=0.25.1",
 ]
-# Figure generation only. manim drags in pycairo, which needs a system cairo and
-# pkg-config; keeping it out of the default groups is what lets the project be
-# installed on a machine that has neither. Pillow was previously undeclared even
-# though manim/scripts/crop_figures.py imports it.
+# Figure generation only: the sample panels and the diagnostic plots the network-free
+# probes draw. Kept out of the default groups so a training install stays small.
 viz = [
-    "manim>=0.21.0",
     "matplotlib>=3.10.8",
-    "pillow>=10.0.0",
 ]
 
 [dependency-groups]
@@ -126,7 +122,6 @@ exclude = [
     "build",
     "dist",
     "data",
-    "manim",
 ]
 
 [tool.ruff.lint]
