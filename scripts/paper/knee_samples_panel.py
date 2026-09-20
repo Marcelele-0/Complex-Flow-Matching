@@ -5,9 +5,10 @@ shows none of them. Every entry of Table 5 is a summary statistic, and a reader 
 to know what "reproduces the reference's amplitude texture twice as closely" looks like has
 to take it on trust. This draws the panel that lets them check.
 
-Real fields come from the held-out store through :func:`cyfm.evaluate.training_pipeline`,
-which is the transform training applied, so the comparison is between fields living in one
-domain -- the same reason that function exists rather than a hand-built ``Compose`` here.
+Real fields come from the held-out store through
+:func:`cyfm.pipelines.evaluation.training_pipeline`, which is the transform training
+applied, so the comparison is between fields living in one domain -- the same reason
+that function exists rather than a hand-built ``Compose`` here.
 Generated fields come from a checkpoint resolved by run name and are drawn with the
 manifold's own solver at the requested step counts, with one shared prior seed across arms
 so a difference in the picture is a difference in the model and not in the noise.
@@ -39,8 +40,8 @@ from omegaconf import DictConfig, OmegaConf  # noqa: E402
 from torch.utils.data import DataLoader, Subset  # noqa: E402
 
 from cyfm.data import build_dataset  # noqa: E402
-from cyfm.evaluate import training_pipeline  # noqa: E402
 from cyfm.manifolds import build_manifold  # noqa: E402
+from cyfm.pipelines.evaluation import training_pipeline  # noqa: E402
 from cyfm.utils.inference import build_model, load_weights  # noqa: E402
 
 # The two arms of the knee 64x64 block whose checkpoints are in the repository, with the

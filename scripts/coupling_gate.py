@@ -52,7 +52,6 @@ from cyfm.data.synthetic import (
     COUPLING_PRESETS,
     CylinderToy,
     Structure,
-    circular_linear_correlation,
     cylinder_prior,
 )
 from cyfm.flow.transport import (
@@ -62,6 +61,7 @@ from cyfm.flow.transport import (
     transport_cost,
     wasserstein2_cylinder,
 )
+from cyfm.metrics import circular_linear_correlation
 
 # Typed as the Literal the toy accepts, not as bare str: iterating an untyped
 # tuple hands CylinderToy a widened `str` and loses the only check that the

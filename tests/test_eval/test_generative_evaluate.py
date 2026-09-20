@@ -10,8 +10,8 @@ import torch
 
 from cyfm.config.adapters import manifold_from_config
 from cyfm.data.toy import CylinderToyIIDDataset
-from cyfm.evaluate import assert_training_domain, format_table
 from cyfm.manifolds.euclidean import EuclideanManifold
+from cyfm.pipelines.evaluation import assert_training_domain, format_table
 
 
 def _generator(seed: int = 0) -> torch.Generator:
@@ -52,8 +52,8 @@ def _straightness_setup() -> tuple[object, object, torch.Tensor]:
 
 def test_independent_coupling_reproduces_the_uncoupled_straightness() -> None:
     """Passing the baseline coupling explicitly must not change the number."""
-    from cyfm.evaluate import straightness
     from cyfm.flow.couplings import IndependentCoupling
+    from cyfm.metrics import straightness
 
     manifold, model, data = _straightness_setup()
     cpu = torch.device("cpu")
@@ -71,8 +71,8 @@ def test_independent_coupling_reproduces_the_uncoupled_straightness() -> None:
 
 def test_ot_coupling_changes_the_pairs_that_are_scored() -> None:
     """An OT-trained model is scored on OT pairs, which are not the drawn pairs."""
-    from cyfm.evaluate import straightness
     from cyfm.flow.couplings import OptimalTransportCoupling
+    from cyfm.metrics import straightness
 
     manifold, model, data = _straightness_setup()
     cpu = torch.device("cpu")
@@ -100,7 +100,7 @@ def test_reference_goes_through_the_training_normalisation(geometry: str) -> Non
     """
     from omegaconf import OmegaConf
 
-    from cyfm.evaluate import training_pipeline
+    from cyfm.pipelines.evaluation import training_pipeline
 
     manifold = manifold_from_config(
         OmegaConf.create({"manifold": {"name": geometry}, "training": {"loss": {}}})
@@ -188,8 +188,8 @@ def test_straightness_is_chunk_invariant_for_a_degenerate_model() -> None:
     1 whatever the chunk size. That pins the sums and means across chunks, which is
     the part chunking could get wrong; the draws themselves differ by construction.
     """
-    from cyfm.evaluate import straightness
     from cyfm.manifolds import CylindricalManifold
+    from cyfm.metrics import straightness
 
     manifold = CylindricalManifold()
     device = torch.device("cpu")

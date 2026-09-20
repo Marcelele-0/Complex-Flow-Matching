@@ -59,9 +59,9 @@ from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
 from cyfm.data import build_dataset
-from cyfm.evaluate import training_pipeline
 from cyfm.manifolds import build_manifold
 from cyfm.metrics import generative_metrics
+from cyfm.pipelines.evaluation import training_pipeline
 
 
 def parse_args() -> argparse.Namespace:

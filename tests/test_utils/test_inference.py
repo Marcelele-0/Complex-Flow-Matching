@@ -131,3 +131,53 @@ class TestLoadWeights:
         x, t = torch.rand(1, 3, 16, 16), torch.rand(1)
         with torch.no_grad():
             assert torch.allclose(source.eval()(x, t), target(x, t))
+
+
+class TestExplicitCheckpointPath:
+    """``evaluate.checkpoint_path`` was declared in the config and read by nothing.
+
+    Setting it was silently ignored: the glob ran anyway, so a run that asked to
+    score one checkpoint could score whichever ``.pt`` under the run directory
+    happened to be newest.
+    """
+
+    def test_an_explicit_path_wins_over_the_glob(self, tmp_path) -> None:
+        globbed = tmp_path / "outputs" / "train" / "my_run" / "checkpoints"
+        globbed.mkdir(parents=True)
+        (globbed / "checkpoint_epoch_99.pt").write_bytes(b"newer")
+
+        wanted = tmp_path / "picked.pt"
+        wanted.write_bytes(b"the one asked for")
+
+        cfg = OmegaConf.create({"evaluate": {"run_name": "my_run", "checkpoint_path": str(wanted)}})
+        assert resolve_checkpoint(cfg, "evaluate", str(tmp_path)) == str(wanted)
+
+    def test_a_relative_path_anchors_to_the_launch_directory(self, tmp_path) -> None:
+        """Hydra moves the working directory, so a relative path must not follow it."""
+        (tmp_path / "ckpt").mkdir()
+        (tmp_path / "ckpt" / "a.pt").write_bytes(b"x")
+        cfg = OmegaConf.create({"evaluate": {"checkpoint_path": "ckpt/a.pt"}})
+        resolved = resolve_checkpoint(cfg, "evaluate", str(tmp_path))
+        assert resolved == os.path.join(str(tmp_path), "ckpt/a.pt")
+
+    def test_a_missing_explicit_path_fails_rather_than_falling_back(self, tmp_path) -> None:
+        """Falling back would score a different checkpoint than the one requested."""
+        globbed = tmp_path / "outputs" / "train" / "my_run" / "checkpoints"
+        globbed.mkdir(parents=True)
+        (globbed / "checkpoint_epoch_1.pt").write_bytes(b"x")
+
+        cfg = OmegaConf.create(
+            {"evaluate": {"run_name": "my_run", "checkpoint_path": str(tmp_path / "gone.pt")}}
+        )
+        with pytest.raises(FileNotFoundError, match="checkpoint_path does not exist"):
+            resolve_checkpoint(cfg, "evaluate", str(tmp_path))
+
+    def test_a_null_path_still_globs(self, tmp_path) -> None:
+        """The shipped default is null, so the glob must remain the normal route."""
+        ckpt_dir = tmp_path / "outputs" / "train" / "my_run" / "checkpoints"
+        ckpt_dir.mkdir(parents=True)
+        expected = ckpt_dir / "checkpoint_epoch_1.pt"
+        expected.write_bytes(b"x")
+
+        cfg = OmegaConf.create({"evaluate": {"run_name": "my_run", "checkpoint_path": None}})
+        assert resolve_checkpoint(cfg, "evaluate", str(tmp_path)) == str(expected)

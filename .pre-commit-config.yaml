@@ -28,11 +28,17 @@ repos:
   # Run through uv rather than mirrors-mypy. The mirror installs mypy into its own
   # isolated environment without the project's dependencies, so it saw DictConfig and
   # every torch type as Any and checked almost nothing. This hook sees what CI sees.
+  #
+  # scripts/ is included: it holds the paper's network-free probes, and it was not
+  # covered, which is how scripts/coupling_gate.py -- the Table 4 measurement -- kept
+  # an import that had been moved out from under it. tests/ is deliberately left out;
+  # it builds ill-typed doubles on purpose, and making those type-check would make
+  # them worse tests.
   - repo: local
     hooks:
       - id: mypy
         name: mypy (project environment)
-        entry: uv run mypy src/
+        entry: uv run mypy src/ scripts/
         language: system
         types: [python]
         pass_filenames: false

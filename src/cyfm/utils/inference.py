@@ -119,29 +119,46 @@ def find_latest_checkpoint(base_dir: str = "outputs/train") -> str | None:
 
 
 def resolve_checkpoint(cfg: Mapping[str, Any], section: str, orig_cwd: str) -> str:
-    """Locate the checkpoint for the run named in ``cfg[section].run_name``.
+    """Locate the checkpoint this run should score.
 
-    Falls back to ``cfg.logging.experiment_name`` when the section sets no
-    ``run_name``, then searches ``outputs/train/{run_name}/`` where ``train.py``
-    writes.
+    Three sources, in order. An explicit ``checkpoint_path`` wins; otherwise the
+    section's ``run_name`` names a run directory, falling back to
+    ``logging.experiment_name``, and the newest ``.pt`` under
+    ``outputs/train/{run_name}/`` is taken.
+
+    ``checkpoint_path`` was declared in ``conf/evaluate/default.yaml`` and read by
+    nothing: setting it was silently ignored and the glob ran anyway, so a run
+    that asked to score one checkpoint could score a different one.
 
     Args:
-        cfg: Full Hydra config.
-        section: Config section holding ``run_name``, e.g. ``"generate"`` or
-            ``"evaluate"``. Only used to read the key and to name it in errors.
+        cfg: Full config.
+        section: Config section holding the keys, e.g. ``"evaluate"``. Only used
+            to read them and to name the section in errors.
         orig_cwd: ``hydra.utils.get_original_cwd()``; Hydra moves the working
-            directory to the run output dir, so paths must be anchored to this.
+            directory to the run output dir, so paths are anchored to this.
 
     Returns:
         Path to the checkpoint.
 
     Raises:
         ValueError: If no run name can be resolved from either place.
-        FileNotFoundError: If the run directory holds no ``.pt`` file.
+        FileNotFoundError: If an explicit ``checkpoint_path`` does not exist, or
+            the run directory holds no ``.pt`` file.
     """
-    run_name = cfg.get(section, {}).get("run_name")
+    settings = cfg.get(section) or {}
+
+    explicit = settings.get("checkpoint_path")
+    if explicit:
+        # Relative to where the user launched, not to Hydra's run directory.
+        path = explicit if os.path.isabs(explicit) else os.path.join(orig_cwd, explicit)
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f"{section}.checkpoint_path does not exist: {path}")
+        print(f"Using {section}.checkpoint_path: {path}")
+        return str(path)
+
+    run_name = settings.get("run_name")
     if not run_name:
-        run_name = cfg.get("logging", {}).get("experiment_name")
+        run_name = (cfg.get("logging") or {}).get("experiment_name")
     if not run_name:
         raise ValueError(
             f"No run_name in {section} config and no experiment_name in logging config"
