@@ -1,18 +1,4 @@
 repos:
-  - repo: local
-    hooks:
-      # jupytext expands the glob itself, so no shell is involved and this works
-      # the same on Windows as on Unix. A pattern matching nothing is a no-op,
-      # which matters because notebooks/*.ipynb is gitignored and absent in a
-      # fresh clone.
-      - id: jupytext-pre
-        name: Jupytext generate .py from .ipynb
-        entry: uv run jupytext --sync notebooks/**/*.ipynb
-        language: system
-        always_run: true
-        pass_filenames: false
-        stages: [pre-commit]
-
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
@@ -58,12 +44,3 @@ repos:
       - id: conventional-pre-commit
         stages: [commit-msg]
 
-  - repo: local
-    hooks:
-      - id: jupytext-post
-        name: Jupytext sync .py back to .ipynb
-        entry: uv run jupytext --sync notebooks/**/*.py
-        language: system
-        always_run: true
-        pass_filenames: false
-        stages: [pre-commit]

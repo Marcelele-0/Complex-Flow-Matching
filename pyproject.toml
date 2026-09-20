@@ -116,15 +116,7 @@ dev = [
     "soundfile>=0.13.1",
     "wandb>=0.25.1",
     "huggingface-hub>=1.30.0",
-    "jupytext>=1.16.0",
 ]
-# The heavy notebook runtime. jupytext itself stays in dev because a pre-commit
-# hook invokes it on every commit; they are not needed to run the tests.
-notebooks = [
-    "ipywidgets>=8.1.8",
-    "jupyter>=1.1.1",
-]
-
 [tool.ruff]
 target-version = "py311"
 line-length = 100
@@ -134,7 +126,6 @@ exclude = [
     "build",
     "dist",
     "data",
-    "notebooks",
     "manim",
 ]
 
@@ -144,12 +135,6 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.ruff.lint.isort]
 combine-as-imports = true
 known-first-party = ["cyfm"]
-
-[tool.ruff.lint.per-file-ignores]
-"notebooks/**/*.py" = ["E402", "B018"]
-
-[tool.jupytext]
-formats = "ipynb,py:percent"
 
 [tool.mypy]
 python_version = "3.11"

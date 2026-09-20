@@ -37,11 +37,6 @@ wandb/
 manim/outputs/
 manim/media/
 
-# Notebooks
-.ipynb_checkpoints/
-notebooks/*.ipynb
-notebooks/presentation
-
 # Editors / IDE
 .idea/
 .vscode/
