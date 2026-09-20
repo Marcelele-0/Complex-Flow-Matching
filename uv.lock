@@ -881,10 +881,10 @@ viz = [
 [package.dev-dependencies]
 dev = [
     { name = "huggingface-hub" },
+    { name = "jupytext" },
     { name = "matplotlib" },
     { name = "mypy" },
     { name = "nibabel" },
-    { name = "pandas" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "ruff" },
@@ -896,7 +896,6 @@ dev = [
 notebooks = [
     { name = "ipywidgets" },
     { name = "jupyter" },
-    { name = "jupytext" },
 ]
 
 [package.metadata]
@@ -922,10 +921,10 @@ provides-extras = ["mri", "fastmri", "espirit", "audio", "logging", "viz"]
 [package.metadata.requires-dev]
 dev = [
     { name = "huggingface-hub", specifier = ">=1.30.0" },
+    { name = "jupytext", specifier = ">=1.16.0" },
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "mypy", specifier = ">=2.3.1" },
     { name = "nibabel", specifier = ">=5.4.2" },
-    { name = "pandas", specifier = ">=2.2.0" },
     { name = "pre-commit", specifier = ">=4.5.0" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "ruff", specifier = ">=0.16.5" },
@@ -937,7 +936,6 @@ dev = [
 notebooks = [
     { name = "ipywidgets", specifier = ">=8.1.8" },
     { name = "jupyter", specifier = ">=1.1.1" },
-    { name = "jupytext", specifier = ">=1.16.0" },
 ]
 
 [[package]]

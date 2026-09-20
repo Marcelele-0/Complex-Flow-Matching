@@ -103,8 +103,7 @@ viz = [
 
 [dependency-groups]
 # What a contributor needs to run the suite, the linters and the repository's scripts.
-# pandas and nibabel are each reached by exactly one place: pandas by
-# src/cyfm/eval/stats.py, nibabel by one test.
+# nibabel is reached by exactly one test.
 dev = [
     "pytest>=9.0.2",
     "ruff>=0.16.5",
@@ -112,7 +111,6 @@ dev = [
     "pre-commit>=4.5.0",
     "types-tqdm>=4.70.0.20260827",
     "matplotlib>=3.10.8",
-    "pandas>=2.2.0",
     "nibabel>=5.4.2",
     "sigpy>=0.1.27",
     "soundfile>=0.13.1",
@@ -163,5 +161,3 @@ Homepage = "https://github.com/Marcelele-0/Complex-Flow-Matching"
 Repository = "https://github.com/Marcelele-0/Complex-Flow-Matching"
 Issues = "https://github.com/Marcelele-0/Complex-Flow-Matching/issues"
 
-[project.scripts]
-cfmri-stats = "cyfm.eval.stats:cli_main"
