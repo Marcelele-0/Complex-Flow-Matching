@@ -13,12 +13,12 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
+from cyfm.config.adapters import manifold_from_config
 from cyfm.core.manifold import BaseManifold
 from cyfm.data.transforms import slice_transform, window_transforms
 from cyfm.manifolds import (
     CylindricalManifold,
     EuclideanManifold,
-    build_manifold,
 )
 from cyfm.manifolds.cylindrical import sample_cylindrical_noise
 from cyfm.manifolds.euclidean import sample_matched_noise
@@ -40,7 +40,7 @@ def _complex_slice(h: int, w: int, seed: int = 0) -> torch.Tensor:
 class TestRegistry:
     def test_defaults_to_cylindrical(self) -> None:
         """A config predating the manifold group must behave exactly as it did."""
-        manifold = build_manifold(OmegaConf.create({}))
+        manifold = manifold_from_config(OmegaConf.create({}))
         assert isinstance(manifold, CylindricalManifold)
 
     @pytest.mark.parametrize(
@@ -48,20 +48,22 @@ class TestRegistry:
         [("cylindrical", CylindricalManifold), ("euclidean", EuclideanManifold)],
     )
     def test_builds_the_named_geometry(self, name: str, expected: type) -> None:
-        manifold = build_manifold(OmegaConf.create({"manifold": {"name": name}}))
+        manifold = manifold_from_config(OmegaConf.create({"manifold": {"name": name}}))
         assert isinstance(manifold, expected)
 
     def test_unknown_name_raises(self) -> None:
         cfg = OmegaConf.create({"manifold": {"name": "klein_bottle"}})
         with pytest.raises(ValueError, match="Unknown manifold name"):
-            build_manifold(cfg)
+            manifold_from_config(cfg)
 
     def test_loss_config_reaches_both_geometries_from_training_loss(self) -> None:
         """`training.loss.*` overrides must keep working across the manifold switch."""
         loss_cfg = {"training": {"loss": {"phase_loss_type": "l2", "vel_loss_type": "l2"}}}
 
-        cyl = build_manifold(OmegaConf.create({"manifold": {"name": "cylindrical"}} | loss_cfg))
-        euc = build_manifold(OmegaConf.create({"manifold": {"name": "euclidean"}} | loss_cfg))
+        cyl = manifold_from_config(
+            OmegaConf.create({"manifold": {"name": "cylindrical"}} | loss_cfg)
+        )
+        euc = manifold_from_config(OmegaConf.create({"manifold": {"name": "euclidean"}} | loss_cfg))
 
         # build_manifold is typed to the ABC, which owns no loss object. Narrowing
         # to the concrete geometry makes the reads below checkable, and pins that
@@ -80,15 +82,15 @@ class TestRegistry:
                 "training": {"loss": {"vel_loss_type": "mse"}},
             }
         )
-        manifold = build_manifold(cfg)
+        manifold = manifold_from_config(cfg)
 
         assert isinstance(manifold, EuclideanManifold)
         assert manifold.noise_prior == "gaussian"
         assert manifold._loss.loss_type == "mse"
 
     def test_cylindrical_reads_phase_amplitude_weighting(self) -> None:
-        default = build_manifold(OmegaConf.create({"manifold": {"name": "cylindrical"}}))
-        off = build_manifold(
+        default = manifold_from_config(OmegaConf.create({"manifold": {"name": "cylindrical"}}))
+        off = manifold_from_config(
             OmegaConf.create(
                 {
                     "manifold": {"name": "cylindrical"},
@@ -269,7 +271,7 @@ class TestSideBySideFairness:
         test exists so that decision cannot drift back silently.
         """
         assert EuclideanManifold().noise_prior == "uniform"
-        built = build_manifold(OmegaConf.create({"manifold": {"name": "euclidean"}}))
+        built = manifold_from_config(OmegaConf.create({"manifold": {"name": "euclidean"}}))
         assert isinstance(built, EuclideanManifold)
         assert built.noise_prior == "uniform"
 
@@ -386,9 +388,6 @@ class TestSideBySideFairness:
                 "model": {
                     "name": model_name,
                     "base_channels": 8,
-                    "channel_mults": [1, 2],
-                    "use_attention": True,
-                    "attn_heads": 2,
                 }
             }
         )
@@ -429,9 +428,6 @@ class TestSideBySideFairness:
                 "model": {
                     "name": model_name,
                     "base_channels": 8,
-                    "channel_mults": [1, 2],
-                    "use_attention": True,
-                    "attn_heads": 2,
                 }
             }
         )

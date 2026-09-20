@@ -15,17 +15,23 @@ imported, so the crutch is gone.
 from __future__ import annotations
 
 import glob
+import inspect
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 import torch
-from omegaconf import DictConfig
 
+from cyfm.config.resolve import as_plain_dict
 from cyfm.core.registry import MODELS
+
+#: Architecture used when the config names none, matching ``conf/model/``'s root
+#: default. Stated once so the entry point and this builder cannot disagree.
+DEFAULT_MODEL = "c_unet"
 
 
 def build_model(
-    cfg: DictConfig,
+    cfg: Mapping[str, Any],
     device: torch.device,
     in_channels: int = 3,
     out_channels: int = 2,
@@ -33,10 +39,17 @@ def build_model(
 ) -> torch.nn.Module:
     """Instantiate the architecture named by ``cfg.model.name``, on ``device``.
 
-    Uses the MODELS registry to resolve and instantiate architectures.
+    Every key of the ``model`` group except ``name`` is forwarded to the
+    constructor, filtered by what that constructor accepts. There is no branch
+    per architecture: registering a class is what makes it reachable.
+
+    ``velocity_bound`` is forwarded on the same terms. It is a property of the
+    geometry rather than of the config, so it cannot come from the group, and it
+    reaches only an architecture that declares it -- the U-Net does, the
+    pointwise MLP does not.
 
     Args:
-        cfg: Full Hydra config. Reads ``model.name`` and ``model.base_channels``.
+        cfg: Full config. Reads the ``model`` group.
         device: Device to move the instantiated model to.
         in_channels: Width of the state the model consumes, normally
             ``Manifold.state_channels``. Defaults to the cylindrical 3 so a
@@ -45,44 +58,46 @@ def build_model(
             same trunk consumes ``(Re, Im)`` instead of ``(m, cos, sin)``.
         out_channels: Width of the velocity the model emits, normally
             ``Manifold.velocity_channels``. 2 for both geometries.
+        velocity_bound: Per-channel ceiling on the emitted velocity, from the
+            geometry. Ignored by an architecture that does not take one.
 
     Returns:
         The model, on ``device``, in whatever mode ``torch.nn.Module`` defaults to
         (:func:`load_weights` switches it to eval).
 
     Raises:
-        ValueError: If ``cfg.model.name`` is not a known architecture in MODELS.
+        ValueError: If ``cfg.model.name`` is not a known architecture in MODELS,
+            or the group carries a key the architecture cannot accept.
     """
-
-    model_name = cfg.get("model", {}).get("name", "c_unet")
-    base_channels = cfg.get("model", {}).get("base_channels", 64)
+    model_cfg = as_plain_dict(cfg.get("model"))
+    model_name = str(model_cfg.pop("name", DEFAULT_MODEL))
 
     if not MODELS.contains(model_name):
         raise ValueError(
             f"Unknown config model_name: {model_name}. Available models: {MODELS.list()}"
         )
 
-    match model_name:
-        case "c_unet" | "cylindrical_unet":
-            model = MODELS.build(
-                model_name,
-                base_channels=base_channels,
-                in_channels=in_channels,
-                out_channels=out_channels,
-                velocity_bound=velocity_bound,
-            ).to(device)
-            print(f"Instantiated standard CylindricalUNet with base_channels={base_channels}")
+    model_cls = MODELS.get(model_name)
+    accepted = {
+        name
+        for name, parameter in inspect.signature(model_cls).parameters.items()
+        if parameter.kind is not inspect.Parameter.VAR_KEYWORD
+    }
+    unknown = sorted(set(model_cfg) - accepted)
+    if unknown:
+        raise ValueError(
+            f"model={model_name!r} does not accept {', '.join(unknown)}. "
+            f"Accepted keys: {', '.join(sorted(accepted))}."
+        )
 
-        case _:
-            model_kwargs = {k: v for k, v in cfg.get("model", {}).items() if k != "name"}
-            model = MODELS.build(
-                model_name,
-                in_channels=in_channels,
-                out_channels=out_channels,
-                **model_kwargs,
-            ).to(device)
-            print(f"Instantiated registered model {model_name}")
+    settings: dict[str, Any] = dict(model_cfg)
+    settings["in_channels"] = in_channels
+    settings["out_channels"] = out_channels
+    if "velocity_bound" in accepted:
+        settings["velocity_bound"] = velocity_bound
 
+    model = MODELS.build(model_name, **settings).to(device)
+    print(f"Instantiated {type(model).__name__} ({model_name})")
     print(f"  state channels in: {in_channels}   velocity channels out: {out_channels}")
     return model
 
@@ -103,7 +118,7 @@ def find_latest_checkpoint(base_dir: str = "outputs/train") -> str | None:
     return max(checkpoints, key=os.path.getmtime)
 
 
-def resolve_checkpoint(cfg: DictConfig, section: str, orig_cwd: str) -> str:
+def resolve_checkpoint(cfg: Mapping[str, Any], section: str, orig_cwd: str) -> str:
     """Locate the checkpoint for the run named in ``cfg[section].run_name``.
 
     Falls back to ``cfg.logging.experiment_name`` when the section sets no

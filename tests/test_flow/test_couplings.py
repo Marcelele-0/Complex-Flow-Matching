@@ -11,18 +11,18 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
+from cyfm.config.adapters import manifold_from_config
 from cyfm.core.manifold import BaseManifold
 from cyfm.core.registry import COUPLINGS
 from cyfm.data.toy import CylinderToyIIDDataset
 from cyfm.flow.couplings import IndependentCoupling, OptimalTransportCoupling, build_coupling
-from cyfm.manifolds import build_manifold
 
 GEOMETRIES = ("cylindrical", "euclidean")
 
 
 def _manifold(name: str, **manifold_keys: float) -> BaseManifold:
     """Build a manifold the way the entry points do."""
-    return build_manifold(
+    return manifold_from_config(
         OmegaConf.create({"manifold": {"name": name, **manifold_keys}, "training": {"loss": {}}})
     )
 

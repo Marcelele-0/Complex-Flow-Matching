@@ -11,7 +11,8 @@ geometry could not change the behaviour of the first.
 from __future__ import annotations
 
 import math
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, ClassVar
 
 import torch
 
@@ -190,6 +191,16 @@ class CylindricalManifold(BaseManifold):
     state_channels = 3
     velocity_channels = 2
     representation = Representation.CYLINDER
+    # The phase terms and their weight. `phase_amplitude_weighting` has no
+    # Euclidean counterpart at all: the weight depends on x_1, so the phase
+    # channel regresses a reweighted conditional statistic the amplitude channel
+    # does not, which is why it is an ablation flag rather than a shared default.
+    config_loss_keys: ClassVar[Mapping[str, str]] = {
+        "amp_loss_type": "amp_loss_type",
+        "phase_loss_type": "phase_loss_type",
+        "lambda_phase": "lambda_phase",
+        "phase_amplitude_weighting": "phase_amplitude_weighting",
+    }
 
     def __init__(
         self,

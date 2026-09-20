@@ -35,8 +35,8 @@ from dataclasses import dataclass
 import torch
 from hydra import compose, initialize_config_dir
 
+from cyfm.config.adapters import manifold_from_config
 from cyfm.flow.couplings import build_coupling
-from cyfm.manifolds import build_manifold
 from cyfm.utils.inference import build_model
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -120,7 +120,7 @@ def build_trial(
     with initialize_config_dir(config_dir=str(CONF), version_base="1.3"):
         cfg = compose(config_name="config", overrides=list(overrides))
 
-    manifold = build_manifold(cfg).to(device)
+    manifold = manifold_from_config(cfg).to(device)
     model = build_model(
         cfg,
         device,

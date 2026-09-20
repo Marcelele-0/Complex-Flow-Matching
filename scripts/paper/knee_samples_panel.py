@@ -99,14 +99,7 @@ def manifold_for(name: str) -> Any:
     Returns:
         The manifold.
     """
-    return build_manifold(
-        OmegaConf.create(
-            {
-                "manifold": {"name": name, "spatial_correlation": None},
-                "training": {"loss": {}},
-            }
-        )
-    )
+    return build_manifold({"name": name, "spatial_correlation": None})
 
 
 def dataset_config(args: argparse.Namespace) -> DictConfig:

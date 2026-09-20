@@ -21,8 +21,8 @@ differently and move every absolute number without failing a test.
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Callable, Mapping
+from typing import Any, ClassVar
 
 import torch
 
@@ -96,6 +96,9 @@ class ComplexDiffusionManifold(FlatComplexRepresentation, BaseManifold):
     # The network regresses a score. Straightness and the induced angular velocity
     # are properties of a velocity field and are not reported for it.
     predicts_velocity = False
+    # Deliberately empty: score matching has no velocity loss type to configure,
+    # so this arm reads nothing out of the shared training.loss group.
+    config_loss_keys: ClassVar[Mapping[str, str]] = {}
 
     def __init__(
         self,

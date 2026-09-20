@@ -29,13 +29,13 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader, DistributedSampler, Subset
 from tqdm import tqdm
 
+from cyfm.config.adapters import manifold_from_config
 from cyfm.core.dataset import BaseComplexDataset
 from cyfm.data import build_dataset, build_geometry_transform
 from cyfm.data.splits import load_split_file_names, select_indices
 from cyfm.data.transforms import Compose, slice_transform
 from cyfm.flow import BRIDGE_ENDPOINTS
 from cyfm.flow.couplings import build_coupling
-from cyfm.manifolds import build_manifold
 from cyfm.utils.checkpoint import load_training_state, save_training_state, state_path
 from cyfm.utils.distributed import (
     any_across_ranks,
@@ -128,7 +128,7 @@ def main(cfg: DictConfig) -> None:
 
     # --- Geometry ---
     # The single switch between the cylindrical model and the Euclidean baseline.
-    manifold = build_manifold(cfg).to(device)
+    manifold = manifold_from_config(cfg).to(device)
 
     # --- Data Pipeline ---
     data_dir = cfg.get("dataset", {}).get("data_dir", None)

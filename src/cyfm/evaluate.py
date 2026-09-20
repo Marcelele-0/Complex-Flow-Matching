@@ -60,10 +60,10 @@ import torch
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
+from cyfm.config.adapters import manifold_from_config
 from cyfm.data import build_dataset, build_geometry_transform
 from cyfm.data.transforms import Compose, slice_transform
 from cyfm.flow.couplings import Coupling, build_coupling
-from cyfm.manifolds import build_manifold
 from cyfm.utils.inference import build_model, load_weights, resolve_checkpoint
 from cyfm.utils.metrics import distributional_metrics
 
@@ -344,7 +344,7 @@ def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     print(f"Evaluating generation on: {device}")
 
-    manifold = build_manifold(cfg).to(device)
+    manifold = manifold_from_config(cfg).to(device)
     model = build_model(
         cfg,
         device,

@@ -9,7 +9,8 @@ no continuous trigonometric embedding appears anywhere on this path.
 from __future__ import annotations
 
 import math
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, ClassVar
 
 import torch
 
@@ -146,6 +147,10 @@ class EuclideanManifold(FlatComplexRepresentation, BaseManifold):
     name = "euclidean"
     state_channels = 2
     velocity_channels = 2
+    # One regression over both channels, so a single key -- and it is spelled
+    # differently in the config than in the constructor, which is exactly the
+    # kind of per-geometry knowledge that belongs on the geometry.
+    config_loss_keys: ClassVar[Mapping[str, str]] = {"vel_loss_type": "loss_type"}
 
     def __init__(
         self,

@@ -11,10 +11,11 @@ one of the methods here.
 
 from __future__ import annotations
 
+import inspect
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from enum import Enum
-from typing import Any
+from typing import Any, ClassVar, Self
 
 import torch
 
@@ -72,6 +73,61 @@ class BaseManifold(ABC):
     velocity_channels: int = 2
     predicts_velocity: bool = True
     representation: Representation
+
+    #: Keys this geometry reads out of the ``training.loss`` config group, mapped
+    #: to the constructor parameters they fill. One config group serves both
+    #: geometries, so each takes the keys that apply to it and ignores the rest;
+    #: stating that as data rather than as a branch in a factory is what lets
+    #: :meth:`from_config` be written once.
+    config_loss_keys: ClassVar[Mapping[str, str]] = {}
+
+    @classmethod
+    def from_config(
+        cls, manifold: Mapping[str, Any], loss: Mapping[str, Any] | None = None
+    ) -> Self:
+        """Build this geometry from its two config groups.
+
+        Only keys actually present are forwarded, so the constructor stays the
+        single source of truth for every default. A factory that re-typed them --
+        and the one this replaced re-typed nine for the cylinder and five for the
+        plane -- is how defaults drift: the copy in the factory silently wins
+        whenever a config omits the key, and no test compares the two.
+
+        Args:
+            manifold: The ``manifold`` config group. ``name`` is ignored; it
+                selected this class.
+            loss: The ``training.loss`` group, filtered through
+                :attr:`config_loss_keys`.
+
+        Returns:
+            The configured geometry.
+
+        Raises:
+            ValueError: If ``manifold`` carries a key this geometry cannot accept.
+                Silently ignoring one would make a typo in an override a
+                successful run with the wrong settings.
+        """
+        accepted = {
+            name
+            for name, parameter in inspect.signature(cls).parameters.items()
+            if parameter.kind is not inspect.Parameter.VAR_KEYWORD
+        }
+        unknown = sorted(set(manifold) - accepted - {"name"})
+        if unknown:
+            raise ValueError(
+                f"manifold={cls.name!r} ({cls.__name__}) does not accept "
+                f"{', '.join(unknown)}. Accepted keys: {', '.join(sorted(accepted))}."
+            )
+
+        settings = {key: value for key, value in manifold.items() if key in accepted}
+        settings.update(
+            {
+                parameter: (loss or {})[key]
+                for key, parameter in cls.config_loss_keys.items()
+                if key in (loss or {})
+            }
+        )
+        return cls(**settings)
 
     def to(self, device: torch.device) -> BaseManifold:
         """Move any internal modules / buffers to device and return self."""

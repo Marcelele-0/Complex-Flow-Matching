@@ -30,7 +30,6 @@ import argparse
 import math
 
 import torch
-from omegaconf import OmegaConf
 
 from cyfm.core.manifold import BaseManifold
 from cyfm.data.toy import CylinderToyFieldDataset, CylinderToyIIDDataset
@@ -49,14 +48,7 @@ def parse_args() -> argparse.Namespace:
 
 def cylinder(spatial_correlation: float | None = None) -> BaseManifold:
     """The cylindrical manifold, built the way the entry points build it."""
-    return build_manifold(
-        OmegaConf.create(
-            {
-                "manifold": {"name": "cylindrical", "spatial_correlation": spatial_correlation},
-                "training": {"loss": {}},
-            }
-        )
-    )
+    return build_manifold({"name": "cylindrical", "spatial_correlation": spatial_correlation})
 
 
 def fields(dataset: CylinderToyIIDDataset | CylinderToyFieldDataset, count: int) -> torch.Tensor:

@@ -117,6 +117,32 @@ class Registry(Generic[T]):
             )
         return self._registry[name]
 
+    def get_class(self, name: str) -> type[T]:
+        """Retrieve a registered entry, insisting it is a class.
+
+        :meth:`get` may hand back a factory function, which is fine for
+        :meth:`build` but not for a caller that needs a classmethod -- a
+        geometry's ``from_config``, say. Narrowing here keeps that ``isinstance``
+        out of every such call site.
+
+        Args:
+            name: Registration key.
+
+        Returns:
+            The registered class.
+
+        Raises:
+            KeyError: If name is not registered.
+            TypeError: If the entry is a factory callable rather than a class.
+        """
+        entry = self.get(name)
+        if not isinstance(entry, type):
+            raise TypeError(
+                f"'{name}' in registry '{self._name}' is a factory callable, not a class; "
+                f"it cannot be built from a classmethod. Register the class instead."
+            )
+        return entry
+
     def build(self, name: str, **kwargs: Any) -> T:
         """Instantiate a registered component by name with keyword arguments.
 

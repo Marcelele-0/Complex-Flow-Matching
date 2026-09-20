@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 from omegaconf import OmegaConf
 
+from cyfm.config.adapters import manifold_from_config
 from cyfm.core.manifold import BaseManifold
 from cyfm.core.registry import MANIFOLDS, SOLVERS
 from cyfm.core.solver import BaseSDESolver
@@ -27,7 +28,7 @@ from cyfm.flow.solvers import (
     heun_evaluations,
     plan_within_budget,
 )
-from cyfm.manifolds import ComplexDiffusionManifold, build_manifold
+from cyfm.manifolds import ComplexDiffusionManifold
 from cyfm.manifolds.complex_diffusion import DEFAULT_SIGMA_MAX_320, calibrate_sigma_max
 
 CPU = torch.device("cpu")
@@ -62,7 +63,7 @@ class TestRegistryAndInitialization:
         training a prior too narrow, or too wide, to forget the data.
         """
         cfg = OmegaConf.create({"manifold": {"name": "complex_diffusion"}})
-        manifold = build_manifold(cfg)
+        manifold = manifold_from_config(cfg)
         assert isinstance(manifold, ComplexDiffusionManifold)
         assert manifold.sigma_min == 0.01
         assert manifold.sigma_max == DEFAULT_SIGMA_MAX_320
@@ -88,7 +89,7 @@ class TestRegistryAndInitialization:
                 }
             }
         )
-        manifold = build_manifold(cfg)
+        manifold = manifold_from_config(cfg)
         assert isinstance(manifold, ComplexDiffusionManifold)
         assert manifold.sigma_min == 0.05
         assert manifold.sigma_max == 200.0
@@ -387,7 +388,7 @@ class TestManifoldInterface:
         object graph; this pins it, because a divergence here is silent.
         """
         cfg = OmegaConf.create({"manifold": {"name": "euclidean"}, "training": {"loss": {}}})
-        euclidean = build_manifold(cfg)
+        euclidean = manifold_from_config(cfg)
         diffusion = ComplexDiffusionManifold()
 
         field = _dummy_complex_slice(b=1, h=40, w=40).squeeze(0) * 3.0
@@ -504,7 +505,7 @@ class TestUnconditionalSampling:
         cfg = OmegaConf.create(
             {"manifold": {"name": "complex_diffusion", "sigma_max": 5.0, "num_steps": 3}}
         )
-        manifold = build_manifold(cfg)
+        manifold = manifold_from_config(cfg)
         solver = manifold.make_solver(3)
 
         def score(state: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
@@ -647,7 +648,7 @@ class TestPaperIntegration:
                 config_name="config",
                 overrides=["+experiment=table5_fastmri", "manifold=complex_diffusion"],
             )
-        manifold = build_manifold(cfg)
+        manifold = manifold_from_config(cfg)
         assert isinstance(manifold, ComplexDiffusionManifold)
         assert manifold.name == "complex_diffusion"
         assert manifold.sigma_max == DEFAULT_SIGMA_MAX_320
@@ -675,10 +676,8 @@ def test_wrap_model_is_the_identity_for_a_velocity_geometry() -> None:
     """Only a score arm needs the adaptation; the flow arms predict their target."""
     from omegaconf import OmegaConf
 
-    from cyfm.manifolds import build_manifold
-
     for name in ("cylindrical", "euclidean"):
-        manifold = build_manifold(
+        manifold = manifold_from_config(
             OmegaConf.create({"manifold": {"name": name}, "training": {"loss": {}}})
         )
         sentinel = object()

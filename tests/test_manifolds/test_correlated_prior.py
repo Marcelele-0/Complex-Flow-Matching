@@ -13,7 +13,7 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
-from cyfm.manifolds import build_manifold
+from cyfm.config.adapters import manifold_from_config
 from cyfm.manifolds.cylindrical import sample_cylindrical_noise
 from cyfm.utils.random_fields import smooth_standard_normals
 
@@ -22,7 +22,7 @@ _CPU = torch.device("cpu")
 
 def _manifold(name: str, **keys: object) -> object:
     """Build a manifold the way the entry points do."""
-    return build_manifold(
+    return manifold_from_config(
         OmegaConf.create({"manifold": {"name": name, **keys}, "training": {"loss": {}}})
     )
 

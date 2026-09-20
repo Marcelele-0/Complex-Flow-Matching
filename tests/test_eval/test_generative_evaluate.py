@@ -8,6 +8,7 @@ import math
 import pytest
 import torch
 
+from cyfm.config.adapters import manifold_from_config
 from cyfm.data.toy import CylinderToyIIDDataset
 from cyfm.evaluate import assert_training_domain, format_table
 
@@ -36,11 +37,10 @@ def _straightness_setup() -> tuple[object, object, torch.Tensor]:
     """A small cylindrical model and a data batch in its state representation."""
     from omegaconf import OmegaConf
 
-    from cyfm.manifolds import build_manifold
     from cyfm.models.mlp import PointwiseVelocityMLP
 
     torch.manual_seed(0)
-    manifold = build_manifold(
+    manifold = manifold_from_config(
         OmegaConf.create({"manifold": {"name": "cylindrical"}, "training": {"loss": {}}})
     )
     model = PointwiseVelocityMLP(in_channels=3, base_channels=16, depth=1).eval()
@@ -100,9 +100,8 @@ def test_reference_goes_through_the_training_normalisation(geometry: str) -> Non
     from omegaconf import OmegaConf
 
     from cyfm.evaluate import training_pipeline
-    from cyfm.manifolds import build_manifold
 
-    manifold = build_manifold(
+    manifold = manifold_from_config(
         OmegaConf.create({"manifold": {"name": geometry}, "training": {"loss": {}}})
     )
     pipeline = training_pipeline({"crop_size": [16, 16]}, manifold)

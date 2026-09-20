@@ -33,7 +33,6 @@ import argparse
 from typing import Any
 
 import torch
-from omegaconf import OmegaConf
 
 from cyfm.data.stores.knee import KneeStoreDataset
 from cyfm.data.transforms import slice_transform
@@ -70,14 +69,7 @@ def parse_args() -> argparse.Namespace:
 
 def cylinder() -> Any:
     """The cylindrical manifold, built the way the entry points build it."""
-    return build_manifold(
-        OmegaConf.create(
-            {
-                "manifold": {"name": "cylindrical", "spatial_correlation": None},
-                "training": {"loss": {}},
-            }
-        )
-    )
+    return build_manifold({"name": "cylindrical", "spatial_correlation": None})
 
 
 def amplitudes_and_phases(

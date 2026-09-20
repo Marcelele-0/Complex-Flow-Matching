@@ -120,14 +120,7 @@ def parse_args() -> argparse.Namespace:
 
 def cylinder() -> Any:
     """The cylindrical manifold, built the way the entry points build it."""
-    return build_manifold(
-        OmegaConf.create(
-            {
-                "manifold": {"name": "cylindrical", "spatial_correlation": None},
-                "training": {"loss": {}},
-            }
-        )
-    )
+    return build_manifold({"name": "cylindrical", "spatial_correlation": None})
 
 
 def dataset_config(args: argparse.Namespace) -> DictConfig:
