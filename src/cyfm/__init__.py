@@ -3,16 +3,12 @@
 from cyfm import core
 from cyfm.core import (
     DATASETS,
-    LOSSES,
     MANIFOLDS,
     MODELS,
     SOLVERS,
     BaseComplexDataset,
-    BaseLoss,
     BaseManifold,
     BaseODESolver,
-    CylindricalLoss,
-    EuclideanLoss,
     Registry,
 )
 from cyfm.manifolds.cylindrical import CylindricalManifold
@@ -24,13 +20,9 @@ __all__ = [
     "MANIFOLDS",
     "MODELS",
     "SOLVERS",
-    "LOSSES",
     "DATASETS",
     "BaseManifold",
     "BaseODESolver",
-    "BaseLoss",
-    "CylindricalLoss",
-    "EuclideanLoss",
     "CylindricalManifold",
     "EuclideanManifold",
     "BaseComplexDataset",

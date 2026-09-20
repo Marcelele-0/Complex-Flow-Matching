@@ -7,11 +7,9 @@ import torch
 import torch.nn as nn
 
 from cyfm.core.dataset import BaseComplexDataset
-from cyfm.core.loss import BaseLoss
 from cyfm.core.manifold import BaseManifold
 from cyfm.core.registry import (
     DATASETS,
-    LOSSES,
     MANIFOLDS,
     MASKS,
     MODELS,
@@ -134,12 +132,6 @@ def test_core_registries_populated() -> None:
     assert "euclidean" in SOLVERS
     assert issubclass(cast(type, SOLVERS.get("cylindrical")), BaseODESolver)
     assert issubclass(cast(type, SOLVERS.get("euclidean")), BaseODESolver)
-
-    # LOSSES
-    assert "cylindrical" in LOSSES
-    assert "euclidean" in LOSSES
-    assert issubclass(cast(type, LOSSES.get("cylindrical")), BaseLoss)
-    assert issubclass(cast(type, LOSSES.get("euclidean")), BaseLoss)
 
     # DATASETS
     assert "skm_tea" in DATASETS

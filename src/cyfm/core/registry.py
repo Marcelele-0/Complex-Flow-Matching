@@ -152,7 +152,6 @@ class Registry(Generic[T]):
 MANIFOLDS: Registry[Any] = Registry("manifolds")
 MODELS: Registry[Any] = Registry("models")
 SOLVERS: Registry[Any] = Registry("solvers")
-LOSSES: Registry[Any] = Registry("losses")
 DATASETS: Registry[Any] = Registry("datasets")
 MASKS: Registry[Any] = Registry("masks")
 COUPLINGS: Registry[Any] = Registry("couplings")
