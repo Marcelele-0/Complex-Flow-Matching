@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from cyfm.models.cylindrical_unet import CylindricalUNet
-from cyfm.models.pointwise_mlp import PointwiseVelocityMLP
+from cyfm.models.mlp import PointwiseVelocityMLP
+from cyfm.models.unet import CylindricalUNet
 
 __all__ = [
     "CylindricalUNet",

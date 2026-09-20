@@ -13,7 +13,7 @@ import torch
 from omegaconf import OmegaConf
 
 from cyfm.core.registry import MODELS
-from cyfm.models.pointwise_mlp import PointwiseVelocityMLP, SinusoidalPositionEmbeddings
+from cyfm.models.mlp import PointwiseVelocityMLP, SinusoidalPositionEmbeddings
 from cyfm.utils.inference import build_model
 
 

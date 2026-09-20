@@ -17,7 +17,7 @@ import torch
 
 from cyfm.core.dataset import BaseComplexDataset
 from cyfm.core.registry import DATASETS
-from cyfm.data.hdf5_manager import WorkerHDF5Manager
+from cyfm.data.stores.hdf5 import WorkerHDF5Manager
 from cyfm.utils.fft import fft2c, ifft2c
 
 logger = logging.getLogger(__name__)

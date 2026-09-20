@@ -1,39 +1,10 @@
-import math
 from collections.abc import Sequence
 
 import torch
 import torch.nn as nn
 
 from cyfm.core.registry import MODELS
-
-
-class SinusoidalPositionEmbeddings(nn.Module):
-    """Sinusoidal time position embedding.
-
-    Args:
-        dim: Embedding dimension.
-    """
-
-    def __init__(self, dim: int) -> None:
-        super().__init__()
-        self.dim = dim
-
-    def forward(self, time: torch.Tensor) -> torch.Tensor:
-        """Embed scalar diffusion time into feature vectors.
-
-        Args:
-            time: Diffusion time values [B].
-
-        Returns:
-            Time embeddings [B, dim].
-        """
-        device = time.device
-        half_dim = self.dim // 2
-        inv_freq_scale = math.log(10000) / (half_dim - 1)
-        inv_freq = torch.exp(torch.arange(half_dim, device=device) * -inv_freq_scale)
-        embeddings = time[:, None] * inv_freq[None, :]
-        embeddings = torch.cat((embeddings.sin(), embeddings.cos()), dim=-1)
-        return embeddings
+from cyfm.models.blocks import SinusoidalPositionEmbeddings
 
 
 class TimeConditionedBlock(nn.Module):

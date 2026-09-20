@@ -120,7 +120,7 @@ def sha256_of(path: pathlib.Path, block: int = 1 << 20) -> str:
 def create_images(store: h5py.File, crop: int) -> h5py.Dataset:
     """The store's growable image dataset.
 
-    One chunk is one slice, which is how :class:`~cyfm.data.knee_store.KneeStoreDataset`
+    One chunk is one slice, which is how :class:`~cyfm.data.stores.knee.KneeStoreDataset`
     reads it, so a training read never has to touch a neighbouring slice.
     """
     return store.create_dataset(

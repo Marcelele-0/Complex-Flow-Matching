@@ -18,12 +18,11 @@ geometry hands the trunk its own state, ``(m, cos phi, sin phi)`` or ``(re, im)`
 
 from __future__ import annotations
 
-import math
-
 import torch
 from torch import nn
 
 from cyfm.core.registry import MODELS
+from cyfm.models.blocks import SinusoidalPositionEmbeddings
 
 # Below this amplitude a complex number's phase is numerically meaningless, so
 # the shared encoding reports a fixed direction rather than atan2 noise. The
@@ -32,38 +31,6 @@ _AMPLITUDE_FLOOR = 1e-8
 
 # Width of the shared encoding: (re, im, m, cos phi, sin phi).
 _SHARED_ENCODING_WIDTH = 5
-
-
-class SinusoidalPositionEmbeddings(nn.Module):
-    """Standard sinusoidal embedding of a scalar time.
-
-    Args:
-        dim: Embedding width, must be positive and even.
-
-    Raises:
-        ValueError: If ``dim`` is not a positive even number.
-    """
-
-    def __init__(self, dim: int) -> None:
-        super().__init__()
-        if dim <= 0 or dim % 2 != 0:
-            raise ValueError(f"embedding dim must be positive and even, got {dim}")
-        self.dim = dim
-
-    def forward(self, time: torch.Tensor) -> torch.Tensor:
-        """Embed a batch of times.
-
-        Args:
-            time: Times of shape ``[B]``.
-
-        Returns:
-            Embedding of shape ``[B, dim]``.
-        """
-        half = self.dim // 2
-        scale = math.log(10000.0) / max(half - 1, 1)
-        frequencies = torch.exp(torch.arange(half, device=time.device) * -scale)
-        angles = time.reshape(-1, 1) * frequencies.reshape(1, -1)
-        return torch.cat([angles.sin(), angles.cos()], dim=-1)
 
 
 @MODELS.register("mlp")

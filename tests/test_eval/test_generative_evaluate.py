@@ -8,7 +8,7 @@ import math
 import pytest
 import torch
 
-from cyfm.data.toy_dataset import CylinderToyIIDDataset
+from cyfm.data.toy import CylinderToyIIDDataset
 from cyfm.evaluate import assert_training_domain, format_table
 
 
@@ -37,7 +37,7 @@ def _straightness_setup() -> tuple[object, object, torch.Tensor]:
     from omegaconf import OmegaConf
 
     from cyfm.manifolds import build_manifold
-    from cyfm.models.pointwise_mlp import PointwiseVelocityMLP
+    from cyfm.models.mlp import PointwiseVelocityMLP
 
     torch.manual_seed(0)
     manifold = build_manifold(

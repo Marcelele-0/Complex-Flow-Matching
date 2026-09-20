@@ -35,7 +35,7 @@ from typing import Any
 import torch
 from omegaconf import OmegaConf
 
-from cyfm.data.knee_store import KneeStoreDataset
+from cyfm.data.stores.knee import KneeStoreDataset
 from cyfm.manifolds import build_manifold
 from cyfm.utils.metrics import circular_linear_correlation
 

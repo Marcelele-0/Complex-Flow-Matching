@@ -1,6 +1,6 @@
 """The compact LibriSpeech STFT store, as a dataset.
 
-The audio counterpart of :mod:`cyfm.data.knee_store`, and deliberately the same shape:
+The audio counterpart of :mod:`cyfm.data.stores.knee`, and deliberately the same shape:
 ``scripts/data/build_stft_store.py`` decodes a clean-speech corpus, takes the short-time
 Fourier transform of each utterance and keeps fixed-size complex segments; this class
 reads what it wrote and nothing else. Training therefore never decodes audio and does

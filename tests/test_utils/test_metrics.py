@@ -9,7 +9,7 @@ import math
 import pytest
 import torch
 
-from cyfm.data.toy_dataset import CylinderToyFieldDataset, CylinderToyIIDDataset
+from cyfm.data.toy import CylinderToyFieldDataset, CylinderToyIIDDataset
 from cyfm.utils.metrics import (
     distributional_metrics,
     measured_pair_fraction,

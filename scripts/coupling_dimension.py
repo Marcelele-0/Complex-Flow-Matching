@@ -33,7 +33,7 @@ import torch
 from omegaconf import OmegaConf
 
 from cyfm.core.manifold import BaseManifold
-from cyfm.data.toy_dataset import CylinderToyFieldDataset, CylinderToyIIDDataset
+from cyfm.data.toy import CylinderToyFieldDataset, CylinderToyIIDDataset
 from cyfm.flow.couplings import OptimalTransportCoupling
 from cyfm.flow.transport import sliced_wasserstein2
 from cyfm.manifolds import build_manifold

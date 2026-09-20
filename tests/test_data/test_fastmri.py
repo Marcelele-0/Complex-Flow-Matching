@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 from cyfm.core.dataset import BaseComplexDataset
 from cyfm.core.registry import DATASETS
 from cyfm.data.fastmri import FastMRIDataset
-from cyfm.data.hdf5_manager import WorkerHDF5Manager
+from cyfm.data.stores.hdf5 import WorkerHDF5Manager
 from cyfm.data.transforms import CenterCropOrPad
 from cyfm.utils.fft import fft2c
 

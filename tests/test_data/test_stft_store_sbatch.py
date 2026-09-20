@@ -17,7 +17,7 @@ import pytest
 import soundfile
 import torch
 
-from cyfm.data.stft import DEFAULT_STFT
+from cyfm.data.stores.stft import DEFAULT_STFT
 
 SBATCH = (
     pathlib.Path(__file__).resolve().parents[2] / "scripts" / "wcss" / "build_stft_store.sbatch"

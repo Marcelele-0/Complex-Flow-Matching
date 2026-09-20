@@ -124,24 +124,27 @@ uv run python -m cyfm.evaluate dataset=cylinder_toy_field model=c_unet \
 src/cyfm/
 ├── train.py               # training entry point (Hydra)
 ├── evaluate.py            # generative evaluation: distributional metrics vs. solver steps
+├── core/                  # the contracts: BaseManifold, Sampler, the registries
 ├── flow/
-│   ├── coupling.py        # independent and joint minibatch-OT couplings
-│   ├── optimal_transport.py  # cost matrices, assignments, W2 estimators
-│   ├── solver.py          # Heun / Euler ODE solvers (NFE = 2k - 1 for Heun)
-│   └── torus_math.py      # geodesics on the cylinder, decoupled loss
-├── manifolds/             # cylindrical (R+ x S^1) and euclidean (Re, Im)
+│   ├── bridges.py         # geodesic (cylinder) and straight-line (plane) probability paths
+│   ├── couplings.py       # independent and joint minibatch-OT couplings
+│   ├── losses.py          # the velocity objective in each geometry's own metric
+│   ├── solvers.py         # Heun ODE solvers (NFE = 2k - 1) and the VE-SDE baseline
+│   └── transport.py       # cost matrices, assignments, W2 estimators
+├── manifolds/             # cylindrical (R+ x S^1), euclidean (Re, Im), diffusion baseline
 ├── models/                # c_unet (the paper's U-Net) and a pointwise MLP control
 ├── data/
 │   ├── synthetic.py       # Gaussian-copula target with known amplitude-phase dependence
-│   ├── toy_dataset.py     # cylinder_toy_iid / cylinder_toy_field datasets
-│   ├── knee_store.py      # fastMRI knee CORPD, coil-combined (Tables 1, 3, 7)
-│   └── stft_store.py      # LibriSpeech STFT segments (Tables 1, 2, 8)
-└── utils/random_fields.py # spectral smoothing that keeps every entry N(0, 1)
+│   ├── toy.py             # cylinder_toy_iid / cylinder_toy_field datasets
+│   └── stores/            # readers for the prebuilt knee MRI and speech stores
+├── config/                # the Hydra boundary; nothing outside it sees a DictConfig
+└── utils/                 # metrics, complex ops, spectral random fields, checkpointing
 
 conf/experiment/           # the paper's experiments and training protocols (above)
 conf/                      # the other Hydra configs: datasets, manifolds, models, training
 scripts/paper/             # reproduce.py and the table / statistics printers
 scripts/*.py               # the network-free probes the experiments call
+scripts/data/              # builders for the knee MRI and LibriSpeech stores
 docs/reproduce/            # archived evaluations with provenance, generated LaTeX tables
 docs/notes/                # the research log (COUPLING_NOTES.md)
 ```

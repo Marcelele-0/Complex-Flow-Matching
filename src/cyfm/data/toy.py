@@ -11,7 +11,7 @@ Why both exist
 --------------
 The iid variant is the control. A convolutional trunk on a field whose
 coefficients are independent has nothing spatial to exploit, so a U-Net there
-should do no better than :class:`~cyfm.models.pointwise_mlp.PointwiseVelocityMLP`.
+should do no better than :class:`~cyfm.models.mlp.PointwiseVelocityMLP`.
 If it does, the difference is capacity or optimisation, not structure. Run it
 before believing any architecture result on the structured variant.
 

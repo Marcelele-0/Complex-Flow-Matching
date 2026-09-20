@@ -38,7 +38,7 @@ import torch
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
 
-from cyfm.data.stft import StftProtocol, forward_stft, segment_frames  # noqa: E402
+from cyfm.data.stores.stft import StftProtocol, forward_stft, segment_frames  # noqa: E402
 
 CHUNK_BYTES = 1 << 20
 
@@ -75,7 +75,7 @@ def checksum(path: pathlib.Path) -> str:
 def create_frames(store: h5py.File, protocol: StftProtocol) -> h5py.Dataset:
     """The store's growable segment dataset.
 
-    One chunk is one segment, which is how :class:`~cyfm.data.stft_store.StftStoreDataset`
+    One chunk is one segment, which is how :class:`~cyfm.data.stores.audio.StftStoreDataset`
     reads it, so a training read never has to touch a neighbouring segment.
     """
     shape = (protocol.bins, protocol.frames)
@@ -225,7 +225,7 @@ def write_attrs(
     for key, value in protocol.as_dict().items():
         store.attrs[key] = value
     store.attrs["split"] = split
-    store.attrs["dropped_bin"] = "nyquist; negligible energy in speech, see cyfm.data.stft"
+    store.attrs["dropped_bin"] = "nyquist; negligible energy in speech, see cyfm.data.stores.stft"
     store.attrs["normalised"] = "no; the training transform normalises per field"
     store.attrs["git_revision"] = revision
 

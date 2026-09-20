@@ -12,13 +12,13 @@ from cyfm.core.dataset import BaseComplexDataset
 from cyfm.core.registry import DATASETS
 from cyfm.data.espirit import compute_espirit_maps, ensure_espirit_maps, process_h5_file
 from cyfm.data.fastmri import FastMRIDataset
-from cyfm.data.knee_store import KneeStoreDataset
-from cyfm.data.hdf5_manager import WorkerHDF5Manager
+from cyfm.data.stores.knee import KneeStoreDataset
+from cyfm.data.stores.hdf5 import WorkerHDF5Manager
 from cyfm.data.splits import load_split_file_names, select_indices
-from cyfm.data.stft import DEFAULT_STFT, StftProtocol, forward_stft, inverse_stft
-from cyfm.data.stft_store import StftStoreDataset
+from cyfm.data.stores.stft import DEFAULT_STFT, StftProtocol, forward_stft, inverse_stft
+from cyfm.data.stores.audio import StftStoreDataset
 from cyfm.data.torch_espirit import calibrate_fastmri_file_torch, compute_espirit_torch
-from cyfm.data.toy_dataset import CylinderToyFieldDataset, CylinderToyIIDDataset
+from cyfm.data.toy import CylinderToyFieldDataset, CylinderToyIIDDataset
 from cyfm.data.transforms import (
     AmplitudeNormalize,
     CenterCropModulo,
@@ -31,7 +31,7 @@ from cyfm.data.transforms import (
     WindowAmplitudeNormalize,
     WindowEuclideanNormalize,
 )
-from cyfm.utils.config import as_plain_dict
+from cyfm.config.resolve import as_plain_dict
 
 # Config keys that belong to a dataset group but are consumed by the entry point
 # rather than passed to the dataset constructor.

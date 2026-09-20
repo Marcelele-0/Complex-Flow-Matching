@@ -477,7 +477,7 @@ def test_a_bounded_head_cannot_leave_the_range_its_geometry_allows() -> None:
     """
     import math
 
-    from cyfm.models.cylindrical_unet import CylindricalUNet
+    from cyfm.models.unet import CylindricalUNet
 
     model = CylindricalUNet(
         base_channels=8, in_channels=3, out_channels=2, velocity_bound=(1.0, math.pi)
@@ -498,7 +498,7 @@ def test_a_bounded_head_cannot_leave_the_range_its_geometry_allows() -> None:
 
 def test_an_unbounded_head_is_left_exactly_as_it_was() -> None:
     """Omitting the bound must not perturb the existing architecture."""
-    from cyfm.models.cylindrical_unet import CylindricalUNet
+    from cyfm.models.unet import CylindricalUNet
 
     torch.manual_seed(0)
     plain = CylindricalUNet(base_channels=8, in_channels=3, out_channels=2)
