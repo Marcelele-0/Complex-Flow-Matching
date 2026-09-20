@@ -54,7 +54,7 @@ trains one 64x64 arm for two epochs so the timing is on record. `uv sync --froze
 
 ## Gotchas paid for once
 
-- **The venv remembers where the project was.** `uv` installs `torch-cfmri` as a path
+- **The venv remembers where the project was.** `uv` installs `cyfm` as a path
   dependency, so moving or deleting the checkout leaves `import cfm` failing with
   `ModuleNotFoundError` even though the venv looks intact. Fix: `uv sync --frozen
   --no-dev --offline` from the new location (the deps are already cached, so it is a

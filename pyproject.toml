@@ -6,11 +6,25 @@ build-backend = "hatchling.build"
 packages = ["src/cfm"]
 
 [project]
-name = "torch-cfmri"
+name = "cyfm"
 version = "0.1.0"
-description = "Complex Flow Matching for MRI synthesis on cylindrical manifolds"
+description = "Cylindrical Flow Matching: generative flow matching for complex-valued fields on the cylinder, with the couplings, bridges and structural metrics"
 readme = "README.md"
 requires-python = ">=3.11"
+# The acronym is what the paper uses and what a citation will carry, but nobody searching
+# for "cylindrical flow matching" would find it, so the full phrase lives here where
+# PyPI's search reads it. No alias package: an empty pointer is a dead entry forever.
+keywords = [
+    "cylindrical flow matching",
+    "complex flow matching",
+    "flow matching",
+    "generative model",
+    "optimal transport",
+    "complex-valued",
+    "phase",
+    "MRI",
+    "STFT",
+]
 dependencies = [
     "h5py>=3.16.0",
     "huggingface-hub>=1.30.0",

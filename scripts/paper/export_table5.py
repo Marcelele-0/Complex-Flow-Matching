@@ -27,10 +27,9 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
-import sys
 from typing import Any
 
-from latex_tables import TABLE5_ARCHIVE, TABLE5_NAME, TABLE5_ROWS
+from latex_tables import TABLE5_ARCHIVE, TABLE5_NAME, TABLE5_PREFIX, TABLE5_ROWS
 from loss_protocols import RESULTS, SEEDS, Runs
 from paper_tables import EVALUATIONS, display, provenance
 
@@ -46,9 +45,10 @@ def evaluation_names() -> list[tuple[str, str]]:
     """Every ``(evaluation name, training run name)`` pair Table 5 needs.
 
     Returns:
-        Thirty pairs, in the row order of the table and seed-innermost. The two
-        entries differ only for the many-step row, which has no training run of
-        its own.
+        Thirty pairs, in the row order of the table and seed-innermost. The evaluation
+        name carries ``TABLE5_PREFIX``; the training name never does, because that
+        re-scoring pass produced no checkpoints of its own. The two entries differ
+        further only for the many-step row, which has no training run at all.
     """
     pairs = []
     for arm, coupling, _, _, _ in TABLE5_ROWS:
@@ -56,10 +56,10 @@ def evaluation_names() -> list[tuple[str, str]]:
         for seed in SEEDS:
             pairs.append(
                 (
-                    TABLE5_NAME.format(arm=arm, coupling=coupling, seed=seed),
-                    TABLE5_NAME.format(arm=trained, coupling=coupling, seed=seed).removesuffix(
-                        "_eval"
-                    ),
+                    TABLE5_NAME.format(prefix=TABLE5_PREFIX, arm=arm, coupling=coupling, seed=seed),
+                    TABLE5_NAME.format(
+                        prefix="", arm=trained, coupling=coupling, seed=seed
+                    ).removesuffix("_eval"),
                 )
             )
     return pairs
@@ -149,4 +149,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

@@ -291,7 +291,15 @@ def table_appendix(sources: dict[str, Runs]) -> str:
 # every archive in this repository is keyed by the *evaluation* directory name,
 # which run_arm.sh writes as "{run}_eval".
 TABLE5_ARCHIVE = "table5_fastmri_metrics.json"
-TABLE5_NAME = "t5_{arm}_{coupling}_s{seed}_eval"
+TABLE5_NAME = "{prefix}t5_{arm}_{coupling}_s{seed}_eval"
+
+# The evaluations Appendix D is printed from. The unprefixed `t5_*` directories are the
+# original scoring pass and are superseded: they predate the phase-coherence metric and
+# carry no `phase_lag1_gap` key at all, so half that table cannot be built from them, and
+# their sliced W2 differs in the third decimal (cylindrical OT at k=1 is 0.0565 there
+# against the printed 0.0561). Collecting them produced an archive that disagreed with
+# the paper on every row, which is the whole failure this archive exists to prevent.
+TABLE5_PREFIX = "p5_"
 
 # The step count the diffusion baseline's own regime is reported at. Score-based
 # samplers are used in the hundreds-to-thousands, not at the handful of steps the
@@ -384,7 +392,7 @@ def table5_values(runs: Runs, arm: str, coupling: str, step: int, metric: str) -
     """Per-seed values of one arm at one step count; raises if a seed is missing."""
     out = []
     for seed in SEEDS:
-        run = runs[TABLE5_NAME.format(arm=arm, coupling=coupling, seed=seed)]
+        run = runs[TABLE5_NAME.format(prefix=TABLE5_PREFIX, arm=arm, coupling=coupling, seed=seed)]
         out.append(next(row[metric] for row in run["sweep"] if row["num_steps"] == step))
     return np.array(out, dtype=float)
 
@@ -512,14 +520,30 @@ def main() -> None:
         (args.out / filename).write_text(text)
         print(f"wrote {args.out / filename}")
 
-    # Written only once its grid has been run and archived, so the other tables
-    # stay reproducible from this script before Table 5 exists.
-    if (RESULTS / TABLE5_ARCHIVE).exists():
-        destination = args.out / "table5_fastmri.tex"
-        destination.write_text(table5(load_table5()))
-        print(f"wrote {destination}")
-    else:
+    # Written only once its grid has been run and archived WHOLE. Existence of the file
+    # is not enough: the archive is legitimately partial, because the score-based
+    # baseline was run at 64x64 only and Appendix D has no diffusion row, so the two
+    # diffusion lines this renderer models have no evaluations at 320. Rendering anyway
+    # would raise a KeyError from inside the bolding loop rather than say which rows are
+    # missing, and the paper does not \input this file -- Appendix D's table is written
+    # inline against the same archive.
+    if not (RESULTS / TABLE5_ARCHIVE).exists():
         print(f"skipped table5_fastmri.tex: no {RESULTS / TABLE5_ARCHIVE} yet")
+        return
+    runs = load_table5()
+    absent = [
+        name
+        for arm, coupling, _, _, _ in TABLE5_ROWS
+        for seed in SEEDS
+        if (name := TABLE5_NAME.format(prefix=TABLE5_PREFIX, arm=arm, coupling=coupling, seed=seed))
+        not in runs
+    ]
+    if absent:
+        print(f"skipped table5_fastmri.tex: archive is partial, {len(absent)} rows missing")
+        return
+    destination = args.out / "table5_fastmri.tex"
+    destination.write_text(table5(runs))
+    print(f"wrote {destination}")
 
 
 if __name__ == "__main__":

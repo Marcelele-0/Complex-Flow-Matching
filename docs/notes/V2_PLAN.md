@@ -206,7 +206,7 @@ table or a figure. Last item before submitting.
 
 ## P3 — after the submission
 
-PyPI release of `torch-cfmri` and a Zenodo DOI for the archives (the data itself cannot
+PyPI release of `cyfm` and a Zenodo DOI for the archives (the data itself cannot
 be redistributed; the pipeline can). Forward-backward cylindrical SDE, pixel-wise
 uncertainty maps, DSB / IPF.
 

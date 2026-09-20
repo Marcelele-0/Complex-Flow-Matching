@@ -207,15 +207,43 @@ table5_needs_archive = pytest.mark.skipif(
 )
 
 
+# The score-based baseline was trained and scored at 64x64 only, and Appendix D prints
+# no diffusion row, so these two arms have no evaluations at 320 and the archive is
+# legitimately partial. Named rather than silently tolerated: "twenty of thirty" has to
+# mean this and nothing else, or a genuinely lost row hides inside the shortfall.
+TABLE5_ABSENT_AT_320 = frozenset(
+    {"complex_diffusion_heun_independent", "complex_diffusion_native_independent"}
+)
+
+# Appendix D is printed from the `p5_` re-scoring pass. The unprefixed directories are
+# superseded: they predate the phase-coherence metric and carry no `phase_lag1_gap` at
+# all, and their sliced W2 differs in the third decimal.
+TABLE5_PREFIX = "p5_"
+
+# That pass scored every arm with ``evaluate.seed=0``: the five seeds of a 320 row differ
+# in TRAINING only and share one prior draw, exactly as at 64x64. It makes the
+# arm-against-arm comparisons paired, and it makes the five-seed spread a measure of
+# training variance alone -- which is what every asterisk in Appendix D rests on.
+TABLE5_EVALUATE_SEED = 0
+
+
 def table5_expected() -> dict[str, tuple[str, int]]:
     """Every Table 5 evaluation name, mapped to its arm key and seed."""
-    return {f"t5_{arm}_s{seed}_eval": (arm, seed) for arm in TABLE5_ARMS for seed in SEEDS}
+    return {
+        f"{TABLE5_PREFIX}t5_{arm}_s{seed}_eval": (arm, seed)
+        for arm in TABLE5_ARMS
+        for seed in SEEDS
+    }
 
 
 @table5_needs_archive
 def test_table5_archive_holds_the_full_grid() -> None:
-    """Thirty evaluations: six rows of five seeds, from twenty-five training runs."""
-    assert set(load(TABLE5_ARCHIVE)) == set(table5_expected())
+    """Every flow arm at 320, five seeds; the diffusion rows exist only at 64x64."""
+    archive = set(load(TABLE5_ARCHIVE))
+    expected = table5_expected()
+    required = {name for name, (arm, _) in expected.items() if arm not in TABLE5_ABSENT_AT_320}
+    assert required <= archive, sorted(required - archive)
+    assert archive <= set(expected), sorted(archive - set(expected))
 
 
 @table5_needs_archive
@@ -227,7 +255,9 @@ def test_table5_entries_match_their_names() -> None:
         manifold, _, _, steps, _ = TABLE5_ARMS[arm]
         assert run["field_shape"] == [TABLE5_SIDE, TABLE5_SIDE], name
         assert run["manifold"] == manifold, name
-        assert run["seed"] == seed, name
+        # `seed` in a metrics.json is the EVALUATION seed, fixed at 0 across this pass;
+        # the training seed the name encodes lives in the provenance record.
+        assert run["seed"] == TABLE5_EVALUATE_SEED, name
         assert run["num_fields"] == 64, name
         assert run["reference_domain"] == "training transform", name
         assert [row["num_steps"] for row in run["sweep"]] == steps, name
@@ -260,7 +290,7 @@ def test_table5_recorded_overrides_carry_the_protocol() -> None:
         assert train["training.seed"] == str(seed), name
         assert train["training.epochs"] == "40", name
         evaluate = overrides_to_dict(record["evaluate_overrides"])
-        assert evaluate["evaluate.seed"] == str(seed), name
+        assert evaluate["evaluate.seed"] == str(TABLE5_EVALUATE_SEED), name
         assert evaluate["dataset.role"] == "all", name
         assert evaluate["evaluate.num_fields"] == "64", name
         for field, value in extra.items():
