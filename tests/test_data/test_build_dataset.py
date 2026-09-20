@@ -110,9 +110,9 @@ def test_shipped_dataset_configs_match_their_constructors(config_path) -> None:
     accepted = set(inspect.signature(dataset_cls).parameters)
     unknown = sorted(set(cfg.keys()) - accepted - _ENTRY_POINT_KEYS)
 
-    assert (
-        not unknown
-    ), f"{config_path.name} sets keys {dataset_cls.__name__} cannot take: {unknown}"
+    assert not unknown, (
+        f"{config_path.name} sets keys {dataset_cls.__name__} cannot take: {unknown}"
+    )
 
 
 def test_build_geometry_transform_enforces_a_fixed_shape() -> None:

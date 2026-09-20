@@ -1,0 +1,41 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite both the software and the paper."
+title: "CyFM: Cylindrical Flow Matching"
+abstract: >-
+  Generative flow matching for complex-valued fields on the cylinder R+ x S^1,
+  with joint minibatch optimal-transport couplings, geodesic bridges, Heun
+  solvers and the structural metrics used to score them.
+type: software
+license: MIT
+repository-code: "https://github.com/Marcelele-0/Complex-Flow-Matching"
+authors:
+  - family-names: "Musiałek"
+    given-names: "Marcel"
+    affiliation: "Wrocław University of Science and Technology"
+  - family-names: "Wolanin"
+    given-names: "Iga"
+    affiliation: "Wrocław University of Science and Technology"
+  - family-names: "Ryczko"
+    given-names: "Damian"
+    affiliation: "Wrocław University of Science and Technology"
+  - family-names: "Grelewska"
+    given-names: "Anna"
+    affiliation: "Wrocław University of Science and Technology"
+  - family-names: "Furman"
+    given-names: "Oleksii"
+    affiliation: "Wrocław University of Science and Technology"
+preferred-citation:
+  type: article
+  title: "CyFM: Cylindrical Optimal Transport for Few-Step Complex-Valued Flow Matching"
+  year: 2026
+  authors:
+    - family-names: "Musiałek"
+      given-names: "Marcel"
+    - family-names: "Wolanin"
+      given-names: "Iga"
+    - family-names: "Ryczko"
+      given-names: "Damian"
+    - family-names: "Grelewska"
+      given-names: "Anna"
+    - family-names: "Furman"
+      given-names: "Oleksii"

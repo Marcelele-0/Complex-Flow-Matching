@@ -27,19 +27,30 @@ repos:
       - id: check-json
       - id: detect-private-key
 
+  # Pinned to the version the project itself resolves (pyproject: ruff>=0.16.5).
+  # These drifted before: the hook sat at v0.6.9 while the project used 0.16.5, and
+  # the two disagreed on the layout of one assert in scripts/bridge_angular_velocity.py
+  # and one in tests/test_data/test_build_dataset.py, so both files flipped back and
+  # forth depending on who ran the formatter last.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v0.16.5
     hooks:
       - id: ruff
         args: [--fix]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.8.0
+  # Run through uv rather than mirrors-mypy. The mirror installs mypy into its own
+  # isolated environment without the project's dependencies, so it saw DictConfig and
+  # every torch type as Any and checked almost nothing. This hook sees what CI sees.
+  - repo: local
     hooks:
       - id: mypy
-        args: [--ignore-missing-imports]
-        exclude: ^notebooks/
+        name: mypy (project environment)
+        entry: uv run mypy src/
+        language: system
+        types: [python]
+        pass_filenames: false
+        require_serial: true
 
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v2.4.0

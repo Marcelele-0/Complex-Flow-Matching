@@ -1,0 +1,91 @@
+# The test suite is this repository's reproducibility check: tests/test_paper_results.py
+# asserts that the Hydra overrides recorded in docs/reproduce/paper_results/ still
+# compose to the configuration of the documented experiment. Nothing else verifies the
+# paper's claims, and outputs/ is not in the repository, so this workflow is the gate.
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python
+        run: uv python install
+
+      # No extras: this is also a check that the core dependency set is enough to
+      # import the package and run the suite. A test that needs an extra should say so.
+      - name: Install project
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Type check
+        run: uv run mypy src/
+
+      - name: Tests
+        run: uv run pytest tests/ -q
+
+      # The cheapest end-to-end check in the repository: dataset registry, manifold,
+      # prior and metrics, with no network and no checkpoint.
+      #
+      # This asserts determinism and a band, NOT a literal. The exact digits are
+      # platform-dependent: measured 0.1852 on macOS 15.6 arm64 (torch 2.11.0,
+      # numpy 2.4.4, scipy 1.17.1), while docs/notes/2026-09-20-repo-migration-plan.md
+      # recorded 0.1841 from a different machine. A genuine regression moves this by
+      # far more than the ~0.6% that float32 reduction order accounts for.
+      - name: Numerical gate (prior control)
+        run: |
+          probe() { uv run python scripts/prior_control.py --side 16 --num-fields 16 \
+            | awk '/sliced_w2_complex/ {print $3}'; }
+          first=$(probe); second=$(probe)
+          echo "run 1: $first, run 2: $second"
+          [ "$first" = "$second" ] \
+            || { echo "::error::prior control is not deterministic ($first vs $second)"; exit 1; }
+          awk -v v="$first" 'BEGIN {
+            if (v < 0.17 || v > 0.20) {
+              print "::error::prior control " v " outside [0.17, 0.20]"; exit 1
+            }
+            print "prior control " v " within [0.17, 0.20]"
+          }'
+
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Build wheel and sdist
+        run: uv build
+      - name: Check the wheel carries py.typed
+        run: |
+          python3 -m zipfile -l dist/*.whl | grep -q "cyfm/py.typed" \
+            || { echo "::error::py.typed missing from the wheel"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/

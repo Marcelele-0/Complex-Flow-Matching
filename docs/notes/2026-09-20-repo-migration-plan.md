@@ -102,11 +102,20 @@ uv run pytest tests/ -q          # 722 passing as of aadf412
 uv run ruff check .
 uv run mypy src/
 uv run python -m cyfm.train --help
-uv run python scripts/prior_control.py --side 16 --num-fields 16   # 0.1841
+uv run python scripts/prior_control.py --side 16 --num-fields 16   # 0.1841, see below
 ```
 
 The last one is the cheapest end-to-end check in the repository: it exercises the dataset
 registry, the manifold, the prior and the metrics without a network or a checkpoint.
+
+**Correction, 2026-09-20 (`refactor/pypi-architecture`): the exact digits are
+platform-dependent and `0.1841` does not reproduce everywhere.** Measured `0.1852` on
+macOS 15.6 arm64 with torch 2.11.0 / numpy 2.4.4 / scipy 1.17.1 -- and measured on a
+pristine checkout of `775710d`, so it is not a regression introduced by any later work.
+The two values differ by 0.6%, which is the order float32 reduction ordering accounts for
+between BLAS builds. Treat this gate as a determinism-and-band check (two runs must agree
+exactly, and the value must stay near 0.185), not as a literal to grep for. The value is
+quoted in this file only; no test asserts it.
 
 Two known-weak spots in that gate, worth fixing early in the rewrite rather than trusting:
 
@@ -158,7 +167,7 @@ Hand the agent the text below, in a checkout of this repository.
 > ```bash
 > uv run pytest tests/ -q && uv run ruff check . && uv run mypy src/
 > uv run python -m cyfm.train --help
-> uv run python scripts/prior_control.py --side 16 --num-fields 16   # expect 0.1841
+> uv run python scripts/prior_control.py --side 16 --num-fields 16   # platform-dependent
 > ```
 >
 > **Report back** with: what moved, what the import surface of `cyfm` now is, which

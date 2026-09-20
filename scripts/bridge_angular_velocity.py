@@ -275,9 +275,9 @@ def verify_closed_form(start: torch.Tensor, end: torch.Tensor, grid: int = 20001
     # failure of the formula.
     resolved = (closest / scale > 1e-6) & torch.isfinite(on_grid)
     checked = closed[resolved]
-    assert bool(
-        (on_grid[resolved] <= checked * (1 + 1e-9) + 1e-12).all()
-    ), "grid exceeded the closed form"
+    assert bool((on_grid[resolved] <= checked * (1 + 1e-9) + 1e-12).all()), (
+        "grid exceeded the closed form"
+    )
     if not bool(resolved.any()):
         return float("nan")
     print(
