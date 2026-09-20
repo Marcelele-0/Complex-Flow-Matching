@@ -15,7 +15,7 @@ from collections.abc import Sequence
 
 
 def load_split_file_names(
-    data_dir: str,
+    data_dir: str | None,
     split: str | None,
     annotations_subdir: str = "annotations/v1.0.0",
     config_key: str = "evaluate.split",
@@ -23,7 +23,9 @@ def load_split_file_names(
     """Read the COCO-style manifest for ``split`` and return its ``.h5`` basenames.
 
     Args:
-        data_dir: Dataset root, the same one handed to the dataset.
+        data_dir: Dataset root, the same one handed to the dataset. May be
+            ``None``, and is for every synthetic cohort, which has no directory;
+            it is read only when ``split`` is not ``None``.
         split: Manifest name (``"train"``, ``"val"``, ``"test"``), or ``None`` for
             every file in ``data_dir``, the escape hatch for a directory with no
             ``annotations/``.
@@ -37,10 +39,20 @@ def load_split_file_names(
 
     Raises:
         FileNotFoundError: If the manifest for ``split`` does not exist.
-        ValueError: If the manifest lists no images.
+        ValueError: If the manifest lists no images, or if a split is named while
+            ``data_dir`` is ``None``.
     """
     if split is None:
         return None
+
+    # A named split with nowhere to read it from. Reachable by pointing a
+    # synthetic dataset group at a split, and it used to surface as a TypeError
+    # from os.path.join naming neither the config key nor the cause.
+    if data_dir is None:
+        raise ValueError(
+            f"{config_key}={split!r} needs a dataset.data_dir to read the manifest from. "
+            f"Set {config_key}=null for a cohort that has no directory."
+        )
 
     all_file_names = set()
     splits = [s.strip() for s in split.split(",")]
