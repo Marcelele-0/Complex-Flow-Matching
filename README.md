@@ -122,9 +122,19 @@ uv run python -m cyfm.evaluate dataset=cylinder_toy_field model=c_unet \
 
 ```text
 src/cyfm/
-├── train.py               # training entry point (Hydra)
-├── evaluate.py            # generative evaluation: distributional metrics vs. solver steps
-├── core/                  # the contracts: BaseManifold, Sampler, the registries
+├── train.py               # training entry point (Hydra); the run is in pipelines/
+├── evaluate.py            # evaluation entry point; the sweep is in pipelines/
+├── core/                  # the contracts only: BaseManifold, the protocols, the registry
+│   ├── protocols.py       # VelocityField, Sampler, Coupling
+│   ├── manifold.py        # BaseManifold: what both arms of the comparison share
+│   └── pipeline.py        # BasePipeline: setup -> execute -> teardown
+├── config/                # the Hydra boundary; nothing outside it sees a DictConfig
+│   └── schema.py          # the config sections, parsed once into typed records
+├── pipelines/             # the work the two entry points used to hold inline
+│   ├── training.py        # TrainingPipeline
+│   ├── evaluation.py      # EvaluationPipeline, and the report it renders
+│   ├── runtime.py         # loop machinery: reduction, checkpoints, resume, preemption
+│   └── reporting.py       # RunLogger: W&B or nothing
 ├── flow/
 │   ├── bridges.py         # geodesic (cylinder) and straight-line (plane) probability paths
 │   ├── couplings.py       # independent and joint minibatch-OT couplings
@@ -133,12 +143,18 @@ src/cyfm/
 │   └── transport.py       # cost matrices, assignments, W2 estimators
 ├── manifolds/             # cylindrical (R+ x S^1), euclidean (Re, Im), diffusion baseline
 ├── models/                # c_unet (the paper's U-Net) and a pointwise MLP control
+├── metrics/               # grouped by what each metric can see
+│   ├── distributional.py  # pools coefficients: sliced W2, marginal W2, dependence
+│   ├── spatial.py         # the nearest neighbour, in amplitude and in phase
+│   ├── spectral.py        # every scale at once: the radial power spectrum
+│   ├── geometry.py        # the path, not the endpoint: straightness, angular velocity
+│   └── summary.py         # the one call the sweep makes
 ├── data/
 │   ├── synthetic.py       # Gaussian-copula target with known amplitude-phase dependence
 │   ├── toy.py             # cylinder_toy_iid / cylinder_toy_field datasets
+│   ├── transforms.py      # the single place a geometry's pipeline is composed
 │   └── stores/            # readers for the prebuilt knee MRI and speech stores
-├── config/                # the Hydra boundary; nothing outside it sees a DictConfig
-└── utils/                 # metrics, complex ops, spectral random fields, checkpointing
+└── utils/                 # complex ops, spectral random fields, seeding, checkpointing
 
 conf/experiment/           # the paper's experiments and training protocols (above)
 conf/                      # the other Hydra configs: datasets, manifolds, models, training
@@ -162,7 +178,7 @@ docs/notes/                # the research log (COUPLING_NOTES.md)
 ```bash
 uv run pytest tests/          # test suite
 uv run ruff check .           # lint
-uv run mypy src/              # types
+uv run mypy src/ scripts/     # types
 pre-commit install            # ruff, ruff-format and mypy on every commit
 ```
 

@@ -20,6 +20,26 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- **The two entry points are now pipelines.** `train.py` was one Hydra `main` of 535
+  lines and `evaluate.py` one of 226, with no seam between deciding what to run and
+  running it; neither had a unit test and neither could, since reaching any of that
+  logic meant standing up Hydra and executing a training job. They are 35 and 89 lines
+  now, keep their module paths, and delegate to `cyfm.pipelines`. `BasePipeline`
+  guarantees teardown runs even when the work raises -- the old loop left the W&B run
+  open and the process group up on an exception, which on a cluster hangs the job's
+  remaining ranks.
+- **The config is parsed once.** `cfg.get("training", {})` was evaluated fourteen times
+  in one function, each with its own inline default, and five of those defaults
+  disagreed with `conf/`. `cyfm.config.schema` parses the four sections an entry point
+  reads into typed records, and a test reads the YAML and asserts field by field that
+  the defaults still match it.
+- Metric families are grouped by what each can see: `cyfm/metrics/{distributional,
+  spatial,spectral,geometry,summary}.py` replaces a single 436-line module under
+  `utils/`, and the path probes move out of `evaluate.py` into it.
+- Geometries declare a `Representation` instead of building their own preprocessing
+  pipeline, so `cyfm/manifolds/` and `cyfm/core/` no longer import the data package.
+- The registries are typed to what they hold, and `cyfm/__init__.py` fills all five.
+
 - Split the dependencies. The wheel now requires `torch`, `numpy`, `scipy`, plus four
   packages the still-eager import graph forces (`h5py`, `hydra-core`, `tqdm`,
   `python-dotenv`). Everything else moved behind extras (`mri`, `fastmri`, `espirit`,
@@ -71,6 +91,22 @@ reconstruction problem. None of it backed a number in the paper.
 
 ### Fixed
 
+- `scripts/coupling_gate.py`, which measures the Factorised Coupling Trap behind Table 4,
+  imported `circular_linear_correlation` from a module it had been moved out of and
+  raised `ImportError` on every invocation. `mypy` covered only `src/` and nothing in
+  the suite imported a script, so nothing looked. CI now type-checks `scripts/` and a
+  test imports every script module.
+- `evaluate.checkpoint_path` was declared in `conf/evaluate/default.yaml` and read by
+  nothing: setting it was ignored and the newest `.pt` under the run directory was
+  scored instead.
+- `training.scheduler.type` was documented and never read, with `CosineAnnealingLR`
+  hardcoded, so any other value trained on cosine silently.
+- `paths.state_dir` defaulted to an unkeyed `outputs/state` in code while the config
+  keys it by experiment name; two concurrent runs without Hydra would have overwritten
+  each other's resume state, each resuming from the other's optimizer moments.
+- `MODELS` was empty after `import cyfm` and `DATASETS` filled only as a side effect of
+  a geometry importing the data package, so `cyfm.MODELS.build("c_unet")` from an
+  installed wheel raised `KeyError`.
 - `cyfm/flow/__init__.py` declared four names in `__all__` that it never imported, so
   `from cyfm.flow import build_coupling` raised `ImportError` and the `COUPLINGS`
   registry stayed empty unless something imported `cyfm.flow.coupling` directly.
