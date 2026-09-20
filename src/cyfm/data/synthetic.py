@@ -47,7 +47,7 @@ Presets
 ``"independent"`` (0.0), ``"partial"`` (0.5) and ``"comonotone"`` (1.0). Note
 that ``coupling`` is the *latent* Gaussian correlation, not an observable
 correlation of the samples; the observable one is lower, and
-:func:`circular_linear_correlation` reports it.
+:func:`cyfm.utils.metrics.circular_linear_correlation` reports it.
 
 Example:
     >>> toy = CylinderToy(coupling=1.0, structure="spiral")
@@ -69,7 +69,6 @@ __all__ = [
     "CylinderToy",
     "Structure",
     "PhaseMode",
-    "circular_linear_correlation",
     "cylinder_prior",
 ]
 
@@ -239,7 +238,7 @@ class CylinderToy:
         coupling: Latent Gaussian correlation in ``[0, 1]``. ``0`` makes
             amplitude and phase independent; ``1`` makes amplitude a
             deterministic function of phase. Not an observable correlation --
-            use :func:`circular_linear_correlation` for that.
+            use :func:`cyfm.utils.metrics.circular_linear_correlation` for that.
         structure: ``"spiral"`` for comonotone dependence on the angle itself
             (with a branch cut), ``"cardioid"`` for periodic dependence through
             ``cos(theta - phase_offset)`` (no cut, mirror symmetric).
@@ -477,47 +476,3 @@ def cylinder_prior(
     return torch.complex(real, imag)
 
 
-def circular_linear_correlation(amplitude: torch.Tensor, phase: torch.Tensor) -> torch.Tensor:
-    """Mardia's circular-linear correlation between an amplitude and an angle.
-
-    Ordinary correlation is meaningless against an angle, because the angle has
-    no ordering that survives the wrap. This statistic is built from the
-    correlations of the amplitude with ``cos`` and ``sin`` of the angle and is
-    invariant to where the branch cut is placed, which is exactly what is needed
-    to compare a ``"spiral"`` target against a ``"cardioid"`` one.
-
-    Args:
-        amplitude: Amplitudes, shape ``[n]``.
-        phase: Angles in radians, shape ``[n]``.
-
-    Returns:
-        Scalar tensor in ``[0, 1]``. ``0`` means no dependence detectable by
-        this statistic; ``1`` means amplitude is determined by the angle.
-
-    Raises:
-        ValueError: If the inputs are not 1D of matching length, or hold fewer
-            than two samples.
-    """
-    if amplitude.ndim != 1 or phase.ndim != 1:
-        raise ValueError("amplitude and phase must be 1D")
-    if amplitude.numel() != phase.numel():
-        raise ValueError(
-            f"amplitude and phase must match in length, got {amplitude.numel()} and {phase.numel()}"
-        )
-    if amplitude.numel() < 2:
-        raise ValueError("need at least two samples")
-
-    cos_phase, sin_phase = torch.cos(phase), torch.sin(phase)
-
-    def _corr(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-        a_centered, b_centered = a - a.mean(), b - b.mean()
-        denom = (a_centered.norm() * b_centered.norm()).clamp_min(_EPS)
-        return (a_centered * b_centered).sum() / denom
-
-    r_ac = _corr(amplitude, cos_phase)
-    r_as = _corr(amplitude, sin_phase)
-    r_cs = _corr(cos_phase, sin_phase)
-
-    numerator = r_ac**2 + r_as**2 - 2.0 * r_ac * r_as * r_cs
-    denominator = (1.0 - r_cs**2).clamp_min(_EPS)
-    return (numerator / denominator).clamp(0.0, 1.0).sqrt()

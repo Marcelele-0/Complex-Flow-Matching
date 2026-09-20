@@ -16,9 +16,9 @@ from cyfm.data.synthetic import (
     COUPLING_PRESETS,
     CylinderToy,
     Structure,
-    circular_linear_correlation,
     cylinder_prior,
 )
+from cyfm.utils.metrics import circular_linear_correlation
 
 # Two-sample KS at n = 40_000 per side has a noise floor near 0.006; 0.02 sits
 # clear of it while still failing any real shift in a marginal.
