@@ -33,12 +33,49 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Removed
 
+Roughly 5,900 lines of code left over from the project's earlier framing as an MRI
+reconstruction problem. None of it backed a number in the paper.
+
+- **SKM-TEA and the undersampling masks.** `SKMTEADataset` carried a
+  `mode="reconstruction"` branch no config selected, and `masks.py` was reachable only
+  through it. With them: the `MASKS` registry, `conf/dataset/skm_tea.yaml`, the
+  SKM-TEA half of the downloader, and three test modules. `DEFAULT_DATASET` was
+  `"skm_tea"`; it is now `"cylinder_toy_field"`.
+- **The paired-Wilcoxon statistics module** (`cyfm/eval/`). It merged evaluation frames
+  on `sample_id` -- the statistic of a reconstruction comparison. The paper reports an
+  unpaired exact Mann-Whitney U over five seeds, computed in `scripts/paper/`.
+- **The dead `LOSSES` layer** (`cyfm/core/loss.py`). Registered under four keys and
+  never built. It was also the only reason `core` imported `flow`, so removing it
+  closes the `flow -> core -> flow` import cycle that lazy in-method imports had been
+  working around.
+- **The high-frequency k-space penalty** (`cyfm/flow/spectral.py`, `lambda_hf`,
+  `hf_boost_factor`). Disabled by default since it was added; no experiment config
+  enables it. The losses lose a return value with it.
+- **The attention and cross-slice architectures.** `c_unet_cross_slice` could train but
+  never sample, and the guard meant to prevent sampling from it was called by nothing
+  but its own test. `c_unet_attention` was unused yet was the root config's default
+  model.
+- **All four notebooks**, two of which could not run (one imports a function that does
+  not exist, one hardcodes another machine's absolute path), plus `schedule_runs.sh`
+  and `scripts/clamp_probe.py`, which hardcodes `/home/marcel/...`.
+- `manifolds/base.py`, a back-compatibility alias. Its docstring -- the argument for
+  why the two-arm comparison is trustworthy -- moved onto the interface it described.
 - `torchvision` and `torchdiffeq` from the dependencies. Neither is imported anywhere
   in the repository.
 - `plotly` from the development group, for the same reason.
 
 ### Fixed
 
+- `cyfm/flow/__init__.py` declared four names in `__all__` that it never imported, so
+  `from cyfm.flow import build_coupling` raised `ImportError` and the `COUPLINGS`
+  registry stayed empty unless something imported `cyfm.flow.coupling` directly.
+- `check_ascii.py` listed fifteen paths, three of them long deleted, and printed read
+  errors without setting its failure flag -- so it exited 0 while checking almost
+  nothing. It now walks the tree and treats an unreadable file as a failure.
+- `README.md` claimed "every result is on synthetic data generated on the fly" and
+  filed fastMRI under "Not part of the paper", while the paper rests on three domains.
+  `conf/experiment/README.md` omitted both real-data experiments, and
+  `docs/reproduce/paper_results/README.md` omitted both knee archives.
 - Declared `pillow`, which `manim/scripts/crop_figures.py` imports and which was
   previously pulled in only transitively through `matplotlib`.
 - Dropped two `ruff` exclusions naming `scripts/generate_figure2*.py` and
