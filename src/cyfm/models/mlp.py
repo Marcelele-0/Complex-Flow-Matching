@@ -21,7 +21,7 @@ from __future__ import annotations
 import torch
 from torch import nn
 
-from cyfm.core.registry import MODELS
+from cyfm.core.registry import register_model
 from cyfm.models.blocks import SinusoidalPositionEmbeddings
 
 # Below this amplitude a complex number's phase is numerically meaningless, so
@@ -33,8 +33,8 @@ _AMPLITUDE_FLOOR = 1e-8
 _SHARED_ENCODING_WIDTH = 5
 
 
-@MODELS.register("mlp")
-@MODELS.register("pointwise_mlp")
+@register_model("mlp")
+@register_model("pointwise_mlp")
 class PointwiseVelocityMLP(nn.Module):
     """Velocity field applied independently at every spatial coefficient.
 

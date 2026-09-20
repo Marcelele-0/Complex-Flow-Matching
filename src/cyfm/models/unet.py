@@ -3,7 +3,7 @@ from collections.abc import Sequence
 import torch
 import torch.nn as nn
 
-from cyfm.core.registry import MODELS
+from cyfm.core.registry import register_model
 from cyfm.models.blocks import SinusoidalPositionEmbeddings
 
 
@@ -51,8 +51,8 @@ class TimeConditionedBlock(nn.Module):
         return self.silu(h + self.residual(x))
 
 
-@MODELS.register("c_unet")
-@MODELS.register("cylindrical_unet")
+@register_model("c_unet")
+@register_model("cylindrical_unet")
 class CylindricalUNet(nn.Module):
     """U-Net architecture for Continuous Flow Matching on complex MRI representations.
 

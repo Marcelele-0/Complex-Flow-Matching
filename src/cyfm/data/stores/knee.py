@@ -25,7 +25,7 @@ import numpy as np
 import torch
 
 from cyfm.core.dataset import BaseComplexDataset
-from cyfm.core.registry import DATASETS
+from cyfm.core.registry import DATASETS, register_dataset
 from cyfm.data.transforms import KSpaceCenterCrop
 
 __all__ = ["KneeStoreDataset"]
@@ -53,8 +53,8 @@ def _volume_role(volume: str, fraction: float, seed: int) -> str:
     return "holdout" if draw < fraction else "fit"
 
 
-@DATASETS.register("fastmri_knee_pd")
-@DATASETS.register("knee_store")
+@register_dataset("fastmri_knee_pd")
+@register_dataset("knee_store")
 class KneeStoreDataset(BaseComplexDataset):
     """Complex knee slices read from a prebuilt store.
 

@@ -27,7 +27,7 @@ from typing import Any
 import torch
 
 from cyfm.core.manifold import BaseManifold
-from cyfm.core.registry import MANIFOLDS
+from cyfm.core.registry import register_manifold
 from cyfm.flow.solvers import (
     PredictorCorrectorSolver,
     heun_evaluations,
@@ -63,7 +63,7 @@ def _match_shape(val: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     return val
 
 
-@MANIFOLDS.register("complex_diffusion")
+@register_manifold("complex_diffusion")
 class ComplexDiffusionManifold(FlatComplexRepresentation, BaseManifold):
     """Complex Diffusion on R^2 via Variance-Exploding SDE (VE-SDE).
 

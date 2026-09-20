@@ -14,7 +14,7 @@ from typing import Any
 import torch
 
 from cyfm.core.manifold import BaseManifold
-from cyfm.core.registry import MANIFOLDS
+from cyfm.core.registry import register_manifold
 from cyfm.flow.bridges import LinearFlowBridge
 from cyfm.flow.losses import EuclideanVelocityLoss
 from cyfm.flow.solvers import EuclideanODESolver
@@ -122,7 +122,7 @@ def sample_gaussian_noise(
     return torch.randn(batch, 2, height, width, device=device, generator=generator)
 
 
-@MANIFOLDS.register("euclidean")
+@register_manifold("euclidean")
 class EuclideanManifold(FlatComplexRepresentation, BaseManifold):
     """Complex pixels as flat 2-vectors, with no manifold structure imposed.
 

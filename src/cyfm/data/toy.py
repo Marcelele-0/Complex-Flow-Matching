@@ -37,7 +37,7 @@ from collections.abc import Callable
 import torch
 
 from cyfm.core.dataset import BaseComplexDataset
-from cyfm.core.registry import DATASETS
+from cyfm.core.registry import DATASETS, register_dataset
 from cyfm.data.synthetic import CylinderToy
 from cyfm.utils.random_fields import smooth_standard_normals
 
@@ -125,7 +125,7 @@ class _CylinderToyDataset(BaseComplexDataset):
         return field if self.transform is None else self.transform(field)
 
 
-@DATASETS.register("cylinder_toy_iid")
+@register_dataset("cylinder_toy_iid")
 class CylinderToyIIDDataset(_CylinderToyDataset):
     """Every coefficient drawn independently: the control variant.
 
@@ -150,7 +150,7 @@ class CylinderToyIIDDataset(_CylinderToyDataset):
         )
 
 
-@DATASETS.register("cylinder_toy_field")
+@register_dataset("cylinder_toy_field")
 class CylinderToyFieldDataset(_CylinderToyDataset):
     """Spatially correlated coefficients: the variant with structure to learn.
 

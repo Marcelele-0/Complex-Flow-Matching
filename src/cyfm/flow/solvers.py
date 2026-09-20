@@ -25,7 +25,7 @@ from typing import Any
 
 import torch
 
-from cyfm.core.registry import SOLVERS
+from cyfm.core.registry import register_solver
 from cyfm.core.solver import BaseODESolver, BaseSDESolver
 
 
@@ -102,8 +102,8 @@ def _match_shape(val: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     return val
 
 
-@SOLVERS.register("pc_diffusion")
-@SOLVERS.register("complex_diffusion")
+@register_solver("pc_diffusion")
+@register_solver("complex_diffusion")
 class PredictorCorrectorSolver(BaseSDESolver):
     """Predictor-Corrector SDE solver for the unconditional complex-diffusion arm.
 
@@ -438,9 +438,9 @@ class HeunODESolver(BaseODESolver):
         return x_t
 
 
-@SOLVERS.register("cylindrical")
-@SOLVERS.register("cylindrical_heun")
-@SOLVERS.register("cylindrical_ode")
+@register_solver("cylindrical")
+@register_solver("cylindrical_heun")
+@register_solver("cylindrical_ode")
 class CylindricalODESolver(HeunODESolver):
     """2nd-order Heun ODE solver on decoupled cylindrical manifold R+ x S^1."""
 
@@ -475,9 +475,9 @@ class CylindricalODESolver(HeunODESolver):
         return torch.cat([m_next, px_next, py_next], dim=1)
 
 
-@SOLVERS.register("euclidean")
-@SOLVERS.register("euclidean_heun")
-@SOLVERS.register("euclidean_ode")
+@register_solver("euclidean")
+@register_solver("euclidean_heun")
+@register_solver("euclidean_ode")
 class EuclideanODESolver(HeunODESolver):
     """2nd-order Heun ODE solver in flat Euclidean space R^2."""
 

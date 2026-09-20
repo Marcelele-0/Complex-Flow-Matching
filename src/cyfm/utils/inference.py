@@ -5,6 +5,11 @@ and ``evaluate.py`` additionally has to find and load a trained checkpoint.
 Keeping that in one place means a new architecture is reached once through the
 MODELS registry rather than in every entry point, and it makes the logic
 unit-testable without standing up a Hydra ``main()``.
+
+This module used to carry ``import cyfm.models`` for its registration side
+effect, because it was the only thing guaranteeing ``MODELS`` was non-empty.
+That is now :mod:`cyfm`'s job, which runs before any submodule of it can be
+imported, so the crutch is gone.
 """
 
 from __future__ import annotations
@@ -17,12 +22,6 @@ import torch
 from omegaconf import DictConfig
 
 from cyfm.core.registry import MODELS
-
-# Imported for its side effect: @MODELS.register runs at class definition time, so
-# the registry stays empty unless the modules defining the architectures have been
-# imported. build_model is the only consumer, so this is the place that has to
-# guarantee it rather than leaving each entry point to remember.
-import cyfm.models  # noqa: F401,E402  isort:skip
 
 
 def build_model(

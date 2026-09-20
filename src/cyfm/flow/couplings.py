@@ -47,7 +47,7 @@ from scipy.optimize import linear_sum_assignment
 
 from cyfm.core.manifold import BaseManifold
 from cyfm.core.protocols import Coupling
-from cyfm.core.registry import COUPLINGS
+from cyfm.core.registry import COUPLINGS, register_coupling
 
 __all__ = [
     "COUPLING_IMPLEMENTATIONS",
@@ -62,8 +62,8 @@ __all__ = [
 _MAX_BATCH = 4096
 
 
-@COUPLINGS.register("independent")
-@COUPLINGS.register("none")
+@register_coupling("independent")
+@register_coupling("none")
 class IndependentCoupling:
     """Pair whatever the dataloader happened to draw together.
 
@@ -89,8 +89,8 @@ class IndependentCoupling:
         return data
 
 
-@COUPLINGS.register("optimal_transport")
-@COUPLINGS.register("ot")
+@register_coupling("optimal_transport")
+@register_coupling("ot")
 class OptimalTransportCoupling:
     """Exact minibatch optimal transport in the manifold's own metric.
 

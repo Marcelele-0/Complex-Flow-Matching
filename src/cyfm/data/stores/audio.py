@@ -29,7 +29,7 @@ import numpy as np
 import torch
 
 from cyfm.core.dataset import BaseComplexDataset
-from cyfm.core.registry import DATASETS
+from cyfm.core.registry import DATASETS, register_dataset
 
 __all__ = ["StftStoreDataset"]
 
@@ -56,8 +56,8 @@ def _speaker_role(speaker: str, fraction: float, seed: int) -> str:
     return "holdout" if draw < fraction else "fit"
 
 
-@DATASETS.register("librispeech_stft")
-@DATASETS.register("stft_store")
+@register_dataset("librispeech_stft")
+@register_dataset("stft_store")
 class StftStoreDataset(BaseComplexDataset):
     """Complex STFT segments read from a prebuilt store.
 

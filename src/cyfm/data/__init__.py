@@ -4,19 +4,20 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable, Mapping
-from typing import Any, cast
+from typing import Any
 
 import torch
 
+from cyfm.config.resolve import as_plain_dict
 from cyfm.core.dataset import BaseComplexDataset
 from cyfm.core.registry import DATASETS
 from cyfm.data.espirit import compute_espirit_maps, ensure_espirit_maps, process_h5_file
 from cyfm.data.fastmri import FastMRIDataset
-from cyfm.data.stores.knee import KneeStoreDataset
-from cyfm.data.stores.hdf5 import WorkerHDF5Manager
 from cyfm.data.splits import load_split_file_names, select_indices
-from cyfm.data.stores.stft import DEFAULT_STFT, StftProtocol, forward_stft, inverse_stft
 from cyfm.data.stores.audio import StftStoreDataset
+from cyfm.data.stores.hdf5 import WorkerHDF5Manager
+from cyfm.data.stores.knee import KneeStoreDataset
+from cyfm.data.stores.stft import DEFAULT_STFT, StftProtocol, forward_stft, inverse_stft
 from cyfm.data.torch_espirit import calibrate_fastmri_file_torch, compute_espirit_torch
 from cyfm.data.toy import CylinderToyFieldDataset, CylinderToyIIDDataset
 from cyfm.data.transforms import (
@@ -33,7 +34,6 @@ from cyfm.data.transforms import (
     slice_transform,
     window_transforms,
 )
-from cyfm.config.resolve import as_plain_dict
 
 # Config keys that belong to a dataset group but are consumed by the entry point
 # rather than passed to the dataset constructor.
@@ -112,7 +112,7 @@ def build_dataset(
 
     options.update({key: value for key, value in overrides.items() if value is not None})
     kwargs = {key: value for key, value in options.items() if key in accepted}
-    return cast(BaseComplexDataset, dataset_cls(**kwargs))
+    return dataset_cls(**kwargs)
 
 
 __all__ = [

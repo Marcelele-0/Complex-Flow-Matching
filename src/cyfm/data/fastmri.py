@@ -16,7 +16,7 @@ import numpy as np
 import torch
 
 from cyfm.core.dataset import BaseComplexDataset
-from cyfm.core.registry import DATASETS
+from cyfm.core.registry import DATASETS, register_dataset
 from cyfm.data.stores.hdf5 import WorkerHDF5Manager
 from cyfm.utils.fft import fft2c, ifft2c
 
@@ -75,8 +75,8 @@ def _center_crop_to(x: torch.Tensor, height: int, width: int) -> torch.Tensor:
     return x[..., top : top + height, left : left + width]
 
 
-@DATASETS.register("fastmri")
-@DATASETS.register("fast_mri")
+@register_dataset("fastmri")
+@register_dataset("fast_mri")
 class FastMRIDataset(BaseComplexDataset):
     """Streaming multi-coil fastMRI dataset with ESPIRiT sensitivity maps.
 

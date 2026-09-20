@@ -16,7 +16,7 @@ from typing import Any
 import torch
 
 from cyfm.core.manifold import BaseManifold, Representation
-from cyfm.core.registry import MANIFOLDS
+from cyfm.core.registry import register_manifold
 from cyfm.flow.bridges import GeodesicFlowBridge
 from cyfm.flow.losses import DecoupledCylindricalLoss
 from cyfm.flow.solvers import CylindricalODESolver
@@ -165,7 +165,7 @@ def sample_cylindrical_noise_correlated(
     return torch.cat([amp, torch.cos(phi), torch.sin(phi)], dim=1)
 
 
-@MANIFOLDS.register("cylindrical")
+@register_manifold("cylindrical")
 class CylindricalManifold(BaseManifold):
     """Amplitude on the half-line, phase on the circle, carried as ``[m, cos, sin]``.
 

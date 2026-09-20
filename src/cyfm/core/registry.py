@@ -5,6 +5,12 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from typing import Any, Generic, TypeVar, cast, overload
 
+from torch import nn
+
+from cyfm.core.dataset import BaseComplexDataset
+from cyfm.core.manifold import BaseManifold
+from cyfm.core.protocols import Coupling, Sampler
+
 T = TypeVar("T")
 
 
@@ -148,9 +154,23 @@ class Registry(Generic[T]):
         return f"Registry(name={self._name!r}, items={self.list()})"
 
 
-# Pre-instantiated core registries
-MANIFOLDS: Registry[Any] = Registry("manifolds")
-MODELS: Registry[Any] = Registry("models")
-SOLVERS: Registry[Any] = Registry("solvers")
-DATASETS: Registry[Any] = Registry("datasets")
-COUPLINGS: Registry[Any] = Registry("couplings")
+# The package's registries, each typed to what it actually holds. They were all
+# Registry[Any], which made `build` return Any and pushed a cast onto every
+# consumer -- cyfm.data and the registry's own tests both carried one. Typing
+# them here deletes those casts and lets mypy reject a class registered into the
+# wrong registry at the decorator.
+MANIFOLDS: Registry[BaseManifold] = Registry("manifolds")
+MODELS: Registry[nn.Module] = Registry("models")
+SOLVERS: Registry[Sampler] = Registry("solvers")
+DATASETS: Registry[BaseComplexDataset] = Registry("datasets")
+COUPLINGS: Registry[Coupling] = Registry("couplings")
+
+# The decorator spelling used at the definition sites. `@register_dataset("knee")`
+# reads as what it does where it is applied; `DATASETS.register` names the table
+# being mutated, which is the detail the reader at that line cares least about.
+# Both are the same object, so there is no second mechanism to keep in step.
+register_manifold = MANIFOLDS.register
+register_model = MODELS.register
+register_solver = SOLVERS.register
+register_dataset = DATASETS.register
+register_coupling = COUPLINGS.register
