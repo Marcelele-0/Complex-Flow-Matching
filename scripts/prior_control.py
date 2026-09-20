@@ -17,7 +17,7 @@ prior of 0.3173 against their 0.3238. Those collisions were coincidence, and the
 provenance was not evidence of error. The speech and knee rows are still unchecked, because
 their stores are not local.
 
-The protocol mirrors :mod:`cfm.evaluate` rather than reimplementing it: the same
+The protocol mirrors :mod:`cyfm.evaluate` rather than reimplementing it: the same
 dataset registry, the same ``training_pipeline`` (which divides every field by its
 own peak modulus -- scoring against raw fields biases every absolute number, as
 that function's own docstring records), the same ``manifold.sample_noise``, the
@@ -29,7 +29,7 @@ same ``to_complex``, the same ``distributional_metrics``, and the same
 The prior is drawn from the cylindrical manifold, but the metric lives on complex
 fields and both geometries share one prior, so the number is geometry-independent.
 
-**The reference population is the caller's problem, deliberately.** ``cfm.evaluate``
+**The reference population is the caller's problem, deliberately.** ``cyfm.evaluate``
 never touches ``dataset.role``; ``scripts/paper/run_arm.sh`` supplies it per arm through
 its ``EVAL_ONLY`` overrides, and the two file-backed cohorts do not agree on what
 held-out means. Speech hashes one store by speaker, so its evaluation reads
@@ -58,10 +58,10 @@ import torch
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
-from cfm.data import build_dataset
-from cfm.evaluate import training_pipeline
-from cfm.manifolds import build_manifold
-from cfm.utils.metrics import distributional_metrics
+from cyfm.data import build_dataset
+from cyfm.evaluate import training_pipeline
+from cyfm.manifolds import build_manifold
+from cyfm.utils.metrics import distributional_metrics
 
 
 def parse_args() -> argparse.Namespace:

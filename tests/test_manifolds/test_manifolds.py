@@ -13,14 +13,14 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
-from cfm.manifolds import (
+from cyfm.manifolds import (
     CylindricalManifold,
     EuclideanManifold,
     Manifold,
     build_manifold,
 )
-from cfm.manifolds.cylindrical import sample_cylindrical_noise
-from cfm.manifolds.euclidean import sample_matched_noise
+from cyfm.manifolds.cylindrical import sample_cylindrical_noise
+from cyfm.manifolds.euclidean import sample_matched_noise
 
 CPU = torch.device("cpu")
 monkey: dict = {}
@@ -379,7 +379,7 @@ class TestSideBySideFairness:
         self, model_name: str
     ) -> None:
         """Same trunk, same parameter count apart from one convolution."""
-        from cfm.utils.inference import build_model
+        from cyfm.utils.inference import build_model
 
         cfg = OmegaConf.create(
             {
@@ -422,7 +422,7 @@ class TestSideBySideFairness:
         stream before the bias is drawn *inside the same module*. That divergence
         is therefore contained to this one convolution, which is the point.
         """
-        from cfm.utils.inference import build_model
+        from cyfm.utils.inference import build_model
 
         cfg = OmegaConf.create(
             {
@@ -478,7 +478,7 @@ def test_a_bounded_head_cannot_leave_the_range_its_geometry_allows() -> None:
     """
     import math
 
-    from cfm.models.cylindrical_unet import CylindricalUNet
+    from cyfm.models.cylindrical_unet import CylindricalUNet
 
     model = CylindricalUNet(
         base_channels=8, in_channels=3, out_channels=2, velocity_bound=(1.0, math.pi)
@@ -499,7 +499,7 @@ def test_a_bounded_head_cannot_leave_the_range_its_geometry_allows() -> None:
 
 def test_an_unbounded_head_is_left_exactly_as_it_was() -> None:
     """Omitting the bound must not perturb the existing architecture."""
-    from cfm.models.cylindrical_unet import CylindricalUNet
+    from cyfm.models.cylindrical_unet import CylindricalUNet
 
     torch.manual_seed(0)
     plain = CylindricalUNet(base_channels=8, in_channels=3, out_channels=2)
@@ -514,8 +514,8 @@ def test_each_geometry_states_its_own_bound() -> None:
     """The cylinder's binds and the plane's is slack; that asymmetry is the argument."""
     import math
 
-    from cfm.manifolds.cylindrical import CylindricalManifold
-    from cfm.manifolds.euclidean import EuclideanManifold
+    from cyfm.manifolds.cylindrical import CylindricalManifold
+    from cyfm.manifolds.euclidean import EuclideanManifold
 
     assert CylindricalManifold().velocity_bound == (1.0, math.pi)
     assert EuclideanManifold().velocity_bound == (2.0, 2.0)

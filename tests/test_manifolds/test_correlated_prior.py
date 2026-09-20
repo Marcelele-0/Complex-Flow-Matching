@@ -13,9 +13,9 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
-from cfm.manifolds import build_manifold
-from cfm.manifolds.cylindrical import sample_cylindrical_noise
-from cfm.utils.random_fields import smooth_standard_normals
+from cyfm.manifolds import build_manifold
+from cyfm.manifolds.cylindrical import sample_cylindrical_noise
+from cyfm.utils.random_fields import smooth_standard_normals
 
 _CPU = torch.device("cpu")
 

@@ -11,11 +11,11 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
-from cfm.core.manifold import BaseManifold
-from cfm.core.registry import COUPLINGS
-from cfm.data.toy_dataset import CylinderToyIIDDataset
-from cfm.flow.coupling import IndependentCoupling, OptimalTransportCoupling, build_coupling
-from cfm.manifolds import build_manifold
+from cyfm.core.manifold import BaseManifold
+from cyfm.core.registry import COUPLINGS
+from cyfm.data.toy_dataset import CylinderToyIIDDataset
+from cyfm.flow.coupling import IndependentCoupling, OptimalTransportCoupling, build_coupling
+from cyfm.manifolds import build_manifold
 
 GEOMETRIES = ("cylindrical", "euclidean")
 

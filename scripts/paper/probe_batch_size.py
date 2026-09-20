@@ -4,7 +4,7 @@ Issue #76: the synthetic fields trained at batch 64 on 64x64, and 320x320 is 25x
 pixels, so that batch does not carry over to fastMRI. The batch size is part of the
 protocol -- every arm of a table has to share it -- so it is measured, not guessed.
 
-Each trial runs full training steps built the way ``cfm.train`` builds them, from the
+Each trial runs full training steps built the way ``cyfm.train`` builds them, from the
 same experiment config: the prior draw, the coupling, the bridge, the forward pass,
 the loss, backward and an AdamW step. The optimizer's moments and the coupling's cost
 matrix are therefore both inside the measurement. The data states are synthetic, so
@@ -35,9 +35,9 @@ from dataclasses import dataclass
 import torch
 from hydra import compose, initialize_config_dir
 
-from cfm.flow.coupling import build_coupling
-from cfm.manifolds import build_manifold
-from cfm.utils.inference import build_model
+from cyfm.flow.coupling import build_coupling
+from cyfm.manifolds import build_manifold
+from cyfm.utils.inference import build_model
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CONF = ROOT / "conf"

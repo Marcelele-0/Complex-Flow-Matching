@@ -11,7 +11,7 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
-from cfm.utils.inference import (
+from cyfm.utils.inference import (
     build_model,
     find_latest_checkpoint,
     load_weights,

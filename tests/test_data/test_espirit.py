@@ -12,14 +12,14 @@ import numpy as np
 import pytest
 import torch
 
-from cfm.data import (
+from cyfm.data import (
     FastMRIDataset,
     compute_espirit_maps,
     ensure_espirit_maps,
 )
-from cfm.data.espirit import process_h5_file
-from cfm.data.torch_espirit import calibrate_fastmri_file_torch, compute_espirit_torch
-from cfm.utils.fft import fft2c
+from cyfm.data.espirit import process_h5_file
+from cyfm.data.torch_espirit import calibrate_fastmri_file_torch, compute_espirit_torch
+from cyfm.utils.fft import fft2c
 
 pytest.importorskip("sigpy", reason="sigpy is required for ESPIRiT tests")
 
@@ -240,7 +240,7 @@ def test_fastmri_dataset_auto_calibration_ddp_shards_across_ranks(tmp_path: Path
         with (
             _ddp(rank, 2),
             patch("torch.distributed.all_reduce") as mock_all_reduce,
-            patch("cfm.data.espirit.ensure_espirit_maps") as mock_ensure,
+            patch("cyfm.data.espirit.ensure_espirit_maps") as mock_ensure,
         ):
             _ = FastMRIDataset(data_dir=str(data_dir), use_cache=False)
             mock_ensure.assert_called_once()
@@ -262,7 +262,7 @@ def test_fastmri_dataset_auto_calibration_ddp_failure_propagation(tmp_path: Path
     with (
         _ddp(0, 2),
         patch("torch.distributed.all_reduce") as mock_all_reduce,
-        patch("cfm.data.espirit.ensure_espirit_maps", side_effect=RuntimeError("Out of memory")),
+        patch("cyfm.data.espirit.ensure_espirit_maps", side_effect=RuntimeError("Out of memory")),
     ):
         with pytest.raises(RuntimeError, match="failed on at least one rank"):
             _ = FastMRIDataset(data_dir=str(data_dir), use_cache=False)
@@ -276,7 +276,7 @@ def test_fastmri_dataset_auto_calibration_ddp_failure_propagation(tmp_path: Path
     with (
         _ddp(1, 2),
         patch("torch.distributed.all_reduce", side_effect=fail_elsewhere) as mock_all_reduce,
-        patch("cfm.data.espirit.ensure_espirit_maps") as mock_ensure,
+        patch("cyfm.data.espirit.ensure_espirit_maps") as mock_ensure,
     ):
         with pytest.raises(RuntimeError, match="failed on at least one rank"):
             _ = FastMRIDataset(data_dir=str(data_dir), use_cache=False)
@@ -366,12 +366,12 @@ def test_compute_espirit_torch_matches_sigpy() -> None:
 
 def test_compute_espirit_torch_honours_calibration_parameters(tmp_path: Path) -> None:
     """Calibration parameters must reach the GPU writer, not be silently dropped."""
-    from cfm.data.torch_espirit import calibrate_fastmri_file_torch
+    from cyfm.data.torch_espirit import calibrate_fastmri_file_torch
 
     src = tmp_path / "vol.h5"
     _create_mock_kspace_file(src, num_slices=1, num_coils=4, height=24, width=24)
 
-    with patch("cfm.data.torch_espirit.compute_espirit_torch") as mock_compute:
+    with patch("cyfm.data.torch_espirit.compute_espirit_torch") as mock_compute:
         mock_compute.return_value = torch.zeros(4, 24, 24, dtype=torch.complex64)
         calibrate_fastmri_file_torch(
             src_path=src,
@@ -393,7 +393,7 @@ def test_compute_espirit_torch_honours_calibration_parameters(tmp_path: Path) ->
 
 def test_calibrate_torch_recomputes_sidecar_missing_the_key(tmp_path: Path) -> None:
     """A sidecar without the maps is not finished work and must not be skipped."""
-    from cfm.data.torch_espirit import calibrate_fastmri_file_torch
+    from cyfm.data.torch_espirit import calibrate_fastmri_file_torch
 
     src = tmp_path / "vol.h5"
     dest = tmp_path / "sens" / "vol.h5"
@@ -409,7 +409,7 @@ def test_calibrate_torch_recomputes_sidecar_missing_the_key(tmp_path: Path) -> N
 
 def test_compute_espirit_torch_cpu_and_gpu() -> None:
     """Test pure PyTorch ESPIRiT calibration on CPU and GPU (if available)."""
-    from cfm.data.torch_espirit import compute_espirit_torch
+    from cyfm.data.torch_espirit import compute_espirit_torch
 
     # [num_coils, H, W]
     ksp = torch.randn(4, 32, 32, dtype=torch.complex64)
@@ -427,7 +427,7 @@ def test_compute_espirit_torch_cpu_and_gpu() -> None:
 
 def test_calibrate_fastmri_file_torch(tmp_path: Path) -> None:
     """Test calibrate_fastmri_file_torch generates sidecar with correct shape."""
-    from cfm.data.torch_espirit import calibrate_fastmri_file_torch
+    from cyfm.data.torch_espirit import calibrate_fastmri_file_torch
 
     src_file = tmp_path / "mock_vol.h5"
     dest_file = tmp_path / "sens" / "mock_vol.h5"

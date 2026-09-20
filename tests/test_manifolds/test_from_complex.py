@@ -3,7 +3,7 @@ import math
 import pytest
 import torch
 
-from cfm.manifolds import CylindricalManifold, EuclideanManifold
+from cyfm.manifolds import CylindricalManifold, EuclideanManifold
 
 MANIFOLDS = [CylindricalManifold, EuclideanManifold]
 

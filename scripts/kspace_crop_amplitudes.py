@@ -35,9 +35,9 @@ from typing import Any
 import torch
 from omegaconf import OmegaConf
 
-from cfm.data.knee_store import KneeStoreDataset
-from cfm.manifolds import build_manifold
-from cfm.utils.metrics import circular_linear_correlation
+from cyfm.data.knee_store import KneeStoreDataset
+from cyfm.manifolds import build_manifold
+from cyfm.utils.metrics import circular_linear_correlation
 
 _LOW_THRESHOLDS = (0.0, 1e-6, 1e-4, 1e-3, 1e-2)
 _QUANTILES = (0.01, 0.05, 0.25, 0.50)

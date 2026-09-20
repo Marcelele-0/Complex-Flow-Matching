@@ -1,7 +1,7 @@
 import torch
 
-from cfm.flow.bridge import GeodesicFlowBridge
-from cfm.flow.euclidean_bridge import LinearFlowBridge
+from cyfm.flow.bridge import GeodesicFlowBridge
+from cyfm.flow.euclidean_bridge import LinearFlowBridge
 
 
 def _euclidean_state(batch: int, h: int, w: int, seed: int = 0) -> torch.Tensor:

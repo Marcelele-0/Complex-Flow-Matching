@@ -8,8 +8,8 @@ import math
 import pytest
 import torch
 
-from cfm.data.toy_dataset import CylinderToyIIDDataset
-from cfm.evaluate import assert_training_domain, format_table
+from cyfm.data.toy_dataset import CylinderToyIIDDataset
+from cyfm.evaluate import assert_training_domain, format_table
 
 
 def _generator(seed: int = 0) -> torch.Generator:
@@ -36,8 +36,8 @@ def _straightness_setup() -> tuple[object, object, torch.Tensor]:
     """A small cylindrical model and a data batch in its state representation."""
     from omegaconf import OmegaConf
 
-    from cfm.manifolds import build_manifold
-    from cfm.models.pointwise_mlp import PointwiseVelocityMLP
+    from cyfm.manifolds import build_manifold
+    from cyfm.models.pointwise_mlp import PointwiseVelocityMLP
 
     torch.manual_seed(0)
     manifold = build_manifold(
@@ -51,8 +51,8 @@ def _straightness_setup() -> tuple[object, object, torch.Tensor]:
 
 def test_independent_coupling_reproduces_the_uncoupled_straightness() -> None:
     """Passing the baseline coupling explicitly must not change the number."""
-    from cfm.evaluate import straightness
-    from cfm.flow.coupling import IndependentCoupling
+    from cyfm.evaluate import straightness
+    from cyfm.flow.coupling import IndependentCoupling
 
     manifold, model, data = _straightness_setup()
     cpu = torch.device("cpu")
@@ -70,8 +70,8 @@ def test_independent_coupling_reproduces_the_uncoupled_straightness() -> None:
 
 def test_ot_coupling_changes_the_pairs_that_are_scored() -> None:
     """An OT-trained model is scored on OT pairs, which are not the drawn pairs."""
-    from cfm.evaluate import straightness
-    from cfm.flow.coupling import OptimalTransportCoupling
+    from cyfm.evaluate import straightness
+    from cyfm.flow.coupling import OptimalTransportCoupling
 
     manifold, model, data = _straightness_setup()
     cpu = torch.device("cpu")
@@ -99,8 +99,8 @@ def test_reference_goes_through_the_training_normalisation(geometry: str) -> Non
     """
     from omegaconf import OmegaConf
 
-    from cfm.evaluate import training_pipeline
-    from cfm.manifolds import build_manifold
+    from cyfm.evaluate import training_pipeline
+    from cyfm.manifolds import build_manifold
 
     manifold = build_manifold(
         OmegaConf.create({"manifold": {"name": geometry}, "training": {"loss": {}}})
@@ -148,7 +148,7 @@ def test_probe_accumulates_across_batches_of_different_sizes() -> None:
     silently pair two unrelated samples; the extrema are per sample, so batches
     concatenate.
     """
-    from cfm.evaluate import _AngularProbe
+    from cyfm.evaluate import _AngularProbe
 
     probe = _AngularProbe(lambda state, t: torch.ones_like(state), "euclidean")
     for size in (4, 4, 2):
@@ -163,7 +163,7 @@ def test_probe_accumulates_across_batches_of_different_sizes() -> None:
 
 def test_probe_records_nothing_when_disabled() -> None:
     """A score arm has no angular velocity, so there is nothing to report."""
-    from cfm.evaluate import _AngularProbe
+    from cyfm.evaluate import _AngularProbe
 
     probe = _AngularProbe(lambda state, t: torch.ones_like(state), "euclidean", enabled=False)
     probe.start_batch()
@@ -186,8 +186,8 @@ def test_straightness_is_chunk_invariant_for_a_degenerate_model() -> None:
     1 whatever the chunk size. That pins the sums and means across chunks, which is
     the part chunking could get wrong; the draws themselves differ by construction.
     """
-    from cfm.evaluate import straightness
-    from cfm.manifolds import CylindricalManifold
+    from cyfm.evaluate import straightness
+    from cyfm.manifolds import CylindricalManifold
 
     manifold = CylindricalManifold()
     device = torch.device("cpu")

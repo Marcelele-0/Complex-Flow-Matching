@@ -1,4 +1,4 @@
-# Weights & Biases preset: `uv run src/cfm/train.py logging=w_and_b`.
+# Weights & Biases preset: `uv run src/cyfm/train.py logging=w_and_b`.
 # Requires WANDB_API_KEY in the environment.
 #
 # Identical to conf/logging/default.yaml except for use_wandb, so opting into

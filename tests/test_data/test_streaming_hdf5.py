@@ -12,10 +12,10 @@ import pytest
 import torch
 from torch.utils.data import DataLoader
 
-from cfm.core.registry import DATASETS
-from cfm.data.dataset import SKMTEADataset, _process_slice_array
-from cfm.data.hdf5_manager import WorkerHDF5Manager
-from cfm.data.transforms import ComplexToCylinderTransform, Compose
+from cyfm.core.registry import DATASETS
+from cyfm.data.dataset import SKMTEADataset, _process_slice_array
+from cyfm.data.hdf5_manager import WorkerHDF5Manager
+from cyfm.data.transforms import ComplexToCylinderTransform, Compose
 
 
 @pytest.fixture

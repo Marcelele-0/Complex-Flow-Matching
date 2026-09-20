@@ -23,11 +23,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from cfm.evaluate import integrate_from_t
-from cfm.manifolds import CylindricalManifold, EuclideanManifold
-from cfm.models.cylindrical_unet_attention import CylindricalUNetAttention
-from cfm.utils.inference import load_weights
-from cfm.utils.metrics import (
+from cyfm.evaluate import integrate_from_t
+from cyfm.manifolds import CylindricalManifold, EuclideanManifold
+from cyfm.models.cylindrical_unet_attention import CylindricalUNetAttention
+from cyfm.utils.inference import load_weights
+from cyfm.utils.metrics import (
     circular_phase_error,
     peak_signal_noise_ratio,
     structural_similarity,

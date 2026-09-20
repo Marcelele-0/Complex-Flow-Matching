@@ -1,1 +1,1 @@
-"""Unit tests for cfm.core package."""
+"""Unit tests for cyfm.core package."""

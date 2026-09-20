@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from cfm.data.transforms import (
+from cyfm.data.transforms import (
     AmplitudeNormalize,
     CenterCropModulo,
     CenterCropOrPad,
@@ -13,7 +13,7 @@ from cfm.data.transforms import (
     WindowAmplitudeNormalize,
     WindowEuclideanNormalize,
 )
-from cfm.utils.fft import fft2c
+from cyfm.utils.fft import fft2c
 
 
 def test_center_crop_or_pad_crops_to_fixed_shape() -> None:
@@ -287,7 +287,7 @@ def test_kspace_center_crop_at_full_size_is_the_identity() -> None:
 
 
 def test_kspace_center_crop_keeps_dc_centered() -> None:
-    """DC stays at [h // 2, w // 2], the convention cfm.utils.fft asserts."""
+    """DC stays at [h // 2, w // 2], the convention cyfm.utils.fft asserts."""
     out = KSpaceCenterCrop(8)(torch.ones(1, 32, 32, dtype=torch.complex64))
     spectrum = fft2c(out)
     peak = int(spectrum.abs().argmax())

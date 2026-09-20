@@ -24,7 +24,7 @@
 #
 # Archive URLs come from FASTMRI_FULL_URLS in $CYFM_ROOT/.env, which is where issue #77
 # puts them and the only place the team maintains them. They are parsed with the same
-# python-dotenv call and the same comma-or-newline splitting cfm.data.download uses, so
+# python-dotenv call and the same comma-or-newline splitting cyfm.data.download uses, so
 # there is one format to get right rather than two. Task N takes the Nth URL.
 #
 #   URLS_VAR=FASTMRI_MINI_URLS sbatch scripts/wcss/build_knee_store.sbatch

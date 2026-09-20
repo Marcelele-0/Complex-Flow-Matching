@@ -10,7 +10,7 @@ uv run python scripts/paper/knee_samples_panel.py
 Checkpoints: `t5c64_cylindrical_ot_s0` (stamp `2026-09-18_17:10`, epoch 40) and
 `t5c64_euclidean_independent_s0` (stamp `2026-09-18_17:15`, epoch 40), both the 64x64
 k-space-crop arms of Table 5. Reference: `data/knee_pd/val.h5`, `role=all`, slices 0 / 341
-/ 682 of 1023, through `cfm.evaluate.training_pipeline` so the fields sit in the domain
+/ 682 of 1023, through `cyfm.evaluate.training_pipeline` so the fields sit in the domain
 training used. One prior seed shared across all four generated rows.
 
 ## The finding, stated plainly
@@ -48,7 +48,7 @@ actually shows "this backbone at this budget does not synthesise knees".
 
 ## What it is still good for
 
-1. **Nothing in the pipeline could show this before.** `cfm.evaluate` keeps metrics and
+1. **Nothing in the pipeline could show this before.** `cyfm.evaluate` keeps metrics and
    discards samples, and every knee number is a distance between distributions, which a blob
    field scores respectably on. The script now exists, so any future arm can be looked at
    before its numbers are believed.

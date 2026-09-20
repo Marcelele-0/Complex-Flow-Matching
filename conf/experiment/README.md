@@ -45,10 +45,10 @@ interrupted sweep resumes and runs shared between tables are made once. Each U-N
 run is
 
 ```bash
-uv run python -m cfm.train +experiment=<protocol> manifold=<geometry> \
+uv run python -m cyfm.train +experiment=<protocol> manifold=<geometry> \
     training.coupling=<coupling> dataset.crop_size=[<side>,<side>] \
     training.seed=<seed> logging.experiment_name=<name>
-uv run python -m cfm.evaluate +experiment=<protocol> manifold=<geometry> \
+uv run python -m cyfm.evaluate +experiment=<protocol> manifold=<geometry> \
     training.coupling=<coupling> dataset.crop_size=[<side>,<side>] \
     evaluate.run_name=<name> evaluate.num_fields=64 evaluate.seed=<seed> \
     evaluate.nfe=[1,2,4,8,100] logging.experiment_name=<name>_eval

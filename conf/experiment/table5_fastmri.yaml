@@ -14,10 +14,10 @@
 # read from the store built by scripts/data/build_knee_pd_store.py. Geometry,
 # coupling and seed are chosen on the command line:
 #
-#   uv run python -m cfm.train +experiment=table5_fastmri \
+#   uv run python -m cyfm.train +experiment=table5_fastmri \
 #       manifold=cylindrical training.coupling=ot training.seed=0 \
 #       logging.experiment_name=fm_cylindrical_ot_s0
-#   uv run python -m cfm.evaluate +experiment=table5_fastmri \
+#   uv run python -m cyfm.evaluate +experiment=table5_fastmri \
 #       manifold=cylindrical training.coupling=ot dataset.role=holdout \
 #       evaluate.run_name=fm_cylindrical_ot_s0 evaluate.nfe=[1,2,4,8,100]
 #

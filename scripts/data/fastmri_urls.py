@@ -10,7 +10,7 @@ worked last sprint. Two jobs, one file:
   regardless of validity (see :func:`head_status`), so this checks the signature the
   way an actual download would instead.
 
-Parsing goes through :func:`cfm.data.download.load_env` and the same comma-or-newline
+Parsing goes through :func:`cyfm.data.download.load_env` and the same comma-or-newline
 splitting the auto-downloader uses, so there is one ``.env`` format rather than two.
 
 Usage::
@@ -26,7 +26,7 @@ import sys
 import urllib.error
 import urllib.request
 
-from cfm.data.download import load_env
+from cyfm.data.download import load_env
 
 TIMEOUT = 30
 

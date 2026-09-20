@@ -132,7 +132,7 @@ Cryo: AGREE on all four, but the grade is TOO LENIENT on one sub-point.
 
 ### CODE CHECK (audit could not do this -- it had no repo access)
 Zero voxels are NOT excluded. They are manufactured.
-  src/cfm/flow/solver.py:99-100
+  src/cyfm/flow/solver.py:99-100
       # Amplitude clamp >= 0
       m_next = torch.clamp(m_t + v_m * dt, min=0.0)
   - Docstring one line above claims "projected onto R+ x S^1", but the clamp is

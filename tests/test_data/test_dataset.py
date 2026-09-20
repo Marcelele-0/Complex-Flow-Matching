@@ -3,8 +3,8 @@ import numpy as np
 import pytest
 import torch
 
-from cfm.data.dataset import SKMTEADataset
-from cfm.data.transforms import CenterCropModulo, ComplexToCylinderTransform, Compose
+from cyfm.data.dataset import SKMTEADataset
+from cyfm.data.transforms import CenterCropModulo, ComplexToCylinderTransform, Compose
 
 
 @pytest.fixture

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from cfm.utils.fft import fft2c, ifft2c
+from cyfm.utils.fft import fft2c, ifft2c
 
 
 def test_round_trip_is_identity() -> None:

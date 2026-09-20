@@ -7,8 +7,8 @@ import pytest
 import torch
 from omegaconf import DictConfig
 
-from cfm.core.registry import MASKS
-from cfm.data.masks import (
+from cyfm.core.registry import MASKS
+from cyfm.data.masks import (
     BaseMaskGenerator,
     CartesianMaskGenerator,
     PoissonDiscMaskGenerator,
@@ -297,7 +297,7 @@ def dummy_h5_dir(tmp_path) -> str:
 
 def test_dataset_integration_cartesian_default(dummy_h5_dir) -> None:
     """Verify SKMTEADataset defaults to Cartesian mask from registry."""
-    from cfm.data.dataset import SKMTEADataset
+    from cyfm.data.dataset import SKMTEADataset
 
     ds = SKMTEADataset(data_dir=dummy_h5_dir, mode="reconstruction", acceleration=4)
     assert isinstance(ds.mask_generator, CartesianMaskGenerator)
@@ -311,7 +311,7 @@ def test_dataset_integration_cartesian_default(dummy_h5_dir) -> None:
 
 def test_dataset_integration_poisson_disc(dummy_h5_dir) -> None:
     """Verify SKMTEADataset can be configured with poisson_disc mask."""
-    from cfm.data.dataset import SKMTEADataset
+    from cyfm.data.dataset import SKMTEADataset
 
     ds = SKMTEADataset(
         data_dir=dummy_h5_dir,
@@ -332,7 +332,7 @@ def test_dataset_integration_poisson_disc(dummy_h5_dir) -> None:
 
 def test_dataset_integration_hydra_dict_config(dummy_h5_dir) -> None:
     """Verify SKMTEADataset parses Hydra dictionary configuration."""
-    from cfm.data.dataset import SKMTEADataset
+    from cyfm.data.dataset import SKMTEADataset
 
     mask_cfg = {"type": "cartesian", "acceleration": 12, "num_center_lines": 8}
     ds = SKMTEADataset(
@@ -351,7 +351,7 @@ def test_dataset_integration_hydra_dict_config(dummy_h5_dir) -> None:
 
 def test_dataset_integration_explicit_mask_generator_instance(dummy_h5_dir) -> None:
     """Verify SKMTEADataset accepts an instantiated BaseMaskGenerator."""
-    from cfm.data.dataset import SKMTEADataset
+    from cyfm.data.dataset import SKMTEADataset
 
     custom_gen = CartesianMaskGenerator(acceleration=6, num_center_lines=12)
     ds = SKMTEADataset(
@@ -365,7 +365,7 @@ def test_dataset_integration_explicit_mask_generator_instance(dummy_h5_dir) -> N
 
 def test_dataset_determinism_integral_and_float_seed_key(dummy_h5_dir) -> None:
     """Verify S1: integral acceleration formats identically to prevent breaking seed determinism."""
-    from cfm.data.dataset import SKMTEADataset
+    from cyfm.data.dataset import SKMTEADataset
 
     ds_int = SKMTEADataset(data_dir=dummy_h5_dir, mode="reconstruction", acceleration=4)
     ds_float = SKMTEADataset(data_dir=dummy_h5_dir, mode="reconstruction", acceleration=4.0)
@@ -383,7 +383,7 @@ def test_dataset_determinism_integral_and_float_seed_key(dummy_h5_dir) -> None:
 
 def test_dataset_integration_dictconfig(dummy_h5_dir) -> None:
     """Verify SKMTEADataset accepts an OmegaConf DictConfig for mask."""
-    from cfm.data.dataset import SKMTEADataset
+    from cyfm.data.dataset import SKMTEADataset
 
     cfg = DictConfig({"type": "cartesian", "acceleration": 8, "num_center_lines": 16})
     ds = SKMTEADataset(data_dir=dummy_h5_dir, mode="reconstruction", mask=cfg)
@@ -394,7 +394,7 @@ def test_dataset_integration_dictconfig(dummy_h5_dir) -> None:
 
 def test_dataset_integration_eager_pop_preserved(dummy_h5_dir) -> None:
     """Verify mask dictionary with 'name' does not eagerly pop or corrupt keys."""
-    from cfm.data.dataset import SKMTEADataset
+    from cyfm.data.dataset import SKMTEADataset
 
     mask_dict = {"name": "cartesian", "acceleration": 4}
     ds = SKMTEADataset(data_dir=dummy_h5_dir, mode="reconstruction", mask=mask_dict)
@@ -471,7 +471,7 @@ def test_dataset_integration_omegaconf_dict_container(dummy_h5_dir) -> None:
     """Verify SKMTEADataset accepts dict converted from Hydra DictConfig at call site."""
     from omegaconf import OmegaConf
 
-    from cfm.data.dataset import SKMTEADataset
+    from cyfm.data.dataset import SKMTEADataset
 
     cfg = OmegaConf.create(
         {
@@ -495,7 +495,7 @@ def test_evaluate_mask_config_plumbing(dummy_h5_dir) -> None:
     """Verify evaluate.py mask config plumbing passes center_fraction to mask generator."""
     from omegaconf import OmegaConf
 
-    from cfm.data.dataset import SKMTEADataset
+    from cyfm.data.dataset import SKMTEADataset
 
     cfg = OmegaConf.create(
         {
@@ -530,7 +530,7 @@ def test_train_mask_config_plumbing(dummy_h5_dir) -> None:
     """Verify train.py dataset mask config plumbing passes mask configuration to SKMTEADataset."""
     from omegaconf import OmegaConf
 
-    from cfm.data.dataset import SKMTEADataset
+    from cyfm.data.dataset import SKMTEADataset
 
     cfg = OmegaConf.create(
         {

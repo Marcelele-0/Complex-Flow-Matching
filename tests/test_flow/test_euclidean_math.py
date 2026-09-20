@@ -1,8 +1,8 @@
 import pytest
 import torch
 
-from cfm.flow.euclidean_math import EuclideanVelocityLoss
-from cfm.flow.torus_math import DecoupledCylindricalLoss
+from cyfm.flow.euclidean_math import EuclideanVelocityLoss
+from cyfm.flow.torus_math import DecoupledCylindricalLoss
 
 
 class TestValidation:
@@ -105,7 +105,7 @@ class TestHighFrequencyBoost:
         """A HF ablation must mean the same thing on both geometries.
 
         Same velocity error, same boost factor, same number: the two losses share
-        cfm.flow.spectral rather than each spelling the FFT out.
+        cyfm.flow.spectral rather than each spelling the FFT out.
         """
         error = torch.randn(2, 2, 16, 16)
         target = torch.zeros_like(error)

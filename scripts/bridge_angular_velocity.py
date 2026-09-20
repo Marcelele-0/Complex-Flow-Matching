@@ -49,8 +49,8 @@ import h5py
 import numpy as np
 import torch
 
-from cfm.data.synthetic import CylinderToy, cylinder_prior
-from cfm.flow.optimal_transport import euclidean_transport_permutation, shortest_angular_diff
+from cyfm.data.synthetic import CylinderToy, cylinder_prior
+from cyfm.flow.optimal_transport import euclidean_transport_permutation, shortest_angular_diff
 
 # Guards a division by the squared closest approach; a chord through the origin
 # to float precision is the divergence itself, not a numerical accident.

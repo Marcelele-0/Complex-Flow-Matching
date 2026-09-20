@@ -8,7 +8,7 @@ sidecar files in ``--output_dir`` (defaulting to ``<data_dir>_sens``). Source fi
 are strictly read-only and never modified.
 
 The maps land on sigpy's centered image grid, which is the convention
-:mod:`cfm.utils.fft` implements and :class:`~cfm.data.fastmri.FastMRIDataset`
+:mod:`cyfm.utils.fft` implements and :class:`~cyfm.data.fastmri.FastMRIDataset`
 consumes. Do not introduce a transform here without changing both.
 """
 
@@ -20,7 +20,7 @@ import logging
 import os
 from pathlib import Path
 
-from cfm.data.espirit import (
+from cyfm.data.espirit import (
     DEFAULT_SENS_KEY,
     SENS_KEY,
     compute_espirit_maps,

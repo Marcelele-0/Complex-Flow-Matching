@@ -11,9 +11,9 @@ import math
 import pytest
 import torch
 
-from cfm.flow.bridge import GeodesicFlowBridge
-from cfm.flow.torus_math import DecoupledCylindricalLoss
-from cfm.models.cylindrical_unet_cross_slice import (
+from cyfm.flow.bridge import GeodesicFlowBridge
+from cyfm.flow.torus_math import DecoupledCylindricalLoss
+from cyfm.models.cylindrical_unet_cross_slice import (
     CrossSliceAttention,
     CylindricalUNetCrossSlice,
 )

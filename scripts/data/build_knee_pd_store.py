@@ -63,8 +63,8 @@ import h5py
 import numpy as np
 import torch
 
-from cfm.data.fastmri import FastMRIDataset, _center_crop_to, _to_complex_tensor
-from cfm.data.torch_espirit import calibrate_fastmri_file_torch
+from cyfm.data.fastmri import FastMRIDataset, _center_crop_to, _to_complex_tensor
+from cyfm.data.torch_espirit import calibrate_fastmri_file_torch
 
 DEFAULT_MATRICES = ("640x368", "640x372")
 SENS_KEY = "sensitivity_maps"
@@ -120,7 +120,7 @@ def sha256_of(path: pathlib.Path, block: int = 1 << 20) -> str:
 def create_images(store: h5py.File, crop: int) -> h5py.Dataset:
     """The store's growable image dataset.
 
-    One chunk is one slice, which is how :class:`~cfm.data.knee_store.KneeStoreDataset`
+    One chunk is one slice, which is how :class:`~cyfm.data.knee_store.KneeStoreDataset`
     reads it, so a training read never has to touch a neighbouring slice.
     """
     return store.create_dataset(

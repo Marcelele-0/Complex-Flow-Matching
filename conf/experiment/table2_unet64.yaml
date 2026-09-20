@@ -9,7 +9,7 @@
 #   uv run python scripts/paper/reproduce.py table2_unet64 --seeds 0    # quick check
 #
 # One cell by hand (this config includes the protocol):
-#   uv run python -m cfm.train +experiment=table2_unet64 manifold=cylindrical \
+#   uv run python -m cyfm.train +experiment=table2_unet64 manifold=cylindrical \
 #       training.coupling=ot dataset.crop_size=[64,64] training.seed=0 \
 #       logging.experiment_name=my_run
 defaults:

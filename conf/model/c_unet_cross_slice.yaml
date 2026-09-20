@@ -2,7 +2,7 @@
 # bottleneck, then a 2D decoder on the center slice only.
 #
 # REQUIRES an odd dataset.num_slices > 1, since the model consumes slice windows:
-#   uv run src/cfm/train.py model=c_unet_cross_slice dataset.num_slices=3
+#   uv run src/cyfm/train.py model=c_unet_cross_slice dataset.num_slices=3
 # train.py fails fast if this is not set.
 #
 # Sampling is NOT wired yet: the model emits a center-only velocity, which the ODE

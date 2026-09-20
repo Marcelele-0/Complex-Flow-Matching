@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from cfm.data.download import (
+from cyfm.data.download import (
     ensure_dataset_exists,
     ensure_fastmri,
     ensure_skm_tea_mini,
@@ -43,12 +43,12 @@ class TestDownloadUtilities:
 
     def test_ensure_skm_tea_existing_data_skips(self, tmp_path) -> None:
         (tmp_path / "slice_001.h5").touch()
-        with patch("cfm.data.download.snapshot_download") as mock_hf:
+        with patch("cyfm.data.download.snapshot_download") as mock_hf:
             ensure_dataset_exists("skm_tea", tmp_path)
             mock_hf.assert_not_called()
 
     def test_ensure_skm_tea_calls_snapshot_download(self, tmp_path) -> None:
-        with patch("cfm.data.download.snapshot_download") as mock_hf:
+        with patch("cyfm.data.download.snapshot_download") as mock_hf:
             ensure_dataset_exists("skm_tea", tmp_path)
             mock_hf.assert_called_once_with(
                 repo_id="arjundd/skm-tea-mini",
@@ -60,46 +60,46 @@ class TestDownloadUtilities:
         sub = tmp_path / "subdir"
         sub.mkdir()
         (sub / "vol_001.h5").touch()
-        with patch("cfm.data.download.download_and_extract_tar") as mock_dl:
+        with patch("cyfm.data.download.download_and_extract_tar") as mock_dl:
             ensure_dataset_exists("fastmri", tmp_path, mode="local")
             mock_dl.assert_not_called()
 
     def test_ensure_fastmri_local_missing_env_url(self, tmp_path) -> None:
-        with patch("cfm.data.download.load_env", return_value={}):
+        with patch("cyfm.data.download.load_env", return_value={}):
             with pytest.raises(ValueError, match="Missing FASTMRI_MINI_URL"):
                 ensure_dataset_exists("fastmri", tmp_path, mode="local")
 
     def test_ensure_fastmri_full_missing_env_url(self, tmp_path) -> None:
-        with patch("cfm.data.download.load_env", return_value={}):
+        with patch("cyfm.data.download.load_env", return_value={}):
             with pytest.raises(ValueError, match="Missing FASTMRI_FULL_URLS in .env"):
                 ensure_dataset_exists("fastmri", tmp_path, mode="full")
 
     def test_ensure_fastmri_invalid_mode(self, tmp_path) -> None:
-        with patch("cfm.data.download.load_env", return_value={}):
+        with patch("cyfm.data.download.load_env", return_value={}):
             with pytest.raises(ValueError, match="Unknown fastMRI mode"):
                 ensure_dataset_exists("fastmri", tmp_path, mode="invalid_mode")
 
     def test_ensure_fastmri_local_downloads_tar(self, tmp_path) -> None:
         mock_env = {"FASTMRI_MINI_URL": "https://example.com/mini.tar.gz"}
-        with patch("cfm.data.download.load_env", return_value=mock_env):
-            with patch("cfm.data.download.download_and_extract_tar") as mock_dl:
+        with patch("cyfm.data.download.load_env", return_value=mock_env):
+            with patch("cyfm.data.download.download_and_extract_tar") as mock_dl:
                 ensure_dataset_exists("fastmri", tmp_path, mode="local")
                 mock_dl.assert_called_once_with("https://example.com/mini.tar.gz", tmp_path)
 
     def test_ensure_fastmri_full_downloads_all_tars(self, tmp_path) -> None:
         mock_env = {"FASTMRI_FULL_URLS": "https://ex.com/1.tar.gz, https://ex.com/2.tar.gz"}
-        with patch("cfm.data.download.load_env", return_value=mock_env):
-            with patch("cfm.data.download.download_and_extract_tar") as mock_dl:
+        with patch("cyfm.data.download.load_env", return_value=mock_env):
+            with patch("cyfm.data.download.download_and_extract_tar") as mock_dl:
                 ensure_dataset_exists("fastmri", tmp_path, mode="full")
                 assert mock_dl.call_count == 2
 
     def test_backward_compatible_wrappers(self, tmp_path) -> None:
         (tmp_path / "dummy.h5").touch()
-        with patch("cfm.data.download.ensure_dataset_exists") as mock_ensure:
+        with patch("cyfm.data.download.ensure_dataset_exists") as mock_ensure:
             ensure_skm_tea_mini(tmp_path)
             mock_ensure.assert_called_once_with(dataset_name="skm_tea", data_dir=tmp_path)
 
-        with patch("cfm.data.download.ensure_dataset_exists") as mock_ensure:
+        with patch("cyfm.data.download.ensure_dataset_exists") as mock_ensure:
             ensure_fastmri(tmp_path, mode="full")
             mock_ensure.assert_called_once_with(
                 dataset_name="fastmri", data_dir=tmp_path, mode="full"

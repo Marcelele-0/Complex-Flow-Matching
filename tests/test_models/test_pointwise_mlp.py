@@ -12,9 +12,9 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
-from cfm.core.registry import MODELS
-from cfm.models.pointwise_mlp import PointwiseVelocityMLP, SinusoidalPositionEmbeddings
-from cfm.utils.inference import build_model
+from cyfm.core.registry import MODELS
+from cyfm.models.pointwise_mlp import PointwiseVelocityMLP, SinusoidalPositionEmbeddings
+from cyfm.utils.inference import build_model
 
 
 def _cylindrical(samples: torch.Tensor) -> torch.Tensor:

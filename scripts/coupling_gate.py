@@ -48,13 +48,14 @@ from dataclasses import dataclass
 
 import torch
 
-from cfm.data.synthetic import (
+from cyfm.data.synthetic import (
     COUPLING_PRESETS,
     CylinderToy,
+    Structure,
     circular_linear_correlation,
     cylinder_prior,
 )
-from cfm.flow.optimal_transport import (
+from cyfm.flow.optimal_transport import (
     circular_transport_permutation,
     cylinder_transport_permutation,
     sorted_transport_permutation,
@@ -62,7 +63,10 @@ from cfm.flow.optimal_transport import (
     wasserstein2_cylinder,
 )
 
-STRUCTURES = ("spiral", "cardioid")
+# Typed as the Literal the toy accepts, not as bare str: iterating an untyped
+# tuple hands CylinderToy a widened `str` and loses the only check that the
+# two names here still match the ones it implements.
+STRUCTURES: tuple[Structure, ...] = ("spiral", "cardioid")
 
 
 def parse_args() -> argparse.Namespace:

@@ -14,9 +14,9 @@ import sys
 import torch
 from hydra import compose, initialize_config_dir
 
-from cfm.flow.solver import CylindricalODESolver
-from cfm.manifolds import build_manifold
-from cfm.utils.inference import build_model
+from cyfm.flow.solver import CylindricalODESolver
+from cyfm.manifolds import build_manifold
+from cyfm.utils.inference import build_model
 
 CONF = "/home/marcel/Programming/papers/cfm/conf"
 

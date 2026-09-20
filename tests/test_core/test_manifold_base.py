@@ -3,9 +3,9 @@
 import pytest
 import torch
 
-from cfm.core.manifold import BaseManifold
-from cfm.manifolds.cylindrical import CylindricalManifold
-from cfm.manifolds.euclidean import EuclideanManifold
+from cyfm.core.manifold import BaseManifold
+from cyfm.manifolds.cylindrical import CylindricalManifold
+from cyfm.manifolds.euclidean import EuclideanManifold
 
 
 def test_cannot_instantiate_abstract_base_manifold() -> None:

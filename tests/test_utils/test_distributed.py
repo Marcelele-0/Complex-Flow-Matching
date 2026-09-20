@@ -15,7 +15,7 @@ import torch.distributed as dist
 from torch import nn
 from torch.nn.parallel import DistributedDataParallel
 
-from cfm.utils.distributed import (
+from cyfm.utils.distributed import (
     any_across_ranks,
     is_main_process,
     print_main,

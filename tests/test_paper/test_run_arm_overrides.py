@@ -32,8 +32,8 @@ def _capture(tmp_path: pathlib.Path, **env: str) -> tuple[str, str]:
         check=False,
     )
     lines = log.read_text().splitlines() if log.exists() else []
-    train = next((line for line in lines if "cfm.train" in line), "")
-    evaluate = next((line for line in lines if "cfm.evaluate" in line), "")
+    train = next((line for line in lines if "cyfm.train" in line), "")
+    evaluate = next((line for line in lines if "cyfm.evaluate" in line), "")
     return train, evaluate
 
 

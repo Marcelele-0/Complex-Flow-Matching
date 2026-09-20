@@ -1,8 +1,8 @@
 import torch
 
-from cfm.models.cylindrical_unet import CylindricalUNet
-from cfm.models.cylindrical_unet_attention import CylindricalUNetAttention
-from cfm.models.cylindrical_unet_cross_slice import CylindricalUNetCrossSlice
+from cyfm.models.cylindrical_unet import CylindricalUNet
+from cyfm.models.cylindrical_unet_attention import CylindricalUNetAttention
+from cyfm.models.cylindrical_unet_cross_slice import CylindricalUNetCrossSlice
 
 
 def test_2d_model_forward_unet() -> None:

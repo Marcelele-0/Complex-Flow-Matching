@@ -340,7 +340,7 @@ TABLE5_MATCHED_ROWS = tuple(index for index, row in enumerate(TABLE5_ROWS) if ro
 # Appendix D. It is drawn from TWO sweeps of the same checkpoints, and which number
 # came from which is not recoverable from the printed table, so it is pinned here.
 #
-# `cfm.evaluate` consumes one seeded generator sequentially down its NFE list, so a
+# `cyfm.evaluate` consumes one seeded generator sequentially down its NFE list, so a
 # step count draws a different prior depending on where it sits in the list. The two
 # sweeps share the prefix 1, 2, 4, 8 and those columns are byte-identical between
 # them; k=100 sits fifth in the short list and eleventh in the dense one, and there

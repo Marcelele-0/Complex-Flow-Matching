@@ -6,7 +6,7 @@
 # error in both geometries, with an unweighted phase term on the cylinder.
 # Geometry, coupling, field size and seed are chosen on the command line, e.g.
 #
-#   uv run python -m cfm.train +experiment=paper_unet \
+#   uv run python -m cyfm.train +experiment=paper_unet \
 #       manifold=cylindrical training.coupling=ot \
 #       dataset.crop_size=[64,64] training.seed=0 \
 #       logging.experiment_name=l2u_un_cylindrical_ot_scnull_s0

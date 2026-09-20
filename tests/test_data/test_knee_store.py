@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 import torch
 
-from cfm.data.knee_store import KneeStoreDataset, _volume_role
+from cyfm.data.knee_store import KneeStoreDataset, _volume_role
 
 
 def write_store(directory: pathlib.Path, volumes: int = 6, slices: int = 3) -> pathlib.Path:

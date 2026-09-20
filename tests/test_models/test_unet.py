@@ -1,6 +1,6 @@
 import torch
 
-from cfm.models.cylindrical_unet import CylindricalUNet
+from cyfm.models.cylindrical_unet import CylindricalUNet
 
 
 def test_unet_output_shape() -> None:

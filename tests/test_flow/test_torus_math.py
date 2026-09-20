@@ -3,7 +3,7 @@ import math
 import pytest
 import torch
 
-from cfm.flow.torus_math import DecoupledCylindricalLoss
+from cyfm.flow.torus_math import DecoupledCylindricalLoss
 
 
 def test_loss_shapes_and_types() -> None:

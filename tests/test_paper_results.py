@@ -347,7 +347,7 @@ def test_table5_training_config_equals_the_documented_experiment() -> None:
 #
 # It is drawn from TWO sweeps of the same twenty-five checkpoints and the archive keeps
 # both, because which number came from which is not recoverable from the printed table.
-# `cfm.evaluate` consumes one seeded generator down its NFE list, so a step count draws
+# `cyfm.evaluate` consumes one seeded generator down its NFE list, so a step count draws
 # a different prior depending on its position: the two sweeps agree byte-for-byte on
 # their shared prefix 1, 2, 4, 8 and differ at k=100. The printed columns are the
 # five-point sweep; the eleven-point one is what the caption's k* is read off, and k* is

@@ -108,13 +108,13 @@ if [ -n "$EVAL_STORE" ]; then
 fi
 
 echo "[$(date '+%H:%M:%S')] train $NAME ($EXPERIMENT)"
-uv run --no-sync python -m cfm.train "${COMMON[@]}" ${TRAIN_ONLY[@]+"${TRAIN_ONLY[@]}"} \
+uv run --no-sync python -m cyfm.train "${COMMON[@]}" ${TRAIN_ONLY[@]+"${TRAIN_ONLY[@]}"} \
   training.epochs="$EPOCHS" training.seed="$SEED" logging.experiment_name="$NAME"
 code=$?
 if [ "$code" -ne 0 ]; then echo "FAILED train $NAME exit=$code"; exit "$code"; fi
 
 echo "[$(date '+%H:%M:%S')] evaluate $NAME"
-uv run --no-sync python -m cfm.evaluate "${COMMON[@]}" ${EVAL_ONLY[@]+"${EVAL_ONLY[@]}"} \
+uv run --no-sync python -m cyfm.evaluate "${COMMON[@]}" ${EVAL_ONLY[@]+"${EVAL_ONLY[@]}"} \
   evaluate.run_name="$NAME" evaluate.num_fields=64 evaluate.seed="$SEED" \
   evaluate.nfe="$NFE" logging.experiment_name="${NAME}_eval"
 code=$?

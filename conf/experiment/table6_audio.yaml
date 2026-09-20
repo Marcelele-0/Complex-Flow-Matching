@@ -5,10 +5,10 @@
 # objective, same schedule, same evaluation, on a second domain. Geometry, coupling and
 # seed are chosen on the command line:
 #
-#   uv run python -m cfm.train +experiment=table6_audio \
+#   uv run python -m cyfm.train +experiment=table6_audio \
 #       manifold=cylindrical training.coupling=ot training.seed=0 \
 #       logging.experiment_name=t6_cylindrical_ot_s0
-#   uv run python -m cfm.evaluate +experiment=table6_audio \
+#   uv run python -m cyfm.evaluate +experiment=table6_audio \
 #       manifold=cylindrical training.coupling=ot dataset.role=holdout \
 #       evaluate.run_name=t6_cylindrical_ot_s0 evaluate.nfe=[1,2,4,8,100]
 #

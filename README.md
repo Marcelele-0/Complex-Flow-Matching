@@ -87,20 +87,20 @@ dataset are independent switches:
 
 ```bash
 # CyFM with joint OT on 64x64 synthetic fields
-uv run python -m cfm.train dataset=cylinder_toy_field model=c_unet \
+uv run python -m cyfm.train dataset=cylinder_toy_field model=c_unet \
     manifold=cylindrical training.coupling=ot training.bridge=noise \
     logging.experiment_name=my_cyfm
 
 # score it: sliced W2, amplitude W2, circular phase W2, dependence and spatial gaps,
 # straightness and angular-velocity probes, at several Heun step counts
-uv run python -m cfm.evaluate dataset=cylinder_toy_field model=c_unet \
+uv run python -m cyfm.evaluate dataset=cylinder_toy_field model=c_unet \
     manifold=cylindrical training.coupling=ot training.bridge=noise \
     evaluate.run_name=my_cyfm evaluate.nfe='[1,2,4,8,100]'
 ```
 
 - `manifold=cylindrical | euclidean` -- the geometry (`conf/manifold/`).
 - `training.coupling=independent | ot` -- the coupling. `ot` is one exact assignment over
-  the whole batch in the manifold's own metric (`src/cfm/flow/coupling.py`); no factorised
+  the whole batch in the manifold's own metric (`src/cyfm/flow/coupling.py`); no factorised
   variant is offered, deliberately.
 - `dataset=cylinder_toy_field | cylinder_toy_iid` -- synthetic copula data with
   `dataset.coupling` (amplitude-phase correlation), `dataset.crop_size` and, for the
@@ -112,7 +112,7 @@ uv run python -m cfm.evaluate dataset=cylinder_toy_field model=c_unet \
 ## Repository map
 
 ```text
-src/cfm/
+src/cyfm/
 ├── train.py               # training entry point (Hydra)
 ├── evaluate.py            # generative evaluation: distributional metrics vs. solver steps
 ├── flow/
@@ -141,7 +141,7 @@ docs/notes/                # the research log (COUPLING_NOTES.md)
 - **fastMRI / SKM-TEA.** `conf/dataset/fastmri_*.yaml` and the loaders are kept for the
   next version (real-data evaluation). They are not exercised by the paper and have not
   been re-validated since the move from reconstruction to generation.
-- **DDP (`torchrun`)** is supported by `cfm.train` but was not re-run for the paper:
+- **DDP (`torchrun`)** is supported by `cyfm.train` but was not re-run for the paper:
   every paper result is a single-GPU run.
 
 ## Development

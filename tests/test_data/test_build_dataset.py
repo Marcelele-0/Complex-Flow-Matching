@@ -11,10 +11,10 @@ import pytest
 import torch
 from omegaconf import DictConfig, OmegaConf
 
-from cfm.core.registry import DATASETS
-from cfm.data import _ENTRY_POINT_KEYS, DEFAULT_DATASET, build_dataset, build_geometry_transform
-from cfm.data.fastmri import FastMRIDataset
-from cfm.utils.fft import fft2c
+from cyfm.core.registry import DATASETS
+from cyfm.data import _ENTRY_POINT_KEYS, DEFAULT_DATASET, build_dataset, build_geometry_transform
+from cyfm.data.fastmri import FastMRIDataset
+from cyfm.utils.fft import fft2c
 
 
 @pytest.fixture

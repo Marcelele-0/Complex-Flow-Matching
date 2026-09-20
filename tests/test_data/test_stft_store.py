@@ -12,8 +12,8 @@ import pytest
 import soundfile
 import torch
 
-from cfm.data.stft import DEFAULT_STFT, StftProtocol, forward_stft, inverse_stft, segment_frames
-from cfm.data.stft_store import StftStoreDataset
+from cyfm.data.stft import DEFAULT_STFT, StftProtocol, forward_stft, inverse_stft, segment_frames
+from cyfm.data.stft_store import StftStoreDataset
 
 BUILDER = pathlib.Path(__file__).resolve().parents[2] / "scripts" / "data" / "build_stft_store.py"
 
@@ -208,7 +208,7 @@ def test_the_speaker_assignment_does_not_move_when_the_cohort_grows(
     tmp_path: pathlib.Path,
 ) -> None:
     """Hashing the id, not the file order, is what makes a rebuild reproducible."""
-    from cfm.data.stft_store import _speaker_role
+    from cyfm.data.stft_store import _speaker_role
 
     before = {str(s): _speaker_role(str(s), 0.2, 0) for s in range(100, 106)}
     after = {str(s): _speaker_role(str(s), 0.2, 0) for s in range(100, 120)}

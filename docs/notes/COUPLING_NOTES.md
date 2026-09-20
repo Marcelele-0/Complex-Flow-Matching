@@ -39,11 +39,11 @@ same `--seed` reproduces the tables exactly. No new dependencies: `scipy` and
 `matplotlib` were already declared in `pyproject.toml`.
 
 **Integration status.** The two gate scripts drive the analytic sampler
-(`src/cfm/data/synthetic.py`) directly, and Gate B trains its own small MLP
+(`src/cyfm/data/synthetic.py`) directly, and Gate B trains its own small MLP
 (`ToyVelocityField`) with the production bridges and ODE solvers at `H = W = 1`.
 Everything from section 3 on goes through the production pipeline instead: the
 toy is registered as the datasets `cylinder_toy_iid` and `cylinder_toy_field`
-(`conf/dataset/`), trained with `cfm.train` and scored with `cfm.evaluate`.
+(`conf/dataset/`), trained with `cyfm.train` and scored with `cyfm.evaluate`.
 
 ---
 
@@ -112,7 +112,7 @@ panels of the coupled cloud are indistinguishable across rho.
 
 ### Consequence
 
-`src/cfm/flow/coupling.py` must be a **batch-level joint assignment** on the
+`src/cyfm/flow/coupling.py` must be a **batch-level joint assignment** on the
 cylinder cost, not a factorised sort. Measured: 0.06-0.08 ms at batch 16-64,
 25 ms at n = 1024. The `O(n log n)` headline buys nothing, because Delon's
 algorithm is a 1D circular problem that does not arise at batch level (the cost
@@ -532,7 +532,7 @@ Evaluating a fixed checkpoint is exactly reproducible: re-evaluating 32 of them
 reproduced every generation metric to 0.0. Retraining is seeded but GPU kernels
 are not bitwise deterministic, so a retrained model matches to within the seed
 spread quoted beside each result, not to the digit. The gate scripts and the
-network-free scripts do not go through `cfm.evaluate` and were never affected by
+network-free scripts do not go through `cyfm.evaluate` and were never affected by
 its two defects.
 
 **The arXiv v1 paper** has one wrapper per table in `scripts/paper/` (index in the

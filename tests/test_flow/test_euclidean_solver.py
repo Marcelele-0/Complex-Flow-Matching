@@ -1,8 +1,8 @@
 import pytest
 import torch
 
-from cfm.flow.euclidean_solver import EuclideanODESolver
-from cfm.flow.solver import CylindricalODESolver, HeunODESolver
+from cyfm.flow.euclidean_solver import EuclideanODESolver
+from cyfm.flow.solver import CylindricalODESolver, HeunODESolver
 
 
 def test_step_is_plain_euler() -> None:

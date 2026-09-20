@@ -20,11 +20,11 @@ import matplotlib.pyplot as plt
 import torch
 from torch.fft import fft2, fftshift, ifft2, ifftshift
 
-from cfm.evaluate import dc_project
-from cfm.manifolds import CylindricalManifold, EuclideanManifold
-from cfm.models.cylindrical_unet import CylindricalUNet
-from cfm.models.cylindrical_unet_attention import CylindricalUNetAttention
-from cfm.models.cylindrical_unet_cross_slice import CylindricalUNetCrossSlice
+from cyfm.evaluate import dc_project
+from cyfm.manifolds import CylindricalManifold, EuclideanManifold
+from cyfm.models.cylindrical_unet import CylindricalUNet
+from cyfm.models.cylindrical_unet_attention import CylindricalUNetAttention
+from cyfm.models.cylindrical_unet_cross_slice import CylindricalUNetCrossSlice
 
 torch.manual_seed(42)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

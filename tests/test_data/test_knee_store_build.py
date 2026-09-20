@@ -22,8 +22,8 @@ import numpy as np
 import pytest
 import torch
 
-from cfm.data.fastmri import FastMRIDataset, _center_crop_to, _to_complex_tensor
-from cfm.data.knee_store import KneeStoreDataset
+from cyfm.data.fastmri import FastMRIDataset, _center_crop_to, _to_complex_tensor
+from cyfm.data.knee_store import KneeStoreDataset
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 BUILDER = ROOT / "scripts" / "data" / "build_knee_pd_store.py"

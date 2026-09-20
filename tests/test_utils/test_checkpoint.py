@@ -12,7 +12,7 @@ import pytest
 import torch
 from torch import nn
 
-from cfm.utils.checkpoint import (
+from cyfm.utils.checkpoint import (
     STATE_FILENAME,
     load_training_state,
     save_training_state,

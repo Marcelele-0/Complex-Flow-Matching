@@ -7,7 +7,7 @@ import os
 
 import pytest
 
-from cfm.data.splits import load_split_file_names, select_indices
+from cyfm.data.splits import load_split_file_names, select_indices
 
 SLICE_MAP = [
     ("/d/files_recon_calib-24/MTR_001.h5", 0),

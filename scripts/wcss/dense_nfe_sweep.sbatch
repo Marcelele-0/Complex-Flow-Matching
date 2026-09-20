@@ -57,7 +57,7 @@ fi
 
 echo "task=$SLURM_ARRAY_TASK_ID name=$NAME manifold=$M coupling=$C side=$SIDE seed=$SEED"
 t0=$(date +%s)
-uv run --no-sync python -m cfm.evaluate "${COMMON[@]}" \
+uv run --no-sync python -m cyfm.evaluate "${COMMON[@]}" \
   evaluate.run_name="$NAME" evaluate.num_fields=64 evaluate.seed="$SEED" \
   evaluate.nfe="$NFE" logging.experiment_name="${NAME}_dense" logging.use_wandb=false
 code=$?

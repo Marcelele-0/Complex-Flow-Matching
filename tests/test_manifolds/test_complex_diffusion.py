@@ -18,16 +18,16 @@ import torch
 import torch.nn as nn
 from omegaconf import OmegaConf
 
-from cfm.core.manifold import BaseManifold
-from cfm.core.registry import MANIFOLDS, SOLVERS
-from cfm.core.solver import BaseSDESolver
-from cfm.flow.diffusion_solver import (
+from cyfm.core.manifold import BaseManifold
+from cyfm.core.registry import MANIFOLDS, SOLVERS
+from cyfm.core.solver import BaseSDESolver
+from cyfm.flow.diffusion_solver import (
     PredictorCorrectorSolver,
     heun_evaluations,
     plan_within_budget,
 )
-from cfm.manifolds import ComplexDiffusionManifold, build_manifold
-from cfm.manifolds.complex_diffusion import DEFAULT_SIGMA_MAX_320, calibrate_sigma_max
+from cyfm.manifolds import ComplexDiffusionManifold, build_manifold
+from cyfm.manifolds.complex_diffusion import DEFAULT_SIGMA_MAX_320, calibrate_sigma_max
 
 CPU = torch.device("cpu")
 
@@ -530,7 +530,7 @@ class TestUnconditionalSampling:
         """A reader should not have to trust the two tests above."""
         import inspect
 
-        from cfm.flow import diffusion_solver
+        from cyfm.flow import diffusion_solver
 
         source = inspect.getsource(diffusion_solver)
         for banned in ("masked_kspace", "sensitivity_maps", "data_consistency"):
@@ -553,7 +553,7 @@ class TestMatchedNFEAccounting:
         The flow arm this baseline is matched against is the one that must agree:
         a second copy of 2n-1 is how a "matched NFE" column stops being matched.
         """
-        from cfm.flow.euclidean_solver import EuclideanODESolver
+        from cyfm.flow.euclidean_solver import EuclideanODESolver
 
         for steps in (1, 2, 4, 8, 100):
             assert EuclideanODESolver(num_steps=steps).evaluations == heun_evaluations(steps)
@@ -674,7 +674,7 @@ def test_wrap_model_is_the_identity_for_a_velocity_geometry() -> None:
     """Only a score arm needs the adaptation; the flow arms predict their target."""
     from omegaconf import OmegaConf
 
-    from cfm.manifolds import build_manifold
+    from cyfm.manifolds import build_manifold
 
     for name in ("cylindrical", "euclidean"):
         manifold = build_manifold(

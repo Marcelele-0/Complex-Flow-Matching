@@ -32,11 +32,11 @@ import math
 import torch
 from omegaconf import OmegaConf
 
-from cfm.core.manifold import BaseManifold
-from cfm.data.toy_dataset import CylinderToyFieldDataset, CylinderToyIIDDataset
-from cfm.flow.coupling import OptimalTransportCoupling
-from cfm.flow.optimal_transport import sliced_wasserstein2
-from cfm.manifolds import build_manifold
+from cyfm.core.manifold import BaseManifold
+from cyfm.data.toy_dataset import CylinderToyFieldDataset, CylinderToyIIDDataset
+from cyfm.flow.coupling import OptimalTransportCoupling
+from cyfm.flow.optimal_transport import sliced_wasserstein2
+from cyfm.manifolds import build_manifold
 
 
 def parse_args() -> argparse.Namespace:

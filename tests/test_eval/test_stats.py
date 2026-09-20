@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cfm.eval.stats import (
+from cyfm.eval.stats import (
     WilcoxonResult,
     apply_holm_bonferroni,
     cli_main,

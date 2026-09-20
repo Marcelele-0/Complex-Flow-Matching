@@ -2,7 +2,7 @@
 # Re-score existing checkpoints with the current metrics, without retraining.
 #
 # A metric added after a cohort has run leaves the cohort's archives without it. This
-# re-runs `cfm.evaluate` against checkpoints that already exist, found by
+# re-runs `cyfm.evaluate` against checkpoints that already exist, found by
 # `evaluate.run_name`, and writes to a separate `logging.experiment_name` so the original
 # evaluation is preserved rather than overwritten. Nothing here trains.
 #
@@ -76,7 +76,7 @@ for M in $GEOMS; do
     for SEED in $SEEDS; do
       NAME="${PREFIX}${M}_${C}_s${SEED}"
       echo "=== re-scoring $NAME (crop=${KSPACE_CROP:-none}) ==="
-      uv run --no-sync python -m cfm.evaluate +experiment=table5_fastmri \
+      uv run --no-sync python -m cyfm.evaluate +experiment=table5_fastmri \
         manifold="$M" training.coupling="$C" \
         dataset.data_dir="$STORE_DIR" dataset.store=val.h5 dataset.role=all \
         ${CROP_OVERRIDE[@]+"${CROP_OVERRIDE[@]}"} \

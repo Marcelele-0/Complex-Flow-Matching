@@ -2,7 +2,7 @@ import math
 
 import torch
 
-from cfm.flow.bridge import GeodesicFlowBridge
+from cyfm.flow.bridge import GeodesicFlowBridge
 
 
 def test_bridge_shapes() -> None:

@@ -12,7 +12,7 @@ import math
 import pytest
 import torch
 
-from cfm.data.synthetic import (
+from cyfm.data.synthetic import (
     COUPLING_PRESETS,
     CylinderToy,
     Structure,

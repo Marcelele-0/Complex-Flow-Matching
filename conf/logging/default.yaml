@@ -1,5 +1,5 @@
 # Local preset: no Weights & Biases. Composed by conf/config.yaml, so a plain
-# `uv run src/cfm/train.py` writes metrics to stdout and nothing else.
+# `uv run src/cyfm/train.py` writes metrics to stdout and nothing else.
 #
 # Opt in with `logging=w_and_b`. That file differs from this one *only* in
 # use_wandb, and deliberately so: experiment_name feeds the run directory in

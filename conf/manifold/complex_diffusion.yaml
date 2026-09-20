@@ -22,7 +22,7 @@ name: complex_diffusion
 # at 64x64. A value carried between resolutions is wrong in one direction or the
 # other, so measure it on the store before the grid runs:
 #
-#   cfm.manifolds.complex_diffusion.calibrate_sigma_max(fields)
+#   cyfm.manifolds.complex_diffusion.calibrate_sigma_max(fields)
 #
 # The value below is the 320x320 measurement, the resolution Table 5 runs at.
 sigma_min: 0.01

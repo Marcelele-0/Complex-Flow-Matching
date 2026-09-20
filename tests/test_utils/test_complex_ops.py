@@ -2,7 +2,7 @@ import math
 
 import torch
 
-from cfm.utils.complex_ops import (
+from cyfm.utils.complex_ops import (
     complex_to_cylinder,
     complex_to_euclidean,
     cylinder_to_complex,

@@ -5,7 +5,7 @@ shows none of them. Every entry of Table 5 is a summary statistic, and a reader 
 to know what "reproduces the reference's amplitude texture twice as closely" looks like has
 to take it on trust. This draws the panel that lets them check.
 
-Real fields come from the held-out store through :func:`cfm.evaluate.training_pipeline`,
+Real fields come from the held-out store through :func:`cyfm.evaluate.training_pipeline`,
 which is the transform training applied, so the comparison is between fields living in one
 domain -- the same reason that function exists rather than a hand-built ``Compose`` here.
 Generated fields come from a checkpoint resolved by run name and are drawn with the
@@ -38,10 +38,10 @@ import torch  # noqa: E402
 from omegaconf import DictConfig, OmegaConf  # noqa: E402
 from torch.utils.data import DataLoader, Subset  # noqa: E402
 
-from cfm.data import build_dataset  # noqa: E402
-from cfm.evaluate import training_pipeline  # noqa: E402
-from cfm.manifolds import build_manifold  # noqa: E402
-from cfm.utils.inference import build_model, load_weights  # noqa: E402
+from cyfm.data import build_dataset  # noqa: E402
+from cyfm.evaluate import training_pipeline  # noqa: E402
+from cyfm.manifolds import build_manifold  # noqa: E402
+from cyfm.utils.inference import build_model, load_weights  # noqa: E402
 
 # The two arms of the knee 64x64 block whose checkpoints are in the repository, with the
 # geometry each was trained on. Both come from scripts/wcss/table5_fastmri.sbatch with
@@ -142,7 +142,7 @@ def dataset_config(args: argparse.Namespace) -> DictConfig:
 def resolve_checkpoint(run_name: str) -> pathlib.Path:
     """The checkpoint of a run's newest attempt, highest epoch.
 
-    ``cfm.utils.inference.find_latest_checkpoint`` picks by modification time, which is
+    ``cyfm.utils.inference.find_latest_checkpoint`` picks by modification time, which is
     right on the cluster and wrong here: rsync preserves mtimes, so a run copied back in
     two stamped directories -- ``t5c64_cylindrical_ot_s0`` has two, from a superseded job
     array -- would be resolved by whichever transfer happened to touch last. Newest stamp,

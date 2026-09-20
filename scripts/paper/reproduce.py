@@ -6,8 +6,8 @@ how to reproduce it (the U-Net tables also include their training protocol, so
 
 * ``unet_grid`` -- trains and evaluates every run of a grid
   (field sides x arms x geometries x couplings x seeds). Each arm names a Hydra
-  experiment config in ``conf/experiment/``; a run is one ``cfm.train`` and one
-  ``cfm.evaluate`` call with that config plus geometry, coupling, field size and
+  experiment config in ``conf/experiment/``; a run is one ``cyfm.train`` and one
+  ``cyfm.evaluate`` call with that config plus geometry, coupling, field size and
   seed. A run whose evaluation already exists is skipped, so an interrupted sweep
   resumes, and runs shared between specs (Table 3 contains Table 2) are made once.
 * ``commands`` -- network-free scripts, run as given.
@@ -159,8 +159,8 @@ def run_arguments(run: Run) -> list[str]:
 
 
 def train_command(run: Run, epochs: int | None) -> list[str]:
-    """The ``cfm.train`` call of one run; ``epochs`` overrides the config's 40."""
-    command = [sys.executable, "-m", "cfm.train", *run_arguments(run)]
+    """The ``cyfm.train`` call of one run; ``epochs`` overrides the config's 40."""
+    command = [sys.executable, "-m", "cyfm.train", *run_arguments(run)]
     command += [f"training.seed={run.seed}", f"logging.experiment_name={run.name}"]
     if epochs is not None:
         command.append(f"training.epochs={epochs}")
@@ -168,11 +168,11 @@ def train_command(run: Run, epochs: int | None) -> list[str]:
 
 
 def evaluate_command(run: Run) -> list[str]:
-    """The ``cfm.evaluate`` call of one run, at the paper's step counts."""
+    """The ``cyfm.evaluate`` call of one run, at the paper's step counts."""
     return [
         sys.executable,
         "-m",
-        "cfm.evaluate",
+        "cyfm.evaluate",
         *run_arguments(run),
         f"evaluate.run_name={run.name}",
         f"evaluate.num_fields={NUM_FIELDS}",

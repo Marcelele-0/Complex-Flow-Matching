@@ -1,4 +1,4 @@
-"""Unit tests for the distributional metrics in cfm.utils.metrics.
+"""Unit tests for the distributional metrics in cyfm.utils.metrics.
 
 Each test pins the property the metric exists for: that it separates
 distributions it should separate, and stays near zero on ones it should not.
@@ -9,8 +9,8 @@ import math
 import pytest
 import torch
 
-from cfm.data.toy_dataset import CylinderToyFieldDataset, CylinderToyIIDDataset
-from cfm.utils.metrics import (
+from cyfm.data.toy_dataset import CylinderToyFieldDataset, CylinderToyIIDDataset
+from cyfm.utils.metrics import (
     distributional_metrics,
     measured_pair_fraction,
     phase_lag_one,

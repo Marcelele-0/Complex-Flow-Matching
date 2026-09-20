@@ -26,7 +26,7 @@
 #
 # sigma_max is the VE prior's width and must match the data: ~140 at 320x320 for
 # peak-normalised knee fields. Confirm it against the store before launching, with
-# cfm.manifolds.complex_diffusion.calibrate_sigma_max; a value from another
+# cyfm.manifolds.complex_diffusion.calibrate_sigma_max; a value from another
 # resolution is wrong in one direction or the other.
 #
 # The many-step scoring is a regime, not a column: the matched-NFE columns top out at
@@ -159,7 +159,7 @@ echo "[$(date '+%H:%M:%S')] evaluate $NATIVE_NAME ($NATIVE_STEPS steps, same che
 # training.coupling is set here even though a score model has no pairing: run_arm.sh
 # always records it, and the archive's integrity test reads one protocol off every
 # row. A row missing it is a row that cannot be checked against the others.
-uv run --no-sync python -m cfm.evaluate +experiment=table5_fastmri \
+uv run --no-sync python -m cyfm.evaluate +experiment=table5_fastmri \
   manifold="$DIFFUSION" manifold.nfe_mode=native "${EXTRA[@]}" \
   training.coupling=independent \
   dataset.data_dir="$STAGE" dataset.store=val.h5 dataset.role=all \

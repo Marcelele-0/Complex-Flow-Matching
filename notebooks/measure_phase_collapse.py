@@ -1,8 +1,8 @@
 import torch
 import numpy as np
 from torch.utils.data import DataLoader
-from cfm.data.dataset import SKMTEADataset
-from cfm.data.transforms import (
+from cyfm.data.dataset import SKMTEADataset
+from cyfm.data.transforms import (
     Compose,
     ComplexToCylinderTransform,
     AmplitudeNormalize,

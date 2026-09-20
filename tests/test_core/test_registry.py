@@ -6,10 +6,10 @@ import pytest
 import torch
 import torch.nn as nn
 
-from cfm.core.dataset import BaseComplexDataset
-from cfm.core.loss import BaseLoss
-from cfm.core.manifold import BaseManifold
-from cfm.core.registry import (
+from cyfm.core.dataset import BaseComplexDataset
+from cyfm.core.loss import BaseLoss
+from cyfm.core.manifold import BaseManifold
+from cyfm.core.registry import (
     DATASETS,
     LOSSES,
     MANIFOLDS,
@@ -18,8 +18,8 @@ from cfm.core.registry import (
     SOLVERS,
     Registry,
 )
-from cfm.core.solver import BaseODESolver
-from cfm.data.masks import BaseMaskGenerator
+from cyfm.core.solver import BaseODESolver
+from cyfm.data.masks import BaseMaskGenerator
 
 
 def test_registry_basic_operations() -> None:
@@ -109,14 +109,14 @@ def test_registry_missing_key_error() -> None:
 
 def test_core_registries_populated() -> None:
     """Verify built-in CFM components are registered in their respective registries."""
-    import cfm.data.dataset  # noqa: F401
-    import cfm.data.fastmri  # noqa: F401
-    import cfm.data.masks  # noqa: F401
-    import cfm.flow.euclidean_solver  # noqa: F401
-    import cfm.flow.solver  # noqa: F401
-    import cfm.manifolds.cylindrical  # noqa: F401
-    import cfm.manifolds.euclidean  # noqa: F401
-    import cfm.models  # noqa: F401
+    import cyfm.data.dataset  # noqa: F401
+    import cyfm.data.fastmri  # noqa: F401
+    import cyfm.data.masks  # noqa: F401
+    import cyfm.flow.euclidean_solver  # noqa: F401
+    import cyfm.flow.solver  # noqa: F401
+    import cyfm.manifolds.cylindrical  # noqa: F401
+    import cyfm.manifolds.euclidean  # noqa: F401
+    import cyfm.models  # noqa: F401
 
     # MANIFOLDS
     assert "cylindrical" in MANIFOLDS

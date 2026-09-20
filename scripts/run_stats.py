@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import sys
 
-from cfm.eval.stats import (
+from cyfm.eval.stats import (
     WilcoxonResult,
     apply_holm_bonferroni,
     cli_main,

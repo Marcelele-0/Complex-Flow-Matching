@@ -61,7 +61,7 @@ over-smoothing claim becomes something a reader can check rather than take on tr
 Layout: two rows, amplitude and phase; columns ground truth, prior, Cartesian $k=1$, Cartesian
 $k=100$, CyFM $k=1$, CyFM $k=100$. Knee $64\times64$.
 
-`cfm.evaluate` keeps metrics and discards samples, so this needs a short script that loads a
+`cyfm.evaluate` keeps metrics and discards samples, so this needs a short script that loads a
 checkpoint by run name, generates, and writes PNGs. Same pattern as
 `scripts/prior_control.py`: mirror the evaluation pipeline rather than reimplement it.
 

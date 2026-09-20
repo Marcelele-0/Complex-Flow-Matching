@@ -11,12 +11,12 @@ import pytest
 import torch
 from torch.utils.data import DataLoader
 
-from cfm.core.dataset import BaseComplexDataset
-from cfm.core.registry import DATASETS
-from cfm.data.fastmri import FastMRIDataset
-from cfm.data.hdf5_manager import WorkerHDF5Manager
-from cfm.data.transforms import CenterCropOrPad
-from cfm.utils.fft import fft2c
+from cyfm.core.dataset import BaseComplexDataset
+from cyfm.core.registry import DATASETS
+from cyfm.data.fastmri import FastMRIDataset
+from cyfm.data.hdf5_manager import WorkerHDF5Manager
+from cyfm.data.transforms import CenterCropOrPad
+from cyfm.utils.fft import fft2c
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:

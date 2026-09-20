@@ -130,7 +130,7 @@ def test_ablation_names_match_the_ablation_report() -> None:
 def test_commands_carry_the_run_arguments() -> None:
     run = reproduce.Run("x", "paper_unet_l1", 32, "cylindrical", "ot", 3)
     train = reproduce.train_command(run, epochs=None)
-    assert train[1:3] == ["-m", "cfm.train"]
+    assert train[1:3] == ["-m", "cyfm.train"]
     assert "+experiment=paper_unet_l1" in train and "training.seed=3" in train
     assert not any(arg.startswith("training.epochs") for arg in train)
     assert "training.epochs=1" in reproduce.train_command(run, epochs=1)
