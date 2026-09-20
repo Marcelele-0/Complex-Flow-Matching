@@ -28,7 +28,7 @@ import torch
 
 from cyfm.core.manifold import BaseManifold
 from cyfm.core.registry import MANIFOLDS
-from cyfm.flow.diffusion_solver import (
+from cyfm.flow.solvers import (
     PredictorCorrectorSolver,
     heun_evaluations,
     plan_within_budget,

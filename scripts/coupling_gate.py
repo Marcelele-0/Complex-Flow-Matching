@@ -55,7 +55,7 @@ from cyfm.data.synthetic import (
     circular_linear_correlation,
     cylinder_prior,
 )
-from cyfm.flow.optimal_transport import (
+from cyfm.flow.transport import (
     circular_transport_permutation,
     cylinder_transport_permutation,
     sorted_transport_permutation,

@@ -21,7 +21,7 @@ from omegaconf import OmegaConf
 from cyfm.core.manifold import BaseManifold
 from cyfm.core.registry import MANIFOLDS, SOLVERS
 from cyfm.core.solver import BaseSDESolver
-from cyfm.flow.diffusion_solver import (
+from cyfm.flow.solvers import (
     PredictorCorrectorSolver,
     heun_evaluations,
     plan_within_budget,
@@ -530,7 +530,7 @@ class TestUnconditionalSampling:
         """A reader should not have to trust the two tests above."""
         import inspect
 
-        from cyfm.flow import diffusion_solver
+        from cyfm.flow import solvers as diffusion_solver
 
         source = inspect.getsource(diffusion_solver)
         for banned in ("masked_kspace", "sensitivity_maps", "data_consistency"):
@@ -553,7 +553,7 @@ class TestMatchedNFEAccounting:
         The flow arm this baseline is matched against is the one that must agree:
         a second copy of 2n-1 is how a "matched NFE" column stops being matched.
         """
-        from cyfm.flow.euclidean_solver import EuclideanODESolver
+        from cyfm.flow.solvers import EuclideanODESolver
 
         for steps in (1, 2, 4, 8, 100):
             assert EuclideanODESolver(num_steps=steps).evaluations == heun_evaluations(steps)

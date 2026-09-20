@@ -35,7 +35,7 @@ from dataclasses import dataclass
 import torch
 from hydra import compose, initialize_config_dir
 
-from cyfm.flow.coupling import build_coupling
+from cyfm.flow.couplings import build_coupling
 from cyfm.manifolds import build_manifold
 from cyfm.utils.inference import build_model
 

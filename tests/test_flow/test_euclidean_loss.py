@@ -1,8 +1,7 @@
 import pytest
 import torch
 
-from cyfm.flow.euclidean_math import EuclideanVelocityLoss
-from cyfm.flow.torus_math import DecoupledCylindricalLoss
+from cyfm.flow.losses import DecoupledCylindricalLoss, EuclideanVelocityLoss
 
 
 class TestValidation:

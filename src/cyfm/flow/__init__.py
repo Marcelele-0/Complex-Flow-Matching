@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cyfm.flow.coupling import (
+from cyfm.flow.couplings import (
     BaseCoupling,
     IndependentCoupling,
     OptimalTransportCoupling,

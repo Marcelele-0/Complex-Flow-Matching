@@ -15,9 +15,9 @@ import torch
 
 from cyfm.core.manifold import BaseManifold
 from cyfm.core.registry import MANIFOLDS
-from cyfm.flow.euclidean_bridge import LinearFlowBridge
-from cyfm.flow.euclidean_math import EuclideanVelocityLoss
-from cyfm.flow.euclidean_solver import EuclideanODESolver
+from cyfm.flow.bridges import LinearFlowBridge
+from cyfm.flow.losses import EuclideanVelocityLoss
+from cyfm.flow.solvers import EuclideanODESolver
 from cyfm.manifolds.cylindrical import sample_cylindrical_noise_correlated
 from cyfm.manifolds.flat import FlatComplexRepresentation
 

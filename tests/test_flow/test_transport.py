@@ -13,7 +13,7 @@ import torch
 from scipy.optimize import linear_sum_assignment
 
 from cyfm.data.synthetic import CylinderToy, cylinder_prior
-from cyfm.flow.optimal_transport import (
+from cyfm.flow.transport import (
     cylinder_cost_matrix,
     cylinder_transport_permutation,
     euclidean_transport_permutation,
@@ -94,7 +94,7 @@ def test_sorted_permutation_beats_random_pairings() -> None:
 @pytest.mark.parametrize("seed", range(12))
 def test_circular_solver_is_exact(seed: int) -> None:
     """The cyclic-shift search matches a general assignment solver exactly."""
-    from cyfm.flow.optimal_transport import circular_transport_permutation
+    from cyfm.flow.transport import circular_transport_permutation
 
     n = 14
     source = torch.empty(n).uniform_(-math.pi, math.pi, generator=_generator(seed))
@@ -114,7 +114,7 @@ def test_circular_solver_crosses_the_branch_cut() -> None:
     rotation of the source's. Matching by rank on the raw values pairs each cluster
     with the wrong one; the cyclic-shift search does not.
     """
-    from cyfm.flow.optimal_transport import circular_transport_permutation
+    from cyfm.flow.transport import circular_transport_permutation
 
     source = torch.cat([torch.linspace(-3.05, -2.95, 8), torch.linspace(-0.05, 0.05, 8)])
     target = torch.cat([torch.linspace(2.95, 3.05, 8), torch.linspace(0.15, 0.25, 8)])
@@ -257,7 +257,7 @@ def test_factorised_cost_is_a_lower_bound_on_the_joint_cost() -> None:
     Both are computed on the same pair of clouds, so the inequality is the
     product-measure factorisation bound and nothing else.
     """
-    from cyfm.flow.optimal_transport import circular_transport_permutation
+    from cyfm.flow.transport import circular_transport_permutation
 
     prior = cylinder_prior(256, generator=_generator(15))
     amplitude, phase = CylinderToy(coupling=1.0).sample_polar(256, generator=_generator(16))
@@ -278,7 +278,7 @@ def test_factorised_cost_is_a_lower_bound_on_the_joint_cost() -> None:
 
 def test_factorised_pairing_is_not_a_permutation_of_the_target() -> None:
     """Under dependence the factorised endpoints leave the target set."""
-    from cyfm.flow.optimal_transport import circular_transport_permutation
+    from cyfm.flow.transport import circular_transport_permutation
 
     prior = cylinder_prior(256, generator=_generator(17))
     amplitude, phase = CylinderToy(coupling=1.0).sample_polar(256, generator=_generator(18))
@@ -295,7 +295,7 @@ def test_factorised_pairing_is_not_a_permutation_of_the_target() -> None:
 
 def _chimera_displacement(coupling: float, n: int, seed: int) -> float:
     """Distance from the factorised endpoint cloud back to the target cloud."""
-    from cyfm.flow.optimal_transport import circular_transport_permutation
+    from cyfm.flow.transport import circular_transport_permutation
 
     prior = cylinder_prior(n, generator=_generator(seed))
     amplitude, phase = CylinderToy(coupling=coupling).sample_polar(

@@ -62,7 +62,7 @@ compile: true
 #                the baseline every coupling claim is measured against.
 #   ot           Exact minibatch optimal transport in the manifold's own metric,
 #                one joint assignment over the batch. Requires bridge=noise and
-#                num_slices=1; see cyfm.flow.coupling for why no factorised
+#                num_slices=1; see cyfm.flow.couplings for why no factorised
 #                variant is offered.
 coupling: "independent"
 

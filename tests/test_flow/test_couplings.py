@@ -14,7 +14,7 @@ from omegaconf import OmegaConf
 from cyfm.core.manifold import BaseManifold
 from cyfm.core.registry import COUPLINGS
 from cyfm.data.toy_dataset import CylinderToyIIDDataset
-from cyfm.flow.coupling import IndependentCoupling, OptimalTransportCoupling, build_coupling
+from cyfm.flow.couplings import IndependentCoupling, OptimalTransportCoupling, build_coupling
 from cyfm.manifolds import build_manifold
 
 GEOMETRIES = ("cylindrical", "euclidean")

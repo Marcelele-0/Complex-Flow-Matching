@@ -106,8 +106,7 @@ def test_registry_missing_key_error() -> None:
 def test_core_registries_populated() -> None:
     """Verify built-in CFM components are registered in their respective registries."""
     import cyfm.data.fastmri  # noqa: F401
-    import cyfm.flow.euclidean_solver  # noqa: F401
-    import cyfm.flow.solver  # noqa: F401
+    import cyfm.flow.solvers  # noqa: F401
     import cyfm.manifolds.cylindrical  # noqa: F401
     import cyfm.manifolds.euclidean  # noqa: F401
     import cyfm.models  # noqa: F401

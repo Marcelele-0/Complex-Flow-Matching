@@ -52,7 +52,7 @@ def _straightness_setup() -> tuple[object, object, torch.Tensor]:
 def test_independent_coupling_reproduces_the_uncoupled_straightness() -> None:
     """Passing the baseline coupling explicitly must not change the number."""
     from cyfm.evaluate import straightness
-    from cyfm.flow.coupling import IndependentCoupling
+    from cyfm.flow.couplings import IndependentCoupling
 
     manifold, model, data = _straightness_setup()
     cpu = torch.device("cpu")
@@ -71,7 +71,7 @@ def test_independent_coupling_reproduces_the_uncoupled_straightness() -> None:
 def test_ot_coupling_changes_the_pairs_that_are_scored() -> None:
     """An OT-trained model is scored on OT pairs, which are not the drawn pairs."""
     from cyfm.evaluate import straightness
-    from cyfm.flow.coupling import OptimalTransportCoupling
+    from cyfm.flow.couplings import OptimalTransportCoupling
 
     manifold, model, data = _straightness_setup()
     cpu = torch.device("cpu")

@@ -1,9 +1,9 @@
 """The cylindrical geometry, R^+ x S^1 - the repository's original formulation.
 
 This module adds no mathematics. It is an adapter that presents the existing
-:class:`~cyfm.flow.bridge.GeodesicFlowBridge`,
-:class:`~cyfm.flow.solver.CylindricalODESolver` and
-:class:`~cyfm.flow.torus_math.DecoupledCylindricalLoss` through the
+:class:`~cyfm.flow.bridges.GeodesicFlowBridge`,
+:class:`~cyfm.flow.solvers.CylindricalODESolver` and
+:class:`~cyfm.flow.losses.DecoupledCylindricalLoss` through the
 :class:`~cyfm.core.manifold.BaseManifold` interface, so that introducing a second
 geometry could not change the behaviour of the first.
 """
@@ -25,9 +25,9 @@ from cyfm.data.transforms import (
     Compose,
     WindowAmplitudeNormalize,
 )
-from cyfm.flow.bridge import GeodesicFlowBridge
-from cyfm.flow.solver import CylindricalODESolver
-from cyfm.flow.torus_math import DecoupledCylindricalLoss
+from cyfm.flow.bridges import GeodesicFlowBridge
+from cyfm.flow.losses import DecoupledCylindricalLoss
+from cyfm.flow.solvers import CylindricalODESolver
 from cyfm.utils.complex_ops import cylinder_to_complex, wrap_to_pi
 from cyfm.utils.random_fields import smooth_standard_normals
 
@@ -191,7 +191,7 @@ class CylindricalManifold(BaseManifold):
             prior's latents. ``None`` keeps the prior white. The pointwise law is
             unchanged either way; see :func:`sample_cylindrical_noise_correlated`.
         phase_amplitude_weighting: Weight the phase error by the clean amplitude.
-            See :class:`cyfm.flow.torus_math.DecoupledCylindricalLoss`.
+            See :class:`cyfm.flow.losses.DecoupledCylindricalLoss`.
     """
 
     name = "cylindrical"

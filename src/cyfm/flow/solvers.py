@@ -1,27 +1,32 @@
-"""Predictor-Corrector SDE solver for the unconditional complex-diffusion baseline.
+"""Everything that steps a state forward in time.
 
-Euler-Maruyama predictor and Langevin-dynamics corrector for a variance-exploding
-SDE, after Song et al. (2021).
+Three samplers, selected by a manifold's ``make_solver``, all satisfying the
+:class:`~cyfm.core.solver.Sampler` protocol so the entry points never branch on
+which one they got:
 
-**Unconditional, structurally.** This sampler draws from the prior alone. It takes
-no measurement, no sampling mask and no sensitivity maps, and there is no
-data-consistency projection anywhere in the path. That is the acceptance criterion
-of the baseline, not a default: Table 5 compares unconditional generators, and an
-arm that saw a measurement would be solving an easier problem and winning for that
-reason. The reconstruction route this solver once carried was deleted rather than
-switched off, so a later caller cannot turn it back on by passing an argument.
+* :class:`HeunODESolver` and its two geometry-specific subclasses integrate the
+  learned velocity field. ``k`` Heun steps cost ``2k - 1`` network evaluations,
+  which is the cost convention every table in the paper reports against.
+* :class:`PredictorCorrectorSolver` integrates a variance-exploding reverse SDE
+  instead, for the score-based baseline. It is a different family -- it consumes
+  a score rather than a velocity -- and lives here because the callers choose
+  between it and the two above by configuration alone.
+
+The reconstruction route through these solvers was deleted rather than switched
+off; there is no measurement to project onto.
 """
 
 from __future__ import annotations
 
 import math
+from abc import abstractmethod
 from collections.abc import Callable
 from typing import Any
 
 import torch
 
 from cyfm.core.registry import SOLVERS
-from cyfm.core.solver import BaseSDESolver
+from cyfm.core.solver import BaseODESolver, BaseSDESolver
 
 
 def heun_evaluations(num_steps: int) -> int:
@@ -354,3 +359,146 @@ class PredictorCorrectorSolver(BaseSDESolver):
             x, x_mean = self.predictor_step(model, x, t_vec, dt, generator=generator)
 
         return x_mean if should_denoise else x
+
+
+class HeunODESolver(BaseODESolver):
+    """2nd-order predictor-corrector Heun ODE integrator."""
+
+    def __init__(self, num_steps: int = 50) -> None:
+        super().__init__(num_steps=num_steps)
+
+    @abstractmethod
+    def step(self, x_t: torch.Tensor, v_t: torch.Tensor, dt: float) -> torch.Tensor:
+        """Advance state x_t by dt under velocity field v_t.
+
+        Args:
+            x_t: State tensor [B, C, H, W].
+            v_t: Velocity tensor [B, 2, H, W].
+            dt: Time step scalar.
+
+        Returns:
+            Advanced state tensor [B, C, H, W].
+        """
+
+    @property
+    def evaluations(self) -> int:
+        """Two calls per step, less the corrector the final step skips.
+
+        Delegates so the count lives in one place: the diffusion arm matches its
+        budget against :func:`heun_evaluations`, and a
+        second copy of the rule here is how that match goes quietly wrong.
+        """
+        return heun_evaluations(self.num_steps)
+
+    @torch.no_grad()
+    def sample(
+        self,
+        model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+        noise: torch.Tensor,
+        generator: torch.Generator | None = None,
+    ) -> torch.Tensor:
+        """Integrate trajectory from t=0 to t=1 using Heun's method.
+
+        Args:
+            model: Neural velocity field callable (x, t) -> v.
+            noise: Initial noise state at t=0 [B, C, H, W].
+            generator: Unused; this integrator is deterministic given ``noise``.
+                Accepted so every sampler presents one interface.
+
+        Returns:
+            Reconstructed state at t=1 [B, C, H, W].
+        """
+        del generator
+        device = noise.device
+        b = noise.shape[0]
+        x_t = noise
+        dt = 1.0 / self.num_steps
+
+        for i in range(self.num_steps):
+            t_val = i / self.num_steps
+            t_next_val = (i + 1) / self.num_steps
+
+            t_tensor = torch.full((b,), t_val, device=device, dtype=torch.float32)
+            t_next_tensor = torch.full((b,), t_next_val, device=device, dtype=torch.float32)
+
+            # Predictor step
+            v_t = model(x_t, t_tensor)
+
+            if i == self.num_steps - 1:
+                x_t = self.step(x_t, v_t, dt)
+                break
+
+            x_pred = self.step(x_t, v_t, dt)
+            v_next = model(x_pred, t_next_tensor)
+            v_avg = 0.5 * (v_t + v_next)
+
+            # Corrector step
+            x_t = self.step(x_t, v_avg, dt)
+
+        return x_t
+
+
+@SOLVERS.register("cylindrical")
+@SOLVERS.register("cylindrical_heun")
+@SOLVERS.register("cylindrical_ode")
+class CylindricalODESolver(HeunODESolver):
+    """2nd-order Heun ODE solver on decoupled cylindrical manifold R+ x S^1."""
+
+    def step(self, x_t: torch.Tensor, v_t: torch.Tensor, dt: float) -> torch.Tensor:
+        """Advance cylindrical state by dt with manifold projection.
+
+        Args:
+            x_t: State tensor [B, 3, H, W] (m, cos(phi), sin(phi)).
+            v_t: Tangent velocity [B, 2, H, W] (v_m, v_phi).
+            dt: Time step scalar.
+
+        Returns:
+            Next state [B, 3, H, W] projected onto R+ x S^1.
+        """
+        m_t = x_t[:, 0:1, :, :]
+        px_t = x_t[:, 1:2, :, :]
+        py_t = x_t[:, 2:3, :, :]
+
+        v_m = v_t[:, 0:1, :, :]
+        v_phi = v_t[:, 1:2, :, :]
+
+        # Amplitude clamp >= 0
+        m_next = torch.clamp(m_t + v_m * dt, min=0.0)
+
+        # Phase update and S^1 reprojection
+        phi_t = torch.atan2(py_t, px_t)
+        phi_next = phi_t + v_phi * dt
+
+        px_next = torch.cos(phi_next)
+        py_next = torch.sin(phi_next)
+
+        return torch.cat([m_next, px_next, py_next], dim=1)
+
+
+@SOLVERS.register("euclidean")
+@SOLVERS.register("euclidean_heun")
+@SOLVERS.register("euclidean_ode")
+class EuclideanODESolver(HeunODESolver):
+    """2nd-order Heun ODE solver in flat Euclidean space R^2."""
+
+    def step(self, x_t: torch.Tensor, v_t: torch.Tensor, dt: float) -> torch.Tensor:
+        """Perform a single Euler step in flat Euclidean space.
+
+        Args:
+            x_t: Current state [B, 2, H, W] (real, imag).
+            v_t: Predicted velocity [B, 2, H, W] (v_re, v_im).
+            dt: Time step size scalar.
+
+        Returns:
+            Next state [B, 2, H, W] in R^2.
+
+        Raises:
+            ValueError: If state and velocity channel dimensions mismatch.
+        """
+        if x_t.shape[1] != v_t.shape[1]:
+            raise ValueError(
+                f"Euclidean state and velocity must share a channel count, got "
+                f"x_t: {x_t.shape[1]} channels, v_t: {v_t.shape[1]} channels"
+            )
+
+        return x_t + v_t * dt

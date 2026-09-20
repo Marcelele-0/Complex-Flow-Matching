@@ -62,7 +62,7 @@ from torch.utils.data import DataLoader
 
 from cyfm.data import build_dataset, build_geometry_transform
 from cyfm.data.transforms import Compose
-from cyfm.flow.coupling import BaseCoupling, build_coupling
+from cyfm.flow.couplings import BaseCoupling, build_coupling
 from cyfm.manifolds import build_manifold
 from cyfm.utils.inference import build_model, load_weights, resolve_checkpoint
 from cyfm.utils.metrics import distributional_metrics

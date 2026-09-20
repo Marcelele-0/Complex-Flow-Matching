@@ -1,4 +1,13 @@
-"""Geodesic probability path and velocity field on decoupled cylindrical manifold."""
+"""The two probability paths the geometries interpolate along.
+
+Both are conditional flow-matching bridges between a prior sample at ``t = 0``
+and a datum at ``t = 1``, and both carry a velocity that is constant along the
+path. They differ only in the space they run in, which is the whole comparison:
+:class:`GeodesicFlowBridge` moves the amplitude linearly and the phase along the
+shorter arc of ``S^1``, so its angular target is bounded by ``pi``;
+:class:`LinearFlowBridge` moves ``(Re z, Im z)`` in a straight line, whose
+induced angular velocity is unbounded near the origin.
+"""
 
 from __future__ import annotations
 
@@ -67,3 +76,30 @@ class GeodesicFlowBridge:
         target_v = torch.cat([u_m, u_phi], dim=1)
 
         return cyl_t, target_v
+
+
+class LinearFlowBridge:
+    """Conditional flow-matching straight-line path in flat Euclidean space R^2."""
+
+    def __init__(self) -> None:
+        pass
+
+    def forward(
+        self, euc_noise: torch.Tensor, euc_data: torch.Tensor, t: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Compute linear interpolated state and target velocity field.
+
+        Args:
+            euc_noise: Pure noise state at t=0 [B, 2, H, W] (real, imag).
+            euc_data: Clean data state at t=1 [B, 2, H, W] (real, imag).
+            t: Time embedding [B, 1, 1, 1] in [0, 1].
+
+        Returns:
+            Tuple containing:
+                - euc_t: Interpolated state [B, 2, H, W] at time t.
+                - target_v: Target velocity field [B, 2, H, W] (v_re, v_im).
+        """
+        target_v = euc_data - euc_noise
+        euc_t = euc_noise + t * target_v
+
+        return euc_t, target_v

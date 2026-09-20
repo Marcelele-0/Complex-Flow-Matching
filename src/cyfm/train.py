@@ -34,7 +34,7 @@ from cyfm.data import build_dataset, build_geometry_transform
 from cyfm.data.splits import load_split_file_names, select_indices
 from cyfm.data.transforms import Compose
 from cyfm.flow import BRIDGE_ENDPOINTS
-from cyfm.flow.coupling import build_coupling
+from cyfm.flow.couplings import build_coupling
 from cyfm.manifolds import build_manifold
 from cyfm.utils.checkpoint import load_training_state, save_training_state, state_path
 from cyfm.utils.distributed import (

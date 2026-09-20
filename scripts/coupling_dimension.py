@@ -34,8 +34,8 @@ from omegaconf import OmegaConf
 
 from cyfm.core.manifold import BaseManifold
 from cyfm.data.toy_dataset import CylinderToyFieldDataset, CylinderToyIIDDataset
-from cyfm.flow.coupling import OptimalTransportCoupling
-from cyfm.flow.optimal_transport import sliced_wasserstein2
+from cyfm.flow.couplings import OptimalTransportCoupling
+from cyfm.flow.transport import sliced_wasserstein2
 from cyfm.manifolds import build_manifold
 
 

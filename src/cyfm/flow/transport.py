@@ -68,7 +68,7 @@ _SHIFT_CHUNK = 256
 def shortest_angular_diff(phi_start: torch.Tensor, phi_end: torch.Tensor) -> torch.Tensor:
     """Signed shortest angular displacement, in ``[-pi, pi]``.
 
-    Matches the convention of :meth:`cyfm.flow.bridge.GeodesicFlowBridge.get_shortest_angular_diff`
+    Matches the convention of :meth:`cyfm.flow.bridges.GeodesicFlowBridge.get_shortest_angular_diff`
     so a coupling and the bridge it feeds measure the same angle.
 
     Args:

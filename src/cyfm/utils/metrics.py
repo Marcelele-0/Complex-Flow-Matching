@@ -33,7 +33,7 @@ from __future__ import annotations
 import torch
 
 from cyfm.data.synthetic import circular_linear_correlation
-from cyfm.flow.optimal_transport import (
+from cyfm.flow.transport import (
     circular_transport_permutation,
     shortest_angular_diff,
     sliced_wasserstein2,

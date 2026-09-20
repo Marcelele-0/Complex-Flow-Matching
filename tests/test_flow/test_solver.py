@@ -2,7 +2,7 @@ import math
 
 import torch
 
-from cyfm.flow.solver import CylindricalODESolver
+from cyfm.flow.solvers import CylindricalODESolver
 
 
 def test_solver_step_projection() -> None:
