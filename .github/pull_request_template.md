@@ -16,4 +16,4 @@ Closes #
 - [ ] Pre-commit hooks passed: `pre-commit run --all-files`
 
 ## 📊 Evaluation / Metrics (if applicable)
-<!-- Paste Table 1 metrics, W&B run URL, or qualitative reconstruction diffs if applicable -->
+<!-- Paste Table 1 metrics, W&B run URL, or qualitative sample panels if applicable -->

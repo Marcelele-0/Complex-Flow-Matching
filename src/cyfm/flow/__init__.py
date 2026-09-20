@@ -1,6 +1,13 @@
-"""Probability paths and bridges for Complex Flow Matching (CFM)."""
+"""Probability paths, couplings and bridges."""
 
 from __future__ import annotations
+
+from cyfm.flow.coupling import (
+    BaseCoupling,
+    IndependentCoupling,
+    OptimalTransportCoupling,
+    build_coupling,
+)
 
 # The distribution the probability path starts from at ``t = 0``, selected by
 # ``training.bridge``. Only the manifold's own prior remains: this paper generates

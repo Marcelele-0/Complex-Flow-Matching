@@ -1,4 +1,4 @@
-"""Complex Flow Matching (CFM) package."""
+"""CyFM: cylindrical flow matching for complex-valued fields."""
 
 from cyfm import core
 from cyfm.core import (

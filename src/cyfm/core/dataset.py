@@ -1,4 +1,4 @@
-"""Base dataset interface for complex-valued MRI data."""
+"""Base dataset interface for complex-valued fields."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from torch.utils.data import Dataset
 
 
 class BaseComplexDataset(ABC, Dataset):
-    """Abstract base dataset for complex-valued MRI reconstruction and synthesis.
+    """Abstract base dataset for complex-valued fields.
 
     Attributes:
         slice_map: One ``(file_path, slice_idx)`` per sample, in dataset order.
@@ -31,6 +31,5 @@ class BaseComplexDataset(ABC, Dataset):
         """Retrieve slice or volume item by index.
 
         Returns:
-            Either a complex tensor [1, H, W] / [S, 1, H, W] or a dictionary
-            containing 'input', 'mask', 'target' for reconstruction tasks.
+            A complex tensor, ``[1, H, W]`` for a single field.
         """

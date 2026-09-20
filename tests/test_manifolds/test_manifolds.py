@@ -13,10 +13,10 @@ import pytest
 import torch
 from omegaconf import OmegaConf
 
+from cyfm.core.manifold import BaseManifold
 from cyfm.manifolds import (
     CylindricalManifold,
     EuclideanManifold,
-    Manifold,
     build_manifold,
 )
 from cyfm.manifolds.cylindrical import sample_cylindrical_noise
@@ -112,7 +112,7 @@ class TestManifoldContract:
 
     def test_is_a_manifold_with_a_declared_width(self, manifold_cls: type) -> None:
         manifold = manifold_cls()
-        assert isinstance(manifold, Manifold)
+        assert isinstance(manifold, BaseManifold)
         assert manifold.state_channels in (2, 3)
         assert manifold.velocity_channels == 2
 
@@ -248,7 +248,7 @@ class TestSideBySideFairness:
         """
         slices = [_complex_slice(40, 40, seed=i) * (i + 1) for i in range(3)]
 
-        def run(manifold: Manifold) -> torch.Tensor:
+        def run(manifold: BaseManifold) -> torch.Tensor:
             slice_tf, window_tf = manifold.build_window_transforms(crop_base=16)
             return window_tf(torch.stack([slice_tf(z.clone()) for z in slices]))
 

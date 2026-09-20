@@ -2,7 +2,7 @@
 
 Nothing below is specific to a manifold. The representation, the noise prior, the
 probability path, the loss and the ODE step are all supplied by the
-:class:`~cyfm.manifolds.base.Manifold` selected in ``conf/manifold/``, so the
+:class:`~cyfm.core.manifold.BaseManifold` selected in ``conf/manifold/``, so the
 cylindrical and Euclidean experiments are the *same* run with one config value
 changed - same data, same architecture, same optimizer, same schedule.
 

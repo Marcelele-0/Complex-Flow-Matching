@@ -10,7 +10,6 @@ from omegaconf import DictConfig
 
 from cyfm.core.manifold import BaseManifold
 from cyfm.core.registry import MANIFOLDS
-from cyfm.manifolds.base import Manifold
 from cyfm.manifolds.complex_diffusion import ComplexDiffusionManifold
 from cyfm.manifolds.cylindrical import CylindricalManifold
 from cyfm.manifolds.euclidean import EuclideanManifold
@@ -20,7 +19,6 @@ __all__ = [
     "ComplexDiffusionManifold",
     "CylindricalManifold",
     "EuclideanManifold",
-    "Manifold",
     "build_manifold",
 ]
 

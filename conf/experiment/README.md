@@ -26,6 +26,18 @@ with `+experiment=table2_unet64`.
 | `table4_factorized` | Table 4 and the patch seams, Section 5.4 | network-free | ~4 min |
 | `sec53_ot_cost` | OT cost saving against field size, Section 5.3 | network-free | ~10 s |
 | `ablation_loss32` | the loss ablation, Section 4 | U-Net grid, 18 runs | ~1 h |
+| `table5_fastmri` | Table 5, fastMRI knee CORPD 320x320 | commands; the grid runs on the cluster | ~15 GPU-h |
+| `table6_audio` | the speech block of Table 2 and Appendix E | protocol only, no `paper:` block | ~20 cluster tasks |
+
+Two of those are not like the others and the difference matters.
+`table5_fastmri` is `kind: commands` although it *is* a U-Net grid: 25 runs at
+320x320 need a cluster, so `scripts/wcss/table5_fastmri.sbatch` launches them and the
+`paper:` block owns only what follows -- collecting the evaluations into the archive
+and rendering the table. `table6_audio` carries no `paper:` block at all, so it is
+absent from `reproduce.py`'s `PAPER_ORDER` and reachable only through
+`scripts/wcss/table6_audio.sbatch`; there is also no archive for it under
+`docs/reproduce/paper_results/`, which means the speech numbers in the main text
+cannot currently be re-derived from a checkout.
 
 Runtimes are for one RTX 4070 Ti SUPER, one run at a time.
 `scripts/paper/reproduce.py` runs them:

@@ -4,22 +4,27 @@
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
 
 Code for the paper *CyFM: Cylindrical Optimal Transport for Few-Step Complex-Valued
-Flow Matching* (arXiv preprint, v1).
+Flow Matching*.
 
 Complex-valued signals (MRI, audio spectrograms) are usually generated as two real
 channels `(Re z, Im z)`. Straight Cartesian paths then pass near the origin, where the
 induced angular velocity is unbounded. CyFM runs flow matching on the cylinder
 `R+ x S^1` instead, where the phase target is bounded by pi, and couples noise and data
 by **exact minibatch optimal transport computed jointly over whole fields in the
-cylindrical metric**. The paper measures, on synthetic complex fields with a known
-ground truth:
+cylindrical metric**. The paper measures this across three domains -- synthetic
+Gaussian-copula fields with a known ground truth, coil-combined fastMRI knee
+acquisitions, and LibriSpeech STFT segments:
 
-- the heavy tail (index ~1) of the Cartesian bridges' angular velocity, network-free;
-- few-step generation (k <= 8 Heun steps) where CyFM beats the best Cartesian arm at
-  16x16, 32x32 and 64x64 with all five seeds separated, with no significant difference
-  at convergence;
+- the heavy tail (index ~1) of the Cartesian bridges' angular velocity, network-free,
+  on all three targets;
+- few-step generation (k <= 8 Heun steps) where CyFM beats the best Cartesian arm on
+  synthetic fields at 16x16, 32x32 and 64x64 and on speech spectrograms, with all five
+  seeds separated and no significant difference at convergence;
 - joint cylindrical OT lowering CyFM's few-step error by 3-60% at every resolution,
   although its transport-cost saving collapses to 3% at 64x64;
+- on knee MRI, a 1.8x single-step advantage whose ordering beyond k=1 depends on
+  whether the measure sees spatial structure -- reported as measured, including where
+  the plane wins;
 - the *Factorized Coupling Trap*: coupling per coordinate or per patch keeps every
   marginal exact and destroys the joint distribution.
 
@@ -28,13 +33,17 @@ ground truth:
 ```bash
 git clone https://github.com/Marcelele-0/Complex-Flow-Matching.git
 cd Complex-Flow-Matching
-git checkout feat/generative-task-scope
 uv sync
 ```
 
-Python 3.11+, dependencies pinned in `uv.lock`. The network-free results run on a CPU;
-the trained ones want a CUDA GPU (timings below are on an RTX 4070 Ti SUPER, 16 GB).
-No dataset download is needed: every result is on synthetic data generated on the fly.
+Python 3.11+, dependencies pinned in `uv.lock`. `uv sync` installs the library and the
+development tools; the real-data intake lives behind extras (`--extra mri`,
+`--extra audio`, `--extra espirit`) and figure generation behind `--extra viz`.
+
+The network-free results run on a CPU and need no data at all: the synthetic target is
+generated on the fly. The synthetic U-Net tables want a CUDA GPU (timings below are on
+an RTX 4070 Ti SUPER, 16 GB). The knee MRI and speech tables additionally need their
+compact stores built first -- see `scripts/data/`.
 
 ## Reproducing the paper
 
@@ -121,11 +130,12 @@ src/cyfm/
 │   ├── solver.py          # Heun / Euler ODE solvers (NFE = 2k - 1 for Heun)
 │   └── torus_math.py      # geodesics on the cylinder, decoupled loss
 ├── manifolds/             # cylindrical (R+ x S^1) and euclidean (Re, Im)
-├── models/                # c_unet (+ attention, cross-slice variants), pointwise MLP
+├── models/                # c_unet (the paper's U-Net) and a pointwise MLP control
 ├── data/
 │   ├── synthetic.py       # Gaussian-copula target with known amplitude-phase dependence
 │   ├── toy_dataset.py     # cylinder_toy_iid / cylinder_toy_field datasets
-│   └── fastmri.py, ...    # real-data loaders (not used in the paper; see below)
+│   ├── knee_store.py      # fastMRI knee CORPD, coil-combined (Tables 1, 3, 7)
+│   └── stft_store.py      # LibriSpeech STFT segments (Tables 1, 2, 8)
 └── utils/random_fields.py # spectral smoothing that keeps every entry N(0, 1)
 
 conf/experiment/           # the paper's experiments and training protocols (above)
@@ -138,11 +148,11 @@ docs/notes/                # the research log (COUPLING_NOTES.md)
 
 ## Not part of the paper
 
-- **fastMRI / SKM-TEA.** `conf/dataset/fastmri_*.yaml` and the loaders are kept for the
-  next version (real-data evaluation). They are not exercised by the paper and have not
-  been re-validated since the move from reconstruction to generation.
 - **DDP (`torchrun`)** is supported by `cyfm.train` but was not re-run for the paper:
   every paper result is a single-GPU run.
+- **`conf/dataset/fastmri_local.yaml`** points at raw multi-coil k-space and is a
+  workstation debug subset. The paper's knee results read the compact store built from
+  it by `scripts/data/build_knee_pd_store.py`, not this directory.
 
 ## Development
 
