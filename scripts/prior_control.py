@@ -21,7 +21,7 @@ The protocol mirrors :mod:`cyfm.evaluate` rather than reimplementing it: the sam
 dataset registry, the same ``training_pipeline`` (which divides every field by its
 own peak modulus -- scoring against raw fields biases every absolute number, as
 that function's own docstring records), the same ``manifold.sample_noise``, the
-same ``to_complex``, the same ``distributional_metrics``, and the same
+same ``to_complex``, the same ``generative_metrics``, and the same
 ``num_fields`` / ``batch_size`` / ``num_projections`` / ``seed`` defaults as
 ``conf/evaluate/default.yaml``. That is what makes the output comparable with the
 ``k = 1`` column of Table 2 instead of merely similar to it.
@@ -61,7 +61,7 @@ from torch.utils.data import DataLoader
 from cyfm.data import build_dataset
 from cyfm.evaluate import training_pipeline
 from cyfm.manifolds import build_manifold
-from cyfm.utils.metrics import distributional_metrics
+from cyfm.metrics import generative_metrics
 
 
 def parse_args() -> argparse.Namespace:
@@ -247,7 +247,7 @@ def main() -> None:
         args, manifold, device, height, width, reference.shape[0], device_generator
     )
 
-    metrics = distributional_metrics(
+    metrics = generative_metrics(
         generated=prior,
         reference=reference,
         num_projections=args.num_projections,

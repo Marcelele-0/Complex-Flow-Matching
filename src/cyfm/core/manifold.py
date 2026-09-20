@@ -74,6 +74,15 @@ class BaseManifold(ABC):
     predicts_velocity: bool = True
     representation: Representation
 
+    #: Whether an angular velocity can be read off this geometry's path at all.
+    #: Separate from :attr:`predicts_velocity`, which asks whether the network
+    #: emits a velocity: a geometry can do the first and not the second, and the
+    #: evaluation sweep needs both to be true before it reports the quantity.
+    #: This replaced an allowlist of manifold names in ``cyfm.evaluate``, which
+    #: a new geometry could not join without editing a tuple it had no reason to
+    #: know about.
+    reports_induced_angular_velocity: bool = False
+
     #: Keys this geometry reads out of the ``training.loss`` config group, mapped
     #: to the constructor parameters they fill. One config group serves both
     #: geometries, so each takes the keys that apply to it and ignores the rest;
@@ -304,6 +313,33 @@ class BaseManifold(ABC):
             A callable with the same signature, emitting this geometry's target.
         """
         return model
+
+    def induced_angular_velocity(
+        self, state: torch.Tensor, velocity: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Amplitude and angular velocity at a point of the path.
+
+        Theorem 3 is a statement about the path, not the endpoint, and the two
+        geometries reach the same quantity by different routes: on the cylinder
+        the angular velocity *is* a coordinate of the prediction, bounded by
+        ``pi`` from the range of ``atan2``, while in the plane it is induced,
+        ``(x v_y - y v_x) / A^2``, and diverges as ``A -> 0``. Recording both
+        along the same trajectories is what turns the argument into a number.
+
+        Each geometry supplies its own, so the evaluation sweep does not have to
+        know which formula applies to which name.
+
+        Args:
+            state: Manifold state ``[B, state_channels, H, W]``.
+            velocity: Tangent velocity ``[B, velocity_channels, H, W]``.
+
+        Returns:
+            ``(amplitude, angular_velocity)``, both ``[B, H, W]``.
+
+        Raises:
+            NotImplementedError: If this geometry defines no such quantity.
+        """
+        raise NotImplementedError(f"{type(self).__name__} reports no induced angular velocity")
 
     @abstractmethod
     def make_solver(self, num_steps: int) -> Sampler:

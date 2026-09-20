@@ -25,6 +25,10 @@ import torch
 from cyfm.core.manifold import Representation
 from cyfm.utils.complex_ops import euclidean_to_complex
 
+# Guards the induced angular velocity against a literal division by zero; the
+# divergence it is meant to expose happens well above this.
+_ANGULAR_FLOOR = 1e-12
+
 
 class FlatComplexRepresentation:
     """Complex pixels as ``(Re z, Im z)`` on flat R^2, with no process attached.
@@ -36,6 +40,10 @@ class FlatComplexRepresentation:
 
     velocity_channels: int
     representation = Representation.PLANE
+    # Defined for this representation, which is not the same as reported for
+    # every arm that carries it: the score-based baseline mixes this in and is
+    # still excluded, by predicts_velocity.
+    reports_induced_angular_velocity = True
 
     def exp_map(self, x: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
         """Exponential map on Euclidean space R^2 is vector addition."""
@@ -55,6 +63,19 @@ class FlatComplexRepresentation:
             device=x.device,
             dtype=x.dtype,
         )
+
+    def induced_angular_velocity(
+        self, state: torch.Tensor, velocity: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """``theta_dot = (x v_y - y v_x) / A^2``, which diverges as ``A -> 0``.
+
+        The Cartesian target ``z_1 - z_0`` is bounded whenever its endpoints
+        are; what is unbounded is the rate at which the path turns, and that is
+        what a coarse integrator has to resolve. This is the measurement of it.
+        """
+        real, imag = state[:, 0], state[:, 1]
+        squared = (real * real + imag * imag).clamp_min(_ANGULAR_FLOOR)
+        return squared.sqrt(), (real * velocity[:, 1] - imag * velocity[:, 0]) / squared
 
     def to_complex(self, state: torch.Tensor) -> torch.Tensor:
         return euclidean_to_complex(state)

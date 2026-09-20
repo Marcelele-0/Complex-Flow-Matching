@@ -12,7 +12,7 @@ from omegaconf import OmegaConf
 from cyfm.core.registry import DATASETS
 from cyfm.data import build_dataset
 from cyfm.data.toy import CylinderToyFieldDataset, CylinderToyIIDDataset
-from cyfm.utils.metrics import circular_linear_correlation
+from cyfm.metrics import circular_linear_correlation
 
 # A spatially correlated field has far fewer effective independent draws than it
 # has coefficients, so its own seed-to-seed KS is an order of magnitude above the

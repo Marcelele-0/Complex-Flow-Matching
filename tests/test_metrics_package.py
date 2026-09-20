@@ -1,4 +1,4 @@
-"""Unit tests for the distributional metrics in cyfm.utils.metrics.
+"""Unit tests for the distributional metrics in cyfm.metrics.
 
 Each test pins the property the metric exists for: that it separates
 distributions it should separate, and stays near zero on ones it should not.
@@ -10,8 +10,8 @@ import pytest
 import torch
 
 from cyfm.data.toy import CylinderToyFieldDataset, CylinderToyIIDDataset
-from cyfm.utils.metrics import (
-    distributional_metrics,
+from cyfm.metrics import (
+    generative_metrics,
     measured_pair_fraction,
     phase_lag_one,
     radial_power_spectrum,
@@ -69,7 +69,7 @@ def test_metrics_are_near_zero_for_two_draws_of_one_distribution() -> None:
     """The floor: a perfect model should score here, not at zero exactly."""
     first = _fields(CylinderToyIIDDataset(size=16, crop_size=(64, 64), seed=0), 16)
     second = _fields(CylinderToyIIDDataset(size=16, crop_size=(64, 64), seed=9000), 16)
-    values = distributional_metrics(first, second, 128, _generator())
+    values = generative_metrics(first, second, 128, _generator())
 
     assert values["sliced_w2_complex"] < 0.05
     assert values["w2_amplitude"] < 0.05
@@ -82,7 +82,7 @@ def test_metrics_separate_distributions_that_differ_in_dependence() -> None:
     """Amplitude-phase dependence is the axis the datasets sweep."""
     independent = _fields(CylinderToyIIDDataset(coupling=0.0, size=16, crop_size=(64, 64)), 16)
     comonotone = _fields(CylinderToyIIDDataset(coupling=1.0, size=16, crop_size=(64, 64)), 16)
-    values = distributional_metrics(independent, comonotone, 128, _generator())
+    values = generative_metrics(independent, comonotone, 128, _generator())
 
     assert values["dependence_gap"] > 0.5
     assert values["sliced_w2_complex"] > 0.1
@@ -96,7 +96,7 @@ def test_marginals_survive_a_dependence_change_and_the_gap_still_fires() -> None
     """
     independent = _fields(CylinderToyIIDDataset(coupling=0.0, size=16, crop_size=(64, 64)), 16)
     comonotone = _fields(CylinderToyIIDDataset(coupling=1.0, size=16, crop_size=(64, 64)), 16)
-    values = distributional_metrics(independent, comonotone, 128, _generator())
+    values = generative_metrics(independent, comonotone, 128, _generator())
 
     assert values["w2_amplitude"] < 0.05
     assert values["w2_phase_circular"] < 0.1
@@ -107,7 +107,7 @@ def test_metrics_separate_distributions_that_differ_only_spatially() -> None:
     """And the point of keeping a spatial metric beside the pooled ones."""
     iid = _fields(CylinderToyIIDDataset(size=16, crop_size=(64, 64)), 16)
     field = _fields(CylinderToyFieldDataset(size=16, crop_size=(64, 64)), 16)
-    values = distributional_metrics(iid, field, 128, _generator())
+    values = generative_metrics(iid, field, 128, _generator())
 
     assert values["spatial_lag1_gap"] > 0.8
     assert values["sliced_w2_complex"] < 0.05
@@ -202,8 +202,8 @@ def test_metrics_are_reproducible_under_a_fixed_generator() -> None:
     first = _fields(CylinderToyIIDDataset(size=8, crop_size=(32, 32), seed=0), 8)
     second = _fields(CylinderToyIIDDataset(size=8, crop_size=(32, 32), seed=1), 8)
 
-    one = distributional_metrics(first, second, 64, _generator(5))
-    two = distributional_metrics(first, second, 64, _generator(5))
+    one = generative_metrics(first, second, 64, _generator(5))
+    two = generative_metrics(first, second, 64, _generator(5))
     assert one == two
 
 
@@ -211,7 +211,7 @@ def test_metrics_accept_unequal_batch_sizes() -> None:
     """Generated and reference counts need not match; the smaller sets the budget."""
     small = _fields(CylinderToyIIDDataset(size=4, crop_size=(32, 32), seed=0), 4)
     large = _fields(CylinderToyIIDDataset(size=12, crop_size=(32, 32), seed=1), 12)
-    values = distributional_metrics(small, large, 64, _generator())
+    values = generative_metrics(small, large, 64, _generator())
     assert math.isfinite(values["sliced_w2_complex"])
 
 
@@ -229,7 +229,7 @@ def test_metrics_accept_unequal_batch_sizes() -> None:
 def test_metrics_validation(generated: torch.Tensor, reference: torch.Tensor, match: str) -> None:
     """Shape and dtype mistakes fail here rather than deep inside a solver."""
     with pytest.raises(ValueError, match=match):
-        distributional_metrics(generated, reference, 16, _generator())
+        generative_metrics(generated, reference, 16, _generator())
 
 
 # --- Subsampling ---

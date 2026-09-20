@@ -191,6 +191,9 @@ class CylindricalManifold(BaseManifold):
     state_channels = 3
     velocity_channels = 2
     representation = Representation.CYLINDER
+    # Bounded by pi, because it is a coordinate of the prediction rather than a
+    # quantity induced by one.
+    reports_induced_angular_velocity = True
     # The phase terms and their weight. `phase_amplitude_weighting` has no
     # Euclidean counterpart at all: the weight depends on x_1, so the phase
     # channel regresses a reweighted conditional statistic the amplitude channel
@@ -320,6 +323,17 @@ class CylindricalManifold(BaseManifold):
             device=x.device,
             dtype=x.dtype,
         )
+
+    def induced_angular_velocity(
+        self, state: torch.Tensor, velocity: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Read straight off the state and the prediction; nothing is induced here.
+
+        The amplitude is the first state channel and the angular velocity the
+        second tangent channel. That directness is the claim: no division by an
+        amplitude, so nothing to diverge.
+        """
+        return state[:, 0].clamp_min(0.0), velocity[:, 1]
 
     def sample_noise(
         self,

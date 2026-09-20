@@ -37,7 +37,7 @@ import torch
 from cyfm.data.stores.knee import KneeStoreDataset
 from cyfm.data.transforms import slice_transform
 from cyfm.manifolds import build_manifold
-from cyfm.utils.metrics import circular_linear_correlation
+from cyfm.metrics import circular_linear_correlation
 
 _LOW_THRESHOLDS = (0.0, 1e-6, 1e-4, 1e-3, 1e-2)
 _QUANTILES = (0.01, 0.05, 0.25, 0.50)

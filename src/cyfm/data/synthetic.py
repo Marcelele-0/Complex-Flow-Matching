@@ -47,7 +47,7 @@ Presets
 ``"independent"`` (0.0), ``"partial"`` (0.5) and ``"comonotone"`` (1.0). Note
 that ``coupling`` is the *latent* Gaussian correlation, not an observable
 correlation of the samples; the observable one is lower, and
-:func:`cyfm.utils.metrics.circular_linear_correlation` reports it.
+:func:`cyfm.metrics.circular_linear_correlation` reports it.
 
 Example:
     >>> toy = CylinderToy(coupling=1.0, structure="spiral")
@@ -238,7 +238,7 @@ class CylinderToy:
         coupling: Latent Gaussian correlation in ``[0, 1]``. ``0`` makes
             amplitude and phase independent; ``1`` makes amplitude a
             deterministic function of phase. Not an observable correlation --
-            use :func:`cyfm.utils.metrics.circular_linear_correlation` for that.
+            use :func:`cyfm.metrics.circular_linear_correlation` for that.
         structure: ``"spiral"`` for comonotone dependence on the angle itself
             (with a branch cut), ``"cardioid"`` for periodic dependence through
             ``cos(theta - phase_offset)`` (no cut, mirror symmetric).

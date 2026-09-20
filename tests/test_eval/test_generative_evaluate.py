@@ -11,6 +11,7 @@ import torch
 from cyfm.config.adapters import manifold_from_config
 from cyfm.data.toy import CylinderToyIIDDataset
 from cyfm.evaluate import assert_training_domain, format_table
+from cyfm.manifolds.euclidean import EuclideanManifold
 
 
 def _generator(seed: int = 0) -> torch.Generator:
@@ -147,9 +148,9 @@ def test_probe_accumulates_across_batches_of_different_sizes() -> None:
     silently pair two unrelated samples; the extrema are per sample, so batches
     concatenate.
     """
-    from cyfm.evaluate import _AngularProbe
+    from cyfm.metrics import AngularVelocityProbe
 
-    probe = _AngularProbe(lambda state, t: torch.ones_like(state), "euclidean")
+    probe = AngularVelocityProbe(lambda state, t: torch.ones_like(state), EuclideanManifold())
     for size in (4, 4, 2):
         probe.start_batch()
         for step in (0.0, 0.5):
@@ -162,9 +163,11 @@ def test_probe_accumulates_across_batches_of_different_sizes() -> None:
 
 def test_probe_records_nothing_when_disabled() -> None:
     """A score arm has no angular velocity, so there is nothing to report."""
-    from cyfm.evaluate import _AngularProbe
+    from cyfm.metrics import AngularVelocityProbe
 
-    probe = _AngularProbe(lambda state, t: torch.ones_like(state), "euclidean", enabled=False)
+    probe = AngularVelocityProbe(
+        lambda state, t: torch.ones_like(state), EuclideanManifold(), enabled=False
+    )
     probe.start_batch()
     probe(torch.ones(2, 2, 4, 4), torch.zeros(2))
     assert probe.enabled is False
@@ -200,3 +203,75 @@ def test_straightness_is_chunk_invariant_for_a_degenerate_model() -> None:
     )
     assert whole == pytest.approx(1.0)
     assert chunked == pytest.approx(1.0)
+
+
+class TestAngularCapability:
+    """The probe asks the geometry, instead of matching its name against a tuple.
+
+    ``cyfm.evaluate`` held ``_ANGULAR_GEOMETRIES = ("euclidean", "cylindrical")``
+    and a branch on the name to pick the formula. A geometry now states both for
+    itself, so a new one cannot be left out of a table it belongs in by an
+    omission from a tuple it has no reason to know about.
+    """
+
+    def test_the_score_arm_is_excluded_by_the_other_gate(self) -> None:
+        """Defined for the representation, not reported for this arm.
+
+        ``ComplexDiffusionManifold`` mixes in the flat representation and so has
+        the induced formula; it still must not report it, because its network
+        emits a score. The two gates are separate questions and this is the case
+        that tells them apart.
+        """
+        from cyfm.manifolds.complex_diffusion import ComplexDiffusionManifold
+        from cyfm.metrics import AngularVelocityProbe
+
+        manifold = ComplexDiffusionManifold()
+        assert manifold.reports_induced_angular_velocity is True
+        assert manifold.predicts_velocity is False
+
+        probe = AngularVelocityProbe(
+            lambda state, t: torch.ones_like(state),
+            manifold,
+            enabled=manifold.predicts_velocity,
+        )
+        probe.start_batch()
+        probe(torch.ones(2, 2, 4, 4), torch.zeros(2))
+        assert probe.enabled is False
+        assert probe.peak_angular is None
+
+    def test_the_cylinder_reads_the_bounded_coordinate(self) -> None:
+        """On the cylinder the angular velocity *is* a coordinate, bounded by pi."""
+        from cyfm.manifolds.cylindrical import CylindricalManifold
+
+        state = torch.rand(2, 3, 4, 4)
+        velocity = torch.rand(2, 2, 4, 4)
+        amplitude, angular = CylindricalManifold().induced_angular_velocity(state, velocity)
+        assert torch.equal(angular, velocity[:, 1])
+        assert torch.equal(amplitude, state[:, 0])
+
+    def test_the_plane_induces_it_and_diverges_at_the_origin(self) -> None:
+        """The divergence the probe exists to expose, as a number.
+
+        A unit tangential velocity at amplitude A induces an angular velocity
+        1/A, so halving the amplitude doubles it. That is Theorem 3's content.
+        """
+        from cyfm.manifolds.euclidean import EuclideanManifold
+
+        manifold = EuclideanManifold()
+        velocity = torch.tensor([[[[0.0]], [[1.0]]]])  # purely tangential at (A, 0)
+        rates = []
+        for radius in (1.0, 0.5, 0.25):
+            state = torch.tensor([[[[radius]], [[0.0]]]])
+            _, angular = manifold.induced_angular_velocity(state, velocity)
+            rates.append(float(angular))
+        assert rates == pytest.approx([1.0, 2.0, 4.0])
+
+    def test_the_floor_stops_a_literal_division_by_zero(self) -> None:
+        """Exactly at the origin the formula must return a number, not a nan."""
+        from cyfm.manifolds.euclidean import EuclideanManifold
+
+        amplitude, angular = EuclideanManifold().induced_angular_velocity(
+            torch.zeros(1, 2, 2, 2), torch.ones(1, 2, 2, 2)
+        )
+        assert torch.isfinite(amplitude).all()
+        assert torch.isfinite(angular).all()
