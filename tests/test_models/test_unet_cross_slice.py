@@ -190,7 +190,7 @@ class TestGradientFlow:
         pred_v = model(x_t, t_model)
         assert pred_v.shape == target_v.shape
 
-        loss, _, _, _ = criterion(pred_v, target_v, target_x1=x_1[:, center])
+        loss, _, _ = criterion(pred_v, target_v, target_x1=x_1[:, center])
         loss.backward()
 
         missing = [n for n, p in model.named_parameters() if p.requires_grad and p.grad is None]

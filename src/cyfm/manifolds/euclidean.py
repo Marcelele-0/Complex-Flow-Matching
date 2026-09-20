@@ -132,8 +132,6 @@ class EuclideanManifold(FlatComplexRepresentation, BaseManifold):
             textbook ``N(0, I)``; ``"matched"`` replays the cylindrical RNG
             stream for a sample-paired run. See the ``sample_*`` functions above.
         loss_type: ``"l1"``, ``"l2"`` or ``"mse"`` on the velocity.
-        lambda_hf: Weight on the high-frequency k-space penalty. ``0.0`` disables it.
-        hf_boost_factor: Radial slope of that penalty.
 
         spatial_correlation: Gaussian smoothing sigma, in pixels, applied to the
             prior's latents. ``None`` keeps the prior white. When set, the draw
@@ -153,8 +151,6 @@ class EuclideanManifold(FlatComplexRepresentation, BaseManifold):
         self,
         noise_prior: str = "uniform",
         loss_type: str = "l1",
-        lambda_hf: float = 0.0,
-        hf_boost_factor: float = 4.0,
         spatial_correlation: float | None = None,
     ) -> None:
         if noise_prior not in NOISE_PRIORS:
@@ -180,8 +176,6 @@ class EuclideanManifold(FlatComplexRepresentation, BaseManifold):
         self._bridge = LinearFlowBridge()
         self._loss = EuclideanVelocityLoss(
             loss_type=loss_type,
-            lambda_hf=lambda_hf,
-            hf_boost_factor=hf_boost_factor,
         )
 
     def to(self, device: torch.device) -> EuclideanManifold:
@@ -249,8 +243,8 @@ class EuclideanManifold(FlatComplexRepresentation, BaseManifold):
         target_x1: torch.Tensor | None = None,
         **kwargs: Any,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        total, loss_vel, loss_hf = self._loss(pred_v, target_v, target_x1)
-        return total, {"vel": loss_vel, "hf": loss_hf}
+        total, loss_vel = self._loss(pred_v, target_v, target_x1)
+        return total, {"vel": loss_vel}
 
     def make_solver(self, num_steps: int) -> EuclideanODESolver:
         return EuclideanODESolver(num_steps=num_steps)

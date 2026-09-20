@@ -132,4 +132,3 @@ def test_core_registries_populated() -> None:
     # DATASETS
     assert "fastmri" in DATASETS
     assert issubclass(cast(type, DATASETS.get("fastmri")), BaseComplexDataset)
-

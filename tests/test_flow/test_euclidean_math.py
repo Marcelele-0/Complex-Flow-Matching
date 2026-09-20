@@ -29,10 +29,9 @@ class TestLossValues:
         pred = torch.tensor([[[[1.0]], [[-1.0]]]])
         target = torch.zeros_like(pred)
 
-        total, loss_vel, loss_hf = criterion(pred, target)
+        total, loss_vel = criterion(pred, target)
 
         assert loss_vel.item() == pytest.approx(1.0)
-        assert loss_hf.item() == 0.0
         assert total.item() == pytest.approx(1.0)
 
     def test_mse_squares_the_error(self) -> None:
@@ -40,7 +39,7 @@ class TestLossValues:
         pred = torch.full((1, 2, 4, 4), 3.0)
         target = torch.zeros_like(pred)
 
-        _, loss_vel, _ = criterion(pred, target)
+        _, loss_vel = criterion(pred, target)
 
         assert loss_vel.item() == pytest.approx(9.0)
 
@@ -48,7 +47,7 @@ class TestLossValues:
         criterion = EuclideanVelocityLoss()
         v = torch.randn(2, 2, 8, 8)
 
-        total, _, _ = criterion(v, v)
+        total, _ = criterion(v, v)
 
         assert total.item() == pytest.approx(0.0, abs=1e-7)
 
@@ -65,8 +64,8 @@ class TestLossValues:
         target = torch.randn(2, 2, 8, 8)
         x_1 = torch.rand(2, 2, 8, 8)
 
-        without, _, _ = criterion(pred, target)
-        with_x1, _, _ = criterion(pred, target, target_x1=x_1)
+        without, _ = criterion(pred, target)
+        with_x1, _ = criterion(pred, target, target_x1=x_1)
 
         assert torch.equal(without, with_x1)
 
@@ -83,37 +82,3 @@ class TestLossValues:
         assert criterion(real_error, target)[0].item() == pytest.approx(
             criterion(imag_error, target)[0].item()
         )
-
-
-class TestHighFrequencyBoost:
-    def test_disabled_by_default(self) -> None:
-        criterion = EuclideanVelocityLoss()
-        _, _, loss_hf = criterion(torch.randn(1, 2, 8, 8), torch.zeros(1, 2, 8, 8))
-        assert loss_hf.item() == 0.0
-
-    def test_enabled_boost_adds_a_positive_term(self) -> None:
-        criterion = EuclideanVelocityLoss(lambda_hf=1.0, hf_boost_factor=4.0)
-        pred = torch.randn(1, 2, 8, 8)
-        target = torch.zeros_like(pred)
-
-        total, loss_vel, loss_hf = criterion(pred, target)
-
-        assert loss_hf.item() > 0.0
-        assert total.item() == pytest.approx((loss_vel + loss_hf).item(), rel=1e-6)
-
-    def test_hf_term_is_identical_to_the_cylindrical_one(self) -> None:
-        """A HF ablation must mean the same thing on both geometries.
-
-        Same velocity error, same boost factor, same number: the two losses share
-        cyfm.flow.spectral rather than each spelling the FFT out.
-        """
-        error = torch.randn(2, 2, 16, 16)
-        target = torch.zeros_like(error)
-
-        euclidean = EuclideanVelocityLoss(lambda_hf=1.0, hf_boost_factor=4.0)
-        cylindrical = DecoupledCylindricalLoss(lambda_hf=1.0, hf_boost_factor=4.0)
-
-        _, _, euc_hf = euclidean(error, target)
-        _, _, _, cyl_hf = cylindrical(error, target)
-
-        assert torch.equal(euc_hf, cyl_hf)

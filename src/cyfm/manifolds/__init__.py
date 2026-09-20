@@ -32,8 +32,8 @@ def build_manifold(cfg: DictConfig) -> BaseManifold:
 
     Loss hyper-parameters are read from ``cfg.training.loss`` rather than from
     the manifold group, so the existing overrides (``training.loss.lambda_phase``,
-    ``training.loss.lambda_hf``, ...) and ``schedule_runs.sh`` keep working
-    unchanged, and one training config serves both geometries.
+    ``training.loss.amp_loss_type``, ...) keep working unchanged, and one training
+    config serves both geometries.
 
     Args:
         cfg: Full Hydra config. Reads ``manifold.name``, ``manifold.noise_prior``
@@ -50,10 +50,6 @@ def build_manifold(cfg: DictConfig) -> BaseManifold:
     name = manifold_cfg.get("name", "cylindrical")
     loss_cfg = cfg.get("training", {}).get("loss", {}) or {}
 
-    # Shared by both geometries; see cyfm.flow.spectral.
-    lambda_hf = loss_cfg.get("lambda_hf", 0.0)
-    hf_boost_factor = loss_cfg.get("hf_boost_factor", 4.0)
-
     if not MANIFOLDS.contains(name):
         raise ValueError(
             f"Unknown manifold name specified in config: {name}. "
@@ -67,8 +63,6 @@ def build_manifold(cfg: DictConfig) -> BaseManifold:
                 amp_loss_type=loss_cfg.get("amp_loss_type", "l1"),
                 phase_loss_type=loss_cfg.get("phase_loss_type", "l1"),
                 lambda_phase=loss_cfg.get("lambda_phase", 1.0),
-                lambda_hf=lambda_hf,
-                hf_boost_factor=hf_boost_factor,
                 phase_weight=manifold_cfg.get("phase_weight", 1.0),
                 phase_spread=manifold_cfg.get("phase_spread", None),
                 spatial_correlation=manifold_cfg.get("spatial_correlation", None),
@@ -81,8 +75,6 @@ def build_manifold(cfg: DictConfig) -> BaseManifold:
                 noise_prior=manifold_cfg.get("noise_prior", "uniform"),
                 spatial_correlation=manifold_cfg.get("spatial_correlation", None),
                 loss_type=loss_cfg.get("vel_loss_type", "l1"),
-                lambda_hf=lambda_hf,
-                hf_boost_factor=hf_boost_factor,
             )
 
         case "complex_diffusion":
@@ -91,8 +83,8 @@ def build_manifold(cfg: DictConfig) -> BaseManifold:
             # branch above re-types its defaults and that is how they drift: this
             # arm's sigma_max in particular is calibrated to the data, and a second
             # default here would silently win whenever a config omits it.
-            # The loss group is not read: score matching has no velocity loss type
-            # and no k-space penalty to configure.
+            # The loss group is not read: score matching has no velocity loss
+            # type to configure.
             settings = {
                 key: manifold_cfg[key]
                 for key in (

@@ -181,8 +181,6 @@ class CylindricalManifold(BaseManifold):
         amp_loss_type: ``"l1"``, ``"l2"`` or ``"mse"`` for the amplitude term.
         phase_loss_type: As above, plus ``"cosine"`` for the wrapping variant.
         lambda_phase: Weight on the phase term.
-        lambda_hf: Weight on the high-frequency k-space penalty. ``0.0`` disables it.
-        hf_boost_factor: Radial slope of that penalty.
         phase_weight: Angular weight of the tangent inner product.
         phase_spread: Standard deviation, in radians, of a wrapped-normal phase
             prior. ``None`` keeps the uniform prior, which is the
@@ -205,8 +203,6 @@ class CylindricalManifold(BaseManifold):
         amp_loss_type: str = "l1",
         phase_loss_type: str = "l1",
         lambda_phase: float = 1.0,
-        lambda_hf: float = 0.0,
-        hf_boost_factor: float = 4.0,
         phase_weight: float = 1.0,
         phase_spread: float | None = None,
         spatial_correlation: float | None = None,
@@ -230,8 +226,6 @@ class CylindricalManifold(BaseManifold):
             amp_loss_type=amp_loss_type,
             phase_loss_type=phase_loss_type,
             lambda_phase=lambda_phase,
-            lambda_hf=lambda_hf,
-            hf_boost_factor=hf_boost_factor,
             phase_amplitude_weighting=phase_amplitude_weighting,
         )
 
@@ -374,11 +368,10 @@ class CylindricalManifold(BaseManifold):
         target_x1: torch.Tensor | None = None,
         **kwargs: Any,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-        total, loss_amp, loss_phi, loss_hf = self._loss(pred_v, target_v, target_x1)
+        total, loss_amp, loss_phi = self._loss(pred_v, target_v, target_x1)
         # Keys chosen to reproduce the pre-refactor W&B series names exactly
-        # (step_loss_amp / step_loss_phi / step_loss_hf), so historical runs stay
-        # comparable with new ones.
-        return total, {"amp": loss_amp, "phi": loss_phi, "hf": loss_hf}
+        # (step_loss_amp / step_loss_phi), so historical runs stay comparable.
+        return total, {"amp": loss_amp, "phi": loss_phi}
 
     def make_solver(self, num_steps: int) -> CylindricalODESolver:
         return CylindricalODESolver(num_steps=num_steps)

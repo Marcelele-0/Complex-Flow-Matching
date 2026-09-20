@@ -84,14 +84,6 @@ loss:
   # one-flag ablation.
   vel_loss_type: "l1"
 
-  # --- both geometries ---
-  # High-frequency k-space boost weight (disabled by default).
-  # NOTE: the FFT uses norm="ortho", which divides magnitudes by sqrt(H*W).
-  # Values tuned before the ortho change must be multiplied by sqrt(H*W)
-  # (512 at the native 512x512 resolution) to keep the same effective weight.
-  lambda_hf: 0.0
-  hf_boost_factor: 4.0    # Radial boost factor for high frequencies
-
 scheduler:
   type: "CosineAnnealingLR"
   eta_min: 1e-6

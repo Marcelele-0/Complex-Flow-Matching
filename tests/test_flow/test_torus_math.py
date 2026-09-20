@@ -12,12 +12,11 @@ def test_loss_shapes_and_types() -> None:
     pred = torch.randn(4, 2, 16, 16)
     target = torch.randn(4, 2, 16, 16)
 
-    total, l_amp, l_phase, l_hf = criterion(pred, target)
+    total, l_amp, l_phase = criterion(pred, target)
 
     assert total.dim() == 0
     assert l_amp.dim() == 0
     assert l_phase.dim() == 0
-    assert l_hf.dim() == 0
     assert total.dtype == torch.float32
 
 
@@ -42,17 +41,17 @@ def test_amplitude_loss_variants() -> None:
 
     # Test L1 (|3.0| = 3.0)
     crit_l1 = DecoupledCylindricalLoss(amp_loss_type="l1", lambda_phase=0.0)
-    _, l_amp_l1, _, _ = crit_l1(pred, target)
+    _, l_amp_l1, _ = crit_l1(pred, target)
     assert torch.isclose(l_amp_l1, torch.tensor(3.0)), "L1 amplitude loss failed"
 
     # Test L2 (3.0^2 = 9.0)
     crit_l2 = DecoupledCylindricalLoss(amp_loss_type="l2", lambda_phase=0.0)
-    _, l_amp_l2, _, _ = crit_l2(pred, target)
+    _, l_amp_l2, _ = crit_l2(pred, target)
     assert torch.isclose(l_amp_l2, torch.tensor(9.0)), "L2 amplitude loss failed"
 
     # "mse" is an alias for "l2": same squared error of 9.0
     crit_mse = DecoupledCylindricalLoss(amp_loss_type="mse", lambda_phase=0.0)
-    _, l_amp_mse, _, _ = crit_mse(pred, target)
+    _, l_amp_mse, _ = crit_mse(pred, target)
     assert torch.isclose(l_amp_mse, torch.tensor(9.0)), "MSE amplitude loss failed"
 
 
@@ -71,13 +70,13 @@ def test_phase_loss_l1_tangent_space() -> None:
     # Case 1: A full-turn velocity vs zero velocity is a 2*pi error, NOT zero
     pred[0, 1, 0, 0] = 2 * math.pi
     target[0, 1, 0, 0] = 0.0
-    _, _, l_phase1, _ = crit_l1(pred, target)
+    _, _, l_phase1 = crit_l1(pred, target)
     assert torch.isclose(l_phase1, torch.tensor(2 * math.pi), atol=1e-6)
 
     # Case 2: Plain magnitude difference of angular velocities
     pred[0, 1, 0, 0] = 1.5
     target[0, 1, 0, 0] = 0.5
-    _, _, l_phase2, _ = crit_l1(pred, target)
+    _, _, l_phase2 = crit_l1(pred, target)
     assert torch.isclose(l_phase2, torch.tensor(1.0), atol=1e-6)
 
 
@@ -94,19 +93,19 @@ def test_phase_loss_cosine() -> None:
     # 0 difference -> 1 - cos(0) = 0.0
     pred[0, 1, 0, 0] = 0.0
     target[0, 1, 0, 0] = 0.0
-    _, _, l_cos_0, _ = crit_cos(pred, target)
+    _, _, l_cos_0 = crit_cos(pred, target)
     assert torch.isclose(l_cos_0, torch.tensor(0.0), atol=1e-6)
 
     # 2*pi difference -> 1 - cos(2pi) = 0.0 (Wrapping test)
     pred[0, 1, 0, 0] = 2 * math.pi
     target[0, 1, 0, 0] = 0.0
-    _, _, l_cos_2pi, _ = crit_cos(pred, target)
+    _, _, l_cos_2pi = crit_cos(pred, target)
     assert torch.isclose(l_cos_2pi, torch.tensor(0.0), atol=1e-6)
 
     # pi difference -> 1 - cos(pi) = 1 - (-1) = 2.0 (Maximum possible error)
     pred[0, 1, 0, 0] = math.pi
     target[0, 1, 0, 0] = 0.0
-    _, _, l_cos_pi, _ = crit_cos(pred, target)
+    _, _, l_cos_pi = crit_cos(pred, target)
     assert torch.isclose(l_cos_pi, torch.tensor(2.0), atol=1e-6)
 
 
@@ -127,29 +126,13 @@ def test_phase_amplitude_weighting_toggle() -> None:
     weighted = DecoupledCylindricalLoss(phase_amplitude_weighting=True)
     unweighted = DecoupledCylindricalLoss(phase_amplitude_weighting=False)
 
-    _, _, l_phi_on, _ = weighted(pred, target, target_x1)
-    _, _, l_phi_off, _ = unweighted(pred, target, target_x1)
-    _, _, l_phi_no_x1, _ = unweighted(pred, target)
+    _, _, l_phi_on = weighted(pred, target, target_x1)
+    _, _, l_phi_off = unweighted(pred, target, target_x1)
+    _, _, l_phi_no_x1 = unweighted(pred, target)
 
     assert torch.isclose(l_phi_on, torch.tensor(0.0), atol=1e-6)
     assert torch.isclose(l_phi_off, torch.tensor(0.5), atol=1e-6)
     assert torch.isclose(l_phi_off, l_phi_no_x1)
-
-
-def test_hf_loss_disabled_and_enabled() -> None:
-    """loss_hf must be zero when lambda_hf=0 and positive on a nonzero error otherwise."""
-    pred = torch.ones(1, 2, 8, 8)
-    target = torch.zeros(1, 2, 8, 8)
-
-    crit_off = DecoupledCylindricalLoss(lambda_hf=0.0)
-    _, _, _, l_hf_off = crit_off(pred, target)
-    assert torch.isclose(l_hf_off, torch.tensor(0.0))
-
-    crit_on = DecoupledCylindricalLoss(lambda_hf=0.5)
-    total_on, l_amp, l_phi, l_hf_on = crit_on(pred, target)
-    assert l_hf_on > 0.0
-    # The HF term must actually contribute to the total
-    assert torch.isclose(total_on, l_amp + l_phi + 0.5 * l_hf_on, atol=1e-6)
 
 
 def test_invalid_loss_config() -> None:

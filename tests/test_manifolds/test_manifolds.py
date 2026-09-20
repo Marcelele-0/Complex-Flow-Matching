@@ -57,7 +57,7 @@ class TestRegistry:
 
     def test_loss_config_reaches_both_geometries_from_training_loss(self) -> None:
         """`training.loss.*` overrides must keep working across the manifold switch."""
-        loss_cfg = {"training": {"loss": {"lambda_hf": 7.0, "hf_boost_factor": 2.0}}}
+        loss_cfg = {"training": {"loss": {"phase_loss_type": "l2", "vel_loss_type": "l2"}}}
 
         cyl = build_manifold(OmegaConf.create({"manifold": {"name": "cylindrical"}} | loss_cfg))
         euc = build_manifold(OmegaConf.create({"manifold": {"name": "euclidean"}} | loss_cfg))
@@ -68,10 +68,9 @@ class TestRegistry:
         assert isinstance(cyl, CylindricalManifold)
         assert isinstance(euc, EuclideanManifold)
 
-        assert cyl._loss.lambda_hf == 7.0
-        assert euc._loss.lambda_hf == 7.0
-        assert cyl._loss.hf_boost_factor == 2.0
-        assert euc._loss.hf_boost_factor == 2.0
+        # Each geometry reads the key that applies to it and ignores the other's.
+        assert cyl._loss.phase_loss_type == "l2"
+        assert euc._loss.loss_type == "l2"
 
     def test_euclidean_reads_its_own_loss_and_prior_keys(self) -> None:
         cfg = OmegaConf.create(
