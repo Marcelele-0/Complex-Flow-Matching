@@ -1,12 +1,6 @@
 \begin{table}[t]
     \centering
-    \caption{\textbf{Few-step synthesis, two domains.} Sliced $W_2$ between generated and
-    reference complex fields, mean over 5 seeds, evaluated on held-out test data. $k$ is the
-    number of solver steps; a Heun step costs two function evaluations. $k^\star$ is the
-    first step count at which an arm reaches $E^\star$, the largest $k=100$ error among
-    the arms of its block, stopping comparisons from being an artefact of
-    converging to different asymptotes. It is the median over seeds, read off a dense step grid. Errors are comparable within each block and
-    not across blocks. Each block holds its protocol fixed across arms (same architecture, batch, objective, seeds and epoch count). Passes were held fixed across arms within each domain: Synthetic ($8{,}192$ fields) and Speech STFT ($110{,}099$ segments).}
+    \caption{\textbf{Few-step synthesis, two domains.} Sliced $W_2$ between generated and reference complex fields, mean over 5 seeds on held-out test data; $k$ is the number of solver steps. Errors are comparable within each block and not across blocks. $E^\star$ and $k^\star$ are defined in Section~\ref{sec:exp_unet_baseline}.}
     \label{tab:unet_baseline}
     \vspace{1mm}
     \resizebox{\linewidth}{!}{
