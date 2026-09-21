@@ -85,6 +85,7 @@ def values(arms: Arms, arm: str, step: int, metric: str) -> list[float]:
 
 
 def print_table(arms: Arms, straightness: dict[str, list[float]]) -> None:
+    """Print one ablation table: sliced W2 per arm, with straightness beneath it."""
     for step in STEPS:
         print(f"\n## k = {step}  (NFE = {2 * step - 1})")
         header = f"{'arm':<28}{'n':>3}" + "".join(f"{label:>11}" for _, label in METRICS)
@@ -119,6 +120,7 @@ def verdict(left: list[float], right: list[float]) -> str:
 
 
 def print_comparisons(arms: Arms) -> None:
+    """Print the pairwise arm comparisons and their Mann-Whitney p-values."""
     print("\n## comparisons (lower is better; change = left / right - 1)")
     for left, right in COMPARISONS:
         if left not in arms or right not in arms:
@@ -135,6 +137,7 @@ def print_comparisons(arms: Arms) -> None:
 
 
 def main() -> None:
+    """Print the loss-ablation tables from the archived evaluations."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n", 1)[0])
     parser.add_argument("--prefix", default="", help="Run-name prefix, e.g. smoke_.")
     parser.add_argument("--side", type=int, default=32, help="Field side length.")

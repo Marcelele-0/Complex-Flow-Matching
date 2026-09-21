@@ -1,3 +1,5 @@
+"""The decoupled amplitude and phase objective, and its optional amplitude weighting."""
+
 import math
 
 import pytest

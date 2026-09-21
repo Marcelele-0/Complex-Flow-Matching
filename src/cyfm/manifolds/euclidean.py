@@ -184,6 +184,7 @@ class EuclideanManifold(FlatComplexRepresentation, BaseManifold):
         )
 
     def to(self, device: torch.device) -> EuclideanManifold:
+        """Move the loss module to ``device`` and return self."""
         self._loss = self._loss.to(device)
         return self
 
@@ -213,6 +214,12 @@ class EuclideanManifold(FlatComplexRepresentation, BaseManifold):
     def target_velocity(
         self, x_0: torch.Tensor, x_1: torch.Tensor, t: torch.Tensor | None = None
     ) -> torch.Tensor:
+        """The chord ``x_1 - x_0``, constant along the path, so ``t`` is not read.
+
+        Bounded whenever its endpoints are. What is unbounded is the rate at
+        which the path *turns*; see
+        :meth:`~cyfm.manifolds.flat.FlatComplexRepresentation.induced_angular_velocity`.
+        """
         del t
         return x_1 - x_0
 
@@ -224,6 +231,14 @@ class EuclideanManifold(FlatComplexRepresentation, BaseManifold):
         device: torch.device,
         generator: torch.Generator | None = None,
     ) -> torch.Tensor:
+        """Draw the prior in ``(Re, Im)``, under the law ``noise_prior`` selects.
+
+        ``uniform`` is the default and is the cylindrical arm's own law expressed
+        in Cartesian coordinates, so neither geometry is handed an easier prior.
+        ``matched`` goes further and replays the cylindrical RNG stream, giving
+        both arms the identical noise field from one seed. ``gaussian`` is the
+        textbook choice, whose support is not the unit disc.
+        """
         if self.spatial_correlation is not None:
             state = sample_cylindrical_noise_correlated(
                 batch, height, width, device, self.spatial_correlation, None, generator
@@ -239,6 +254,7 @@ class EuclideanManifold(FlatComplexRepresentation, BaseManifold):
     def bridge(
         self, x_0: torch.Tensor, x_1: torch.Tensor, t: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        """The straight line ``x_t = (1 - t) x_0 + t x_1``."""
         return self._bridge.forward(euc_noise=x_0, euc_data=x_1, t=t)
 
     def loss(
@@ -248,8 +264,21 @@ class EuclideanManifold(FlatComplexRepresentation, BaseManifold):
         target_x1: torch.Tensor | None = None,
         **kwargs: Any,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        """One unweighted regression over both channels.
+
+        Args:
+            pred_v: The network's velocity.
+            target_v: The bridge's target velocity.
+            target_x1: The clean endpoint; unused here, and accepted so the two
+                geometries present one signature to the shared training loop.
+            **kwargs: Accepted and ignored, as above.
+
+        Returns:
+            ``(total, {"vel": ...})``.
+        """
         total, loss_vel = self._loss(pred_v, target_v, target_x1)
         return total, {"vel": loss_vel}
 
     def make_solver(self, num_steps: int) -> EuclideanODESolver:
+        """Heun in the plane: plain vector addition, no wrapping and no clamp."""
         return EuclideanODESolver(num_steps=num_steps)

@@ -108,6 +108,7 @@ def draw(
 
 
 def main() -> int:
+    """Draw the panel of sample fields from a built knee store."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--store", required=True, help="The store, e.g. data/knee_pd/val.h5.")
     parser.add_argument("--out", required=True, help="PNG to write.")

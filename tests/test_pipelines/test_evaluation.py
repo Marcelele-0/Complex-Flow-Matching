@@ -106,14 +106,21 @@ class TestTrainingDomain:
         assert assert_training_domain(field) == pytest.approx(1.0)
 
     def test_a_field_cropped_below_one_is_accepted(self) -> None:
-        """One-sided on purpose: normalisation happens before the crop, so a
-        field whose peak was cropped away is legitimately below one."""
+        """The bound is one-sided on purpose.
+
+        Normalisation happens before the crop, so a field whose peak was cropped
+        away is legitimately below one; only exceeding one proves the division
+        never happened.
+        """
         field = torch.full((1, 1, 2, 2), 0.3, dtype=torch.complex64)
         assert assert_training_domain(field) == pytest.approx(0.3)
 
     def test_a_raw_batch_is_rejected_and_says_why(self) -> None:
-        """Scoring against un-normalised fields measures the missing division,
-        which once biased every absolute W2 in this module."""
+        """A raw batch must be rejected, not scored.
+
+        Scoring against un-normalised fields measures the missing division, which
+        once biased every absolute W2 in this module.
+        """
         field = torch.full((1, 1, 2, 2), 5.0, dtype=torch.complex64)
         with pytest.raises(ValueError, match="not in the training domain"):
             assert_training_domain(field)

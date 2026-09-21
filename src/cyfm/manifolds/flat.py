@@ -78,7 +78,9 @@ class FlatComplexRepresentation:
         return squared.sqrt(), (real * velocity[:, 1] - imag * velocity[:, 0]) / squared
 
     def to_complex(self, state: torch.Tensor) -> torch.Tensor:
+        """``[Re z, Im z]`` back to a complex field."""
         return euclidean_to_complex(state)
 
     def from_complex(self, z: torch.Tensor) -> torch.Tensor:
+        """A complex field to ``[Re z, Im z]``."""
         return torch.cat([z.real, z.imag], dim=1)

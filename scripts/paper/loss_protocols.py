@@ -150,6 +150,16 @@ def print_protocol(
     metric: str,
     rng: np.random.Generator,
 ) -> None:
+    """Print one loss protocol's table and its arm comparisons.
+
+    Args:
+        title: Heading for the block.
+        sources: Archive name to the runs read from it.
+        cylinder: ``(run prefix, label)`` for each cylindrical arm.
+        cartesian: The same for each Cartesian arm.
+        metric: Metric key compared across arms.
+        rng: Generator for the permutation test's resampling.
+    """
     print(f"\n{title}  ({metric}, {len(SEEDS)} seeds per arm)")
     for side in SIDES:
         print(f" {side}x{side}")

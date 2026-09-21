@@ -1,3 +1,5 @@
+"""Every registered architecture honours the velocity-field shape contract."""
+
 import torch
 
 from cyfm.models.unet import CylindricalUNet

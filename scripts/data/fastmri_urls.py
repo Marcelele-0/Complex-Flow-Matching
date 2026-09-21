@@ -73,6 +73,7 @@ def head_status(url: str) -> tuple[int | None, str]:
 
 
 def main() -> int:
+    """Print or check the fastMRI download URLs."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--env", default=".env", help="The .env file holding the links.")
     parser.add_argument("--var", default="FASTMRI_FULL_URLS", help="Which key to read.")

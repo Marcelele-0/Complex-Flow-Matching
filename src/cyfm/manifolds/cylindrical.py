@@ -262,6 +262,7 @@ class CylindricalManifold(BaseManifold):
         return torch.tensor([1.0, self.phase_weight])
 
     def to(self, device: torch.device) -> CylindricalManifold:
+        """Move the loss module to ``device`` and return self."""
         self._loss = self._loss.to(device)
         return self
 
@@ -310,6 +311,13 @@ class CylindricalManifold(BaseManifold):
     def target_velocity(
         self, x_0: torch.Tensor, x_1: torch.Tensor, t: torch.Tensor | None = None
     ) -> torch.Tensor:
+        """Constant along the path, so ``t`` is not read.
+
+        The cylindrical bridge is linear in amplitude and geodesic in phase, and
+        both have a velocity that does not depend on where along the path you
+        are. That is what makes the angular target equal to ``wrap(phi_1 - phi_0)``
+        everywhere, and therefore bounded by pi.
+        """
         del t
         return self.log_map(x_0, x_1)
 
@@ -343,6 +351,12 @@ class CylindricalManifold(BaseManifold):
         device: torch.device,
         generator: torch.Generator | None = None,
     ) -> torch.Tensor:
+        """Draw the prior: amplitude uniform on [0, 1], phase uniform on the circle.
+
+        With ``spatial_correlation`` set the same law is drawn through smoothed
+        latents, which leaves every marginal untouched and only makes neighbouring
+        coefficients dependent.
+        """
         if self.spatial_correlation is not None:
             return sample_cylindrical_noise_correlated(
                 batch,
@@ -362,6 +376,7 @@ class CylindricalManifold(BaseManifold):
     def bridge(
         self, x_0: torch.Tensor, x_1: torch.Tensor, t: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Interpolate linearly in amplitude and along the shorter arc in phase."""
         return self._bridge.forward(cyl_noise=x_0, cyl_data=x_1, t=t)
 
     def loss(
@@ -371,18 +386,33 @@ class CylindricalManifold(BaseManifold):
         target_x1: torch.Tensor | None = None,
         **kwargs: Any,
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        """Decoupled amplitude and phase terms, in this geometry's own metric.
+
+        Args:
+            pred_v: The network's velocity.
+            target_v: The bridge's target velocity.
+            target_x1: The clean endpoint, which the phase term may weight by.
+            **kwargs: Accepted and ignored; the shared call site passes ``t``,
+                which this geometry does not need.
+
+        Returns:
+            ``(total, {"amp": ..., "phi": ...})``.
+        """
         total, loss_amp, loss_phi = self._loss(pred_v, target_v, target_x1)
         # Keys chosen to reproduce the pre-refactor W&B series names exactly
         # (step_loss_amp / step_loss_phi), so historical runs stay comparable.
         return total, {"amp": loss_amp, "phi": loss_phi}
 
     def make_solver(self, num_steps: int) -> CylindricalODESolver:
+        """Heun on the cylinder: clamp the amplitude at zero, re-wrap the phase."""
         return CylindricalODESolver(num_steps=num_steps)
 
     def to_complex(self, state: torch.Tensor) -> torch.Tensor:
+        """``[m, cos phi, sin phi]`` back to a complex field."""
         return cylinder_to_complex(state)
 
     def from_complex(self, z: torch.Tensor) -> torch.Tensor:
+        """A complex field to ``[m, cos phi, sin phi]``."""
         amp = torch.abs(z)
         phi = torch.angle(z)
         return torch.cat([amp, torch.cos(phi), torch.sin(phi)], dim=1)

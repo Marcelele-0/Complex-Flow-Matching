@@ -1,3 +1,5 @@
+"""Complex conversions and phase wrapping, on which both geometries rest."""
+
 import math
 
 import torch

@@ -118,9 +118,11 @@ class TrainingConfig:
 
 @dataclass(frozen=True)
 class LoggingConfig:
-    """``logging``. ``experiment_name`` is this repository's run identity: it names
-    the Hydra run directory, the W&B run, the resume state and evaluate's
-    ``run_name``."""
+    """The ``logging`` config group.
+
+    ``experiment_name`` is this repository's run identity: it names the Hydra run
+    directory, the W&B run, the resume state and evaluate's ``run_name``.
+    """
 
     use_wandb: bool = False
     project_name: str = "complex_flow_matching"
@@ -139,8 +141,11 @@ class LoggingConfig:
 
 @dataclass(frozen=True)
 class PathsConfig:
-    """``paths``. Two of the three are interpolations in the config, and are
-    derived here from the same inputs rather than given an unrelated literal."""
+    """The ``paths`` config group.
+
+    Two of the three are interpolations in the config, and are derived here from
+    the same inputs rather than given an unrelated literal.
+    """
 
     output_dir: str = "."
     checkpoint_dir: str = "./checkpoints"

@@ -150,7 +150,9 @@ class ComplexDiffusionManifold(FlatComplexRepresentation, BaseManifold):
         return self
 
     def sigma(self, t: float | torch.Tensor) -> torch.Tensor:
-        """Compute noise standard deviation sigma(t) = sigma_min * (sigma_max / sigma_min)^t.
+        """Noise standard deviation of the VE schedule, geometric in ``t``.
+
+        ``sigma(t) = sigma_min * (sigma_max / sigma_min) ** t``.
 
         Args:
             t: Time scalar or tensor in [0, 1].
@@ -325,6 +327,8 @@ class ComplexDiffusionManifold(FlatComplexRepresentation, BaseManifold):
             target_x1: Optional clean data state [B, 2, H, W].
             t: Optional time tensor [B] or [B, 1, 1, 1].
             likelihood_weighting: Override for likelihood weighting flag.
+            **kwargs: Accepted and ignored, so this arm presents the same call
+                signature as the flow geometries to the shared training loop.
 
         Returns:
             Tuple of (total_loss, {"dsm": total_loss}).
@@ -395,7 +399,7 @@ class ComplexDiffusionManifold(FlatComplexRepresentation, BaseManifold):
     def wrap_model(
         self, model: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]
     ) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
-        """Read the network's output as a unit-scale residual and divide by sigma here.
+        r"""Read the network's output as a unit-scale residual and divide by sigma here.
 
         The score of the perturbation kernel is ``-z / sigma``, so its magnitude runs
         over the whole schedule: with ``sigma_min = 0.01`` and a calibrated

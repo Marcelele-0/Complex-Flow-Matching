@@ -1,3 +1,5 @@
+"""Transforms, and the single place each geometry's representation pipeline is composed."""
+
 import pytest
 import torch
 
@@ -105,8 +107,11 @@ def test_center_crop_modulo() -> None:
 
 
 def test_window_amplitude_normalize() -> None:
-    """Exactly one slice hits 1.0, and relative brightness between slices
-    (the ratio of their amplitudes) is preserved by the single shared scale."""
+    """One shared scale keeps relative brightness between slices.
+
+    Exactly one slice hits 1.0, and the ratio of any two slices' amplitudes is
+    what it was before the division.
+    """
     transform = WindowAmplitudeNormalize()
     x = torch.zeros(3, 3, 4, 4)  # [S, C, H, W]
     x[0, 0, :, :] = 50.0
@@ -123,8 +128,11 @@ def test_window_amplitude_normalize() -> None:
 
 
 def test_window_amplitude_normalize_rejects_non_window_input() -> None:
-    """A single [C, H, W] slice must raise, not silently index the wrong axis
-    (x[:, 0:1] on [C, H, W] would slice rows, not the amplitude channel)."""
+    """A single unstacked slice must raise rather than index the wrong axis.
+
+    ``x[:, 0:1]`` on a ``[C, H, W]`` tensor slices rows, not the amplitude
+    channel, and would normalise by something meaningless without complaining.
+    """
     transform = WindowAmplitudeNormalize()
     x = torch.randn(3, 4, 4)
 
@@ -133,8 +141,11 @@ def test_window_amplitude_normalize_rejects_non_window_input() -> None:
 
 
 def test_window_euclidean_normalize() -> None:
-    """One scalar - the largest modulus anywhere in the window - scales every
-    slice, so exactly one pixel hits 1.0 and inter-slice brightness survives."""
+    """The whole window is divided by one scalar.
+
+    That scalar is the largest modulus anywhere in it, so exactly one pixel
+    reaches 1.0 and inter-slice brightness survives.
+    """
     transform = WindowEuclideanNormalize()
     x = torch.zeros(3, 2, 4, 4)  # [S, C, H, W] = (Re, Im)
     x[0, 0, :, :] = 30.0
@@ -172,8 +183,10 @@ def test_window_euclidean_normalize_rejects_non_window_input() -> None:
 
 
 def test_center_crop_modulo_matches_per_slice_on_stacked_window() -> None:
-    """Cropping a whole [S, C, H, W] window at once must equal cropping each
-    slice independently, since the crop only ever touches trailing axes."""
+    """Cropping a window equals cropping its slices one at a time.
+
+    The crop only ever touches the trailing axes, so stacking cannot change it.
+    """
     transform = CenterCropModulo(base=16)
     stack = torch.randn(3, 3, 35, 50)
 

@@ -257,6 +257,7 @@ def write_manifest(
 
 
 def main() -> None:
+    """Build the compact LibriSpeech STFT store from audio."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw-dir", required=True, help="Corpus root to walk for FLAC files.")
     parser.add_argument("--out", required=True, help="Store to write.")

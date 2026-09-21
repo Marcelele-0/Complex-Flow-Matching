@@ -106,6 +106,11 @@ def store_target(
             where the phase carries nothing. Reporting the measurement with and without
             this filter separates a geometric fact about the parametrisation from an
             artefact of counting bins nobody hears.
+        min_field_peak: Drop whole fields whose absolute peak is below this
+            fraction of the loudest field in the store. A near-silent field
+            contributes only coefficients at its own noise floor, which the
+            per-field filter above cannot remove because they are large
+            relative to that field's own peak.
 
     Returns:
         The drawn coefficients as ``complex128``, and a label naming the store.

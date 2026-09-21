@@ -545,6 +545,7 @@ def merge(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    """Build the compact knee store from raw fastMRI volumes."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
         "--merge",

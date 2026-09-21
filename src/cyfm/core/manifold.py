@@ -287,6 +287,8 @@ class BaseManifold(ABC):
             pred_v: Model output [B, velocity_channels, H, W].
             target_v: Bridge target [B, velocity_channels, H, W].
             target_x1: Clean data state [B, state_channels, H, W].
+            **kwargs: Accepted and ignored by geometries that need none. The
+                shared training loop passes ``t``, which only some read.
 
         Returns:
             Tuple (total_loss, components_dict).

@@ -1,3 +1,5 @@
+"""The plane's single unweighted velocity regression."""
+
 import pytest
 import torch
 

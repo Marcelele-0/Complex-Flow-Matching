@@ -562,8 +562,10 @@ class TestMatchedNFEAccounting:
 
     @pytest.mark.parametrize("steps", [1, 2, 4, 8, 100])
     def test_matched_mode_never_overspends_the_flow_arms_budget(self, steps: int) -> None:
-        """``steps=1`` is the case that matters and the easiest to leave out:
-        Heun's budget there is a single call, which one corrected step would double.
+        """``steps=1`` is the case that matters and the easiest to leave out.
+
+        Heun's budget there is a single call, which one corrected step would
+        double -- so a matched-NFE column would be comparing twice the cost.
         """
         manifold = ComplexDiffusionManifold(corrector_steps=1, nfe_mode="heun")
         assert manifold.make_solver(steps).evaluations <= heun_evaluations(steps)

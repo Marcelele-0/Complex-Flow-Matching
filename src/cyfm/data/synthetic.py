@@ -1,5 +1,4 @@
-"""Synthetic complex-valued distributions on the cylinder with tunable
-amplitude-phase dependence.
+"""Synthetic complex fields with tunable amplitude-phase dependence.
 
 The cylinder ``R+ x S^1`` is the geometry the project claims; a synthetic
 target on it is the only place where a claim about that geometry can be

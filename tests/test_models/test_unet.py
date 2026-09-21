@@ -1,3 +1,5 @@
+"""The paper's U-Net: its shapes, its time conditioning and its bounded head."""
+
 import torch
 
 from cyfm.models.unet import CylindricalUNet

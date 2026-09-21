@@ -43,6 +43,7 @@ class DistributedContext:
 
     @property
     def is_distributed(self) -> bool:
+        """Whether this run has peers. False for a single process, whatever launched it."""
         return self.world_size > 1
 
 

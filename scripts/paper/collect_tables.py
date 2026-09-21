@@ -167,6 +167,7 @@ def steps_to_target(records: list[dict[str, Any]], family: str, side: str) -> No
 
 
 def main() -> None:
+    """Collect evaluation runs into the archived JSON the tables read."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--outputs", type=pathlib.Path, default=pathlib.Path("outputs"))
     parser.add_argument("--json", type=pathlib.Path, default=None, help="Also dump the records.")

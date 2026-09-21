@@ -1,3 +1,12 @@
+"""The paper's U-Net, and the time-conditioned block it is built from.
+
+One trunk serves both geometries. The only architectural difference between the
+cylindrical and Cartesian arms is the width of the first convolution, which
+follows ``Manifold.state_channels``: three for ``(m, cos phi, sin phi)``, two for
+``(Re z, Im z)``. Everything after it is identical, which is what makes a
+measured difference between the arms a difference in geometry.
+"""
+
 from collections.abc import Sequence
 
 import torch
@@ -35,6 +44,7 @@ class TimeConditionedBlock(nn.Module):
         )
 
     def forward(self, x: torch.Tensor, t_emb: torch.Tensor) -> torch.Tensor:
+        """Convolve, inject the time embedding, convolve again, add the residual."""
         # Main convolutional branch
         h = self.conv1(x)
         h = self.norm1(h)

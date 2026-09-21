@@ -1,3 +1,5 @@
+"""The cylindrical geodesic bridge: linear in amplitude, shortest arc in phase."""
+
 import math
 
 import torch

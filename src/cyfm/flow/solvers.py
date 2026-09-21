@@ -166,7 +166,9 @@ class PredictorCorrectorSolver(BaseSDESolver):
         self.log_ratio = math.log(self.sigma_max / self.sigma_min)
 
     def sigma(self, t: float | torch.Tensor) -> torch.Tensor:
-        """Compute noise scale sigma(t) = sigma_min * (sigma_max / sigma_min)^t.
+        """Noise scale of the VE schedule, geometric in ``t``.
+
+        ``sigma(t) = sigma_min * (sigma_max / sigma_min) ** t``.
 
         Args:
             t: Time scalar or tensor in [0, 1].

@@ -1,3 +1,5 @@
+"""Round-tripping a complex field through each geometry's state representation."""
+
 import math
 
 import pytest

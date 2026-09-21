@@ -1,3 +1,5 @@
+"""Heun on the cylinder, and the function-evaluation count the tables report."""
+
 import math
 
 import torch

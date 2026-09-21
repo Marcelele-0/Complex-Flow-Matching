@@ -17,8 +17,9 @@ logger = logging.getLogger(__name__)
 
 
 def load_env(env_path: str | Path = ".env") -> dict[str, str | None]:
-    """Parse key-value pairs from a .env file using python-dotenv.
-    Supports multi-line variables if enclosed in quotes.
+    """Parse key-value pairs from a ``.env`` file using python-dotenv.
+
+    Multi-line values are supported when enclosed in quotes.
     """
     path = Path(env_path)
     if not path.exists():

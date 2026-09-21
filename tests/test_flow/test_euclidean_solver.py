@@ -1,3 +1,5 @@
+"""Heun in the plane: plain vector addition, no wrapping and no clamp."""
+
 import pytest
 import torch
 

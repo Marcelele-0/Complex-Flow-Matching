@@ -132,7 +132,29 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+# D is on, with the Google convention: every public module, class and function
+# carries a docstring, and the sections are the ones mkdocstrings renders.
+#
+# Two rules are off, and for the same reason: they flag places this codebase
+# documents somewhere else rather than not at all.
+#   D107  the constructor's arguments are documented in the class docstring,
+#         which is what the Google style guide itself allows and what every
+#         class here does.
+#   D105  a magic method's contract is fixed by the protocol it implements;
+#         __len__ and __repr__ gain nothing from a sentence restating it.
+select = ["E", "F", "I", "UP", "B", "D"]
+ignore = ["D107", "D105"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests are named as sentences -- test_the_cylinder_reads_the_bounded_coordinate --
+# and that name is the documentation. Requiring a docstring alongside it produces a
+# restatement, and the ones worth writing (why a case exists, what defect it pins)
+# are written already, because nothing forced them. The module docstrings stay
+# required; it is the per-function rules that are off.
+"tests/**" = ["D101", "D102", "D103"]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true

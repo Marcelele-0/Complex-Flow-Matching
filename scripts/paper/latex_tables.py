@@ -1,4 +1,4 @@
-"""Write the LaTeX of Tables 2 and 3 and the appendix loss table from the archives.
+r"""Write the LaTeX of Tables 2 and 3 and the appendix loss table from the archives.
 
 The paper includes these files with ``\\input``, so every number in the tables is
 read from ``docs/reproduce/paper_results/`` rather than typed by hand:
@@ -89,7 +89,7 @@ def column_bold(
 
 
 def matched_convergence_p(sources: dict[str, Runs], side: int) -> float:
-    """p at k = 100 between cylinder + OT and the better Cartesian coupling (matched loss)."""
+    """P at k = 100 between cylinder + OT and the better Cartesian coupling (matched loss)."""
     step = STEPS[-1]
     cylinder = values(sources, MATCHED, side, "cylindrical", "ot", step, METRIC)
     _, cartesian = best(sources, [(MATCHED, c) for c in COUPLINGS], side, "euclidean", step, METRIC)

@@ -193,6 +193,7 @@ def build_trial(
 
 
 def main() -> int:
+    """Measure how the OT cost saving moves with batch size."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--side", type=int, default=320, help="Field height and width.")
     parser.add_argument("--max-batch", type=int, default=256, help="Ceiling on the search.")

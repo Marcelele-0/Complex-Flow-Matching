@@ -405,8 +405,7 @@ class TestSideBySideFairness:
     def test_one_seed_gives_both_arms_identical_weights_outside_init_conv(
         self, model_name: str
     ) -> None:
-        """The two arms must start training from the same weights, not merely the
-        same architecture.
+        """Both arms start from the same weights, not merely the same architecture.
 
         ``init_conv`` is the one module whose shape depends on the manifold, and
         it is constructed LAST in both models precisely so that every other module

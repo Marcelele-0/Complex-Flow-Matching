@@ -61,7 +61,7 @@ def test_build_dataset_overrides_win(fastmri_dir) -> None:
 
 
 def test_build_dataset_ignores_entry_point_keys(fastmri_dir) -> None:
-    """split and crop_size are consumed by the caller, not the dataset constructor."""
+    """Split and crop_size are consumed by the caller, not the dataset constructor."""
     cfg = OmegaConf.create(
         {
             "name": "fastmri",

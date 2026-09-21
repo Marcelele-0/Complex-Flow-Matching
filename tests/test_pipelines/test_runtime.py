@@ -259,8 +259,11 @@ class TestCheckpointWriter:
         assert (tmp_path / "ckpt" / "checkpoint_epoch_10.pt").exists()
 
     def test_the_final_epoch_always_writes_one(self, tmp_path) -> None:
-        """Otherwise a run whose length is not a multiple of the interval ends
-        with no checkpoint for evaluate.py to find."""
+        """The final epoch always writes one.
+
+        Otherwise a run whose length is not a multiple of the interval ends with
+        no checkpoint for ``evaluate.py`` to find.
+        """
         self._write(tmp_path, epoch=6, total=7)
         assert (tmp_path / "ckpt" / "checkpoint_epoch_7.pt").exists()
 
@@ -294,8 +297,11 @@ class TestCheckpointWriter:
 
 class TestLogger:
     def test_a_local_run_gets_the_null_logger(self) -> None:
-        """conf/logging/default.yaml ships use_wandb: false, so this is the
-        shipped behaviour rather than a degraded fallback."""
+        """The null logger is the shipped behaviour, not a degraded fallback.
+
+        ``conf/logging/default.yaml`` ships ``use_wandb: false``, so a local run
+        gets this one by design and stdout is the record.
+        """
         logger = build_logger(
             use_wandb=False,
             is_main=True,

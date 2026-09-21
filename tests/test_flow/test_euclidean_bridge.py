@@ -1,3 +1,5 @@
+"""The straight-line bridge in the plane, and the velocity it holds constant."""
+
 import torch
 
 from cyfm.flow.bridges import GeodesicFlowBridge, LinearFlowBridge
