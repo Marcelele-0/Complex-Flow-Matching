@@ -34,6 +34,7 @@ produce it rather than a quiet "OK".
 | `table2_field_synthesis.py` | Table 2, 64x64 synthetic | the archived evaluations | ~1 s |
 | `table3_unet_scaling.py` | Table 3, 16x16 and 32x32 | the archived evaluations | ~1 s |
 | `section53_ot_cost.py` | Section 5.3, OT cost saving vs field size | nothing | ~10 s |
+| `table4_spiral.py` | Table 4, amplitude/phase factorisation | nothing | ~4 min |
 | `table4_patch_seams.py` | Table 4 / Section 5.4, patch seams | nothing | ~40 s |
 | `table5_knee_mri.py` | Table 5, knee MRI 64x64 | the archived evaluations | ~1 s |
 
@@ -98,11 +99,15 @@ travel with any public artefact. The archives are frozen input to
 `tests/test_paper_results.py`, so rewriting them is an editorial decision that
 requires re-deriving the provenance test.
 
-## Still to convert
+## How the network-free measurements are reached
 
-`scripts/coupling_gate.py` still fuses measurement with printing, so Table 4's
-spiral rows (the amplitude/phase factorisation, as opposed to the patch seams)
-have no reproduction script yet. The two probes already converted show the shape
-it needs: the measurement moves to a `BaseExperiment` subclass that returns its
-numbers, a `render()` prints them, and the script keeps its path -- which
-`conf/experiment/*.yaml` names -- and its exact output.
+Each lives in `cyfm/experiments/` as a `BaseExperiment` subclass that returns an
+`ExperimentResult` and prints nothing; a `render()` beside it produces the text
+its script has always printed. The scripts in `scripts/` keep their paths, which
+`conf/experiment/*.yaml` names and `tests/test_experiments.py` asserts, and their
+output is unchanged byte for byte.
+
+That split is what lets a number be checked here without re-printing a report,
+and it is the condition for rendering these tables the way the trained arms are
+rendered. One section of `scripts/coupling_gate.py` is deliberately left behind:
+its batch-size diagnostic is not printed by the paper.

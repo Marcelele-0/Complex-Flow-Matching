@@ -66,6 +66,12 @@ SCRIPTS: tuple[Reproduction, ...] = (
         runtime="~10 s",
     ),
     Reproduction(
+        "reproducibility.table4_spiral",
+        "Table 4 -- the Factorised Coupling Trap (spiral rows)",
+        network_free=True,
+        runtime="~4 min",
+    ),
+    Reproduction(
         "reproducibility.table4_patch_seams",
         "Table 4 / Section 5.4 -- patch seams",
         network_free=True,

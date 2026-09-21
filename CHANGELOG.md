@@ -9,6 +9,19 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **`reproducibility/`** — one script per published result. Each recomputes the number
+  and compares it against the paper, reporting `PASS`, `FAIL`, or `MISSING INPUT` with
+  the command that would produce the missing input. Six results covered; every value in
+  `expected.py` is quoted from `paper/ICLR Main/` with the file and sentence named,
+  never from a script's output or a `conf/` `expected:` block. `run_all.py` gives one
+  verdict, and the exit code is non-zero for either failure kind.
+- **`cyfm/experiments/`** — the network-free measurements as `BaseExperiment` subclasses
+  that return an `ExperimentResult` and print nothing, with a `render()` beside each.
+  Three of the five probes are converted; the scripts keep their paths, which
+  `conf/experiment/*.yaml` names, and their output byte for byte.
+- **An API reference** built with mkdocs and mkdocstrings from the docstrings, with
+  `mkdocs build --strict` in CI.
+- `ruff`'s docstring rules (`D`, Google convention), so a missing docstring is an error.
 - `src/cyfm/py.typed` (PEP 561), so type information actually reaches downstream
   users. Without it `mypy` resolved the whole package to `Any`.
 - Package metadata required for a release: `authors`, SPDX `license`, `classifiers`
@@ -90,6 +103,14 @@ reconstruction problem. None of it backed a number in the paper.
   can only be edited as an image.
 
 ### Fixed
+
+- Two `expected:` blocks in `conf/experiment/` disagreed with both the code and the
+  paper. They were written on 2026-09-11 and `13a1124` (09-17) changed what the probes
+  print without updating them: `sec53_ot_cost.yaml` listed `64x64 3.1%` where the code
+  and Section 5.3 both say 2.8%.
+- `build_manifold` printed to stdout, which made a script's output depend on how many
+  manifolds it happened to construct. Section 4 of `coupling_dimension.py` had a
+  "Using manifold: ..." line between every pair of table rows.
 
 - `scripts/coupling_gate.py`, which measures the Factorised Coupling Trap behind Table 4,
   imported `circular_linear_correlation` from a module it had been moved out of and

@@ -12,11 +12,13 @@ from __future__ import annotations
 from cyfm.core.experiment import EXPERIMENTS, BaseExperiment, ExperimentResult
 from cyfm.experiments.bridge_geometry import BridgeGeometryExperiment
 from cyfm.experiments.coupling_scaling import CouplingScalingExperiment
+from cyfm.experiments.factorised_trap import FactorisedTrapExperiment
 
 __all__ = [
     "EXPERIMENTS",
     "BaseExperiment",
     "BridgeGeometryExperiment",
     "CouplingScalingExperiment",
+    "FactorisedTrapExperiment",
     "ExperimentResult",
 ]
