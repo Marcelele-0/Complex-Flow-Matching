@@ -81,6 +81,18 @@ uv run python scripts/paper/latex_tables.py               # the LaTeX the paper 
 The arXiv v1 tables (L1 with an amplitude-weighted phase term, 2 seeds) remain
 readable with `uv run python scripts/paper/paper_tables.py --archive`.
 
+**Checking the paper's numbers.** `reproducibility/` holds one script per
+published result. Each recomputes the number and compares it against the paper,
+reporting `PASS`, `FAIL`, or `MISSING INPUT` with the command that would produce
+the missing input:
+
+```bash
+uv run python -m reproducibility.run_all --network-free   # minutes, CPU, no data
+```
+
+That directory's README records the known discrepancies, including one number in
+Section 5.4 that is a single draw of a statistic the paper prints as fixed.
+
 **Determinism.** The network-free results (Tables 1 and 4, Sec. 5.3) are seeded through
 explicit generators and reprint the paper's numbers exactly. Training is seeded, but GPU
 kernels are not bitwise deterministic, so a retrained model matches within the seed
@@ -176,11 +188,16 @@ docs/notes/                # the research log (COUPLING_NOTES.md)
 ## Development
 
 ```bash
-uv run pytest tests/          # test suite
-uv run ruff check .           # lint
-uv run mypy src/ scripts/     # types
-pre-commit install            # ruff, ruff-format and mypy on every commit
+uv run pytest tests/                    # test suite
+uv run ruff check .                     # lint, including Google docstrings
+uv run mypy src/ scripts/ reproducibility/   # types
+uv run mkdocs build --strict            # API reference (needs --group docs)
+pre-commit install                      # ruff, ruff-format and mypy on every commit
 ```
+
+The API reference is generated from the docstrings, which carry the argument for
+a choice rather than a restatement of the signature; `uv run mkdocs serve` reads
+it locally.
 
 ## License
 

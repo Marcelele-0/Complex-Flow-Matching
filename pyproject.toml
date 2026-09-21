@@ -98,6 +98,14 @@ viz = [
 ]
 
 [dependency-groups]
+# Building the API reference. Its own group rather than `dev`: the site is built
+# on demand and in CI, and a contributor running the test suite should not have
+# to install a documentation toolchain to do it.
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.6.0",
+    "mkdocstrings[python]>=0.27.0",
+]
 # What a contributor needs to run the suite, the linters and the repository's scripts.
 # nibabel is reached by exactly one test.
 dev = [

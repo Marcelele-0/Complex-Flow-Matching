@@ -1,0 +1,47 @@
+site_name: CyFM
+site_description: Cylindrical optimal transport for few-step complex-valued flow matching
+repo_url: https://github.com/Marcelele-0/Complex-Flow-Matching
+docs_dir: docs/site
+site_dir: outputs/site
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: teal
+    - scheme: slate
+      primary: teal
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            # The docstrings here carry the argument for a choice, not just its
+            # description, so showing the source next to them is the point.
+            show_source: true
+            show_root_heading: true
+            show_signature_annotations: true
+            separate_signature: true
+            members_order: source
+            filters: ["!^_"]
+
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+
+nav:
+  - Overview: index.md
+  - Contracts: contracts.md
+  - Geometry: geometry.md
+  - Flow: flow.md
+  - Metrics: metrics.md
+  - Pipelines: pipelines.md
+  - Experiments: experiments.md

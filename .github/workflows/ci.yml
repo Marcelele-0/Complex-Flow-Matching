@@ -48,6 +48,20 @@ jobs:
       - name: Tests
         run: uv run pytest tests/ -q
 
+      # The reproduction layer, on the results that need no data. Table 1 reports
+      # MISSING INPUT for its knee and speech blocks by design, so this runs the
+      # archive-based results, which must reproduce every published digit.
+      - name: Reproduce the archived tables
+        run: |
+          uv run python -m reproducibility.table2_field_synthesis
+          uv run python -m reproducibility.table3_unet_scaling
+          uv run python -m reproducibility.table5_knee_mri
+
+      # The docstrings are enforced by ruff D; this checks they also render.
+      # --strict turns a broken reference or a missing page into a failure.
+      - name: Build the API reference
+        run: uv sync --locked --group docs && uv run mkdocs build --strict
+
       # The cheapest end-to-end check in the repository: dataset registry, manifold,
       # prior and metrics, with no network and no checkpoint.
       #
