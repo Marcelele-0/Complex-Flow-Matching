@@ -15,6 +15,7 @@ looks.
 
 from __future__ import annotations
 
+import importlib
 import json
 import subprocess
 import sys
@@ -45,14 +46,17 @@ _EXPECTED = {
         "stft_store",
     },
     "couplings": {"independent", "none", "optimal_transport", "ot"},
+    "experiments": {"bridge_geometry"},
 }
 
 _PROBE = """
 import json
 import cyfm
+from cyfm.core.experiment import EXPERIMENTS
 from cyfm.core.registry import COUPLINGS, DATASETS, MANIFOLDS, MODELS, SOLVERS
 
-print(json.dumps({r.name: r.list() for r in (MANIFOLDS, MODELS, SOLVERS, DATASETS, COUPLINGS)}))
+registries = (MANIFOLDS, MODELS, SOLVERS, DATASETS, COUPLINGS, EXPERIMENTS)
+print(json.dumps({r.name: r.list() for r in registries}))
 """
 
 
@@ -78,10 +82,20 @@ def test_every_registry_is_covered_here() -> None:
     Without this, adding a sixth registry would silently go unpopulated and
     untested: the parametrisation only walks the keys already listed.
     """
-    from cyfm.core import registry as registry_module
+    import pkgutil
+
     from cyfm.core.registry import Registry
 
-    live = {value.name for value in vars(registry_module).values() if isinstance(value, Registry)}
+    # Walk the whole of cyfm.core, not one module. The first version of this test
+    # scanned cyfm.core.registry alone, and the very next registry added --
+    # EXPERIMENTS, which lives in cyfm.core.experiment -- was invisible to it.
+    # That is precisely the failure this test exists to prevent, so it had to
+    # stop looking in one place.
+    live: set[str] = set()
+    package = importlib.import_module("cyfm.core")
+    for info in pkgutil.iter_modules(package.__path__):
+        module = importlib.import_module(f"cyfm.core.{info.name}")
+        live |= {v.name for v in vars(module).values() if isinstance(v, Registry)}
     assert live == set(_EXPECTED)
 
 

@@ -22,4 +22,11 @@ paper:
       rho 0.5  r_cl target 0.3104  coupled 0.0415  KS 0  cost factorised 0.1999  joint 0.2248
       rho 1.0  r_cl target 0.8670  coupled 0.0396  KS 0  cost factorised 0.2001  joint 0.3845
     patch seams:
-      patch-level OT  lag1 across seams 0.044  inside patches 0.979  sliced W2 0.0000
+      patch-level OT  lag1 across seams -0.008  inside patches 0.979  sliced W2 0.0000
+
+    The seam figure is one draw of a noisy statistic, not a fixed number: over
+    eight seeds it ranges [-0.008, +0.055], mean +0.017, sd 0.023. The paper
+    prints 0.044, which is another draw from the same spread; this command's seed
+    gives -0.008. The claim -- seam correlation collapses from 0.979 to about
+    zero -- holds under every seed. See reproducibility/table4_patch_seams.py,
+    which checks the claim and the digit separately.

@@ -113,6 +113,13 @@ dev = [
     "wandb>=0.25.1",
     "huggingface-hub>=1.30.0",
 ]
+[tool.pytest.ini_options]
+# The repository root, so `reproducibility/` is importable from the suite. It is
+# deliberately not part of the wheel -- it reproduces the paper, which is a
+# property of this repository rather than of the library -- so nothing else puts
+# it on the path.
+pythonpath = ["."]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100
@@ -135,6 +142,15 @@ known-first-party = ["cyfm"]
 python_version = "3.11"
 ignore_missing_imports = true
 check_untyped_defs = true
+
+# Deliberately no [project.scripts]. The blueprint called for a `cyfm-reproduce`
+# console script, and it was declared and then removed: `reproducibility/` is a
+# property of the repository rather than of the library, so it is not in the
+# wheel, and the entry point resolved to a module an installed wheel does not
+# have. Shipping it instead would claim the top-level name `reproducibility` on
+# the user's system, which a package called `cyfm` has no business doing.
+# A reviewer clones the repo and runs `python -m reproducibility.run_all`, which
+# is how every other paper script here is invoked.
 
 [project.urls]
 Homepage = "https://github.com/Marcelele-0/Complex-Flow-Matching"

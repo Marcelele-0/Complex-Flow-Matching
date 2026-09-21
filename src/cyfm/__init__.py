@@ -25,6 +25,7 @@ from importlib.metadata import PackageNotFoundError, version
 from cyfm import (
     core,
     data as data,  # noqa: F401  -> DATASETS
+    experiments as experiments,  # noqa: F401  -> EXPERIMENTS
     flow as flow,  # noqa: F401  -> COUPLINGS
     manifolds as manifolds,  # noqa: F401  -> MANIFOLDS, SOLVERS
     models as models,  # noqa: F401  -> MODELS
@@ -44,6 +45,7 @@ from cyfm.core import (
     Sampler,
     VelocityField,
 )
+from cyfm.core.experiment import EXPERIMENTS, BaseExperiment, ExperimentResult
 from cyfm.core.manifold import Representation
 from cyfm.manifolds.cylindrical import CylindricalManifold
 from cyfm.manifolds.euclidean import EuclideanManifold
@@ -56,15 +58,18 @@ except PackageNotFoundError:  # pragma: no cover - source checkout without insta
 __all__ = [
     "COUPLINGS",
     "DATASETS",
+    "EXPERIMENTS",
     "MANIFOLDS",
     "MODELS",
     "SOLVERS",
     "BaseComplexDataset",
+    "BaseExperiment",
     "BaseManifold",
     "BaseODESolver",
     "BaseSDESolver",
     "Coupling",
     "CylindricalManifold",
+    "ExperimentResult",
     "EuclideanManifold",
     "Registry",
     "Representation",

@@ -38,7 +38,7 @@ repos:
     hooks:
       - id: mypy
         name: mypy (project environment)
-        entry: uv run mypy src/ scripts/
+        entry: uv run mypy src/ scripts/ reproducibility/
         language: system
         types: [python]
         pass_filenames: false
