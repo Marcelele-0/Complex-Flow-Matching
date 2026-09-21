@@ -33,6 +33,11 @@ import torch
 
 from cyfm.core.manifold import BaseManifold
 from cyfm.data.toy import CylinderToyFieldDataset, CylinderToyIIDDataset
+from cyfm.experiments.coupling_scaling import (
+    CouplingScalingExperiment,
+    pairing_cost,
+    render as render_scaling,
+)
 from cyfm.flow.couplings import OptimalTransportCoupling
 from cyfm.flow.transport import sliced_wasserstein2
 from cyfm.manifolds import build_manifold
@@ -54,13 +59,6 @@ def cylinder(spatial_correlation: float | None = None) -> BaseManifold:
 def fields(dataset: CylinderToyIIDDataset | CylinderToyFieldDataset, count: int) -> torch.Tensor:
     """The first ``count`` fields of a dataset, complex ``[B, 1, H, W]``."""
     return torch.stack([dataset[index] for index in range(count)])
-
-
-def pairing_cost(manifold: BaseManifold, prior: torch.Tensor, data: torch.Tensor) -> float:
-    """Mean weighted squared geodesic displacement of an aligned pairing."""
-    weights = manifold.tangent_weights.to(prior.device).reshape(1, -1, 1, 1)
-    displacement = manifold.log_map(prior, data)
-    return float((displacement.square() * weights).flatten(1).mean(1).mean())
 
 
 def draw_prior(
@@ -90,27 +88,11 @@ def main() -> None:
     coupling = OptimalTransportCoupling()
     manifold = cylinder()
 
-    print("=" * 96)
-    print("1. OT COST REDUCTION vs FIELD SIZE   cylinder_toy_iid rho 0.5, batch 64, white prior")
-    print("=" * 96)
-    print(f"{'field':>8}{'dim':>7}{'cost drop':>12}{'reordered':>12}{'cost spread':>14}")
-    # 320 is the knee acquisition's own side, and the only size in this table where
-    # a paper table is computed on real data rather than synthetic fields.
-    for side in (1, 2, 4, 8, 16, 32, 64, 128, 320):
-        data = manifold.from_complex(
-            fields(
-                CylinderToyIIDDataset(coupling=0.5, size=64, crop_size=(side, side), seed=seed), 64
-            )
-        ).to(device)
-        prior = draw_prior(manifold, 64, side, device, seed)
-        cost = coupling.cost_matrix(prior, data, manifold)
-        paired = coupling(prior, data, manifold)
-        reordered = float((~torch.isclose(paired, data).flatten(1).all(1)).double().mean())
-        drop = 1.0 - pairing_cost(manifold, prior, paired) / pairing_cost(manifold, prior, data)
-        spread = float(cost.std() / cost.mean())
-        print(
-            f"{f'{side}x{side}':>8}{side * side:>7}{drop:>11.1%}{reordered:>11.1%}{spread:>14.4f}"
-        )
+    # Section 1 is the only part of this script that a paper sentence quotes, so
+    # it is the part that had to become re-renderable: the measurement lives in
+    # CouplingScalingExperiment and returns its numbers, and render() prints them
+    # exactly as this script always did.
+    print(render_scaling(CouplingScalingExperiment(seed=seed, device=device).run()))
 
     print("\n" + "=" * 96)
     print("2. OT COST REDUCTION vs BATCH SIZE   16x16, cylinder_toy_iid rho 0.5, white prior")

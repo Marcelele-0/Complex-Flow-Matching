@@ -183,6 +183,9 @@ class EvaluationPipeline(BasePipeline[dict[str, Any]]):
         print(f"Evaluating generation on: {self.device}")
 
         self.manifold = manifold_from_config(self.cfg).to(self.device)
+        print(
+            f"Using manifold: {self.manifold.name} ({self.manifold.state_channels}-channel state)"
+        )
         self.model = build_model(
             self.cfg,
             self.device,

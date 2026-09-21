@@ -33,6 +33,7 @@ produce it rather than a quiet "OK".
 | `table1_bridge_geometry.py` | Table 1, analytical path geometry | nothing for the synthetic block | ~20 s |
 | `table2_field_synthesis.py` | Table 2, 64x64 synthetic | the archived evaluations | ~1 s |
 | `table3_unet_scaling.py` | Table 3, 16x16 and 32x32 | the archived evaluations | ~1 s |
+| `section53_ot_cost.py` | Section 5.3, OT cost saving vs field size | nothing | ~10 s |
 | `table4_patch_seams.py` | Table 4 / Section 5.4, patch seams | nothing | ~40 s |
 | `table5_knee_mri.py` | Table 5, knee MRI 64x64 | the archived evaluations | ~1 s |
 
@@ -99,9 +100,9 @@ requires re-deriving the provenance test.
 
 ## Still to convert
 
-`scripts/coupling_gate.py` and `scripts/coupling_dimension.py` still fuse
-measurement with printing, so Table 4's spiral rows and Section 5.3's cost curve
-have no reproduction script yet. `scripts/bridge_angular_velocity.py` shows the
-shape the others need: the measurement moved to
-`cyfm.experiments.BridgeGeometryExperiment`, which returns its numbers, and the
-script kept its path and its exact output.
+`scripts/coupling_gate.py` still fuses measurement with printing, so Table 4's
+spiral rows (the amplitude/phase factorisation, as opposed to the patch seams)
+have no reproduction script yet. The two probes already converted show the shape
+it needs: the measurement moves to a `BaseExperiment` subclass that returns its
+numbers, a `render()` prints them, and the script keeps its path -- which
+`conf/experiment/*.yaml` names -- and its exact output.

@@ -60,6 +60,12 @@ SCRIPTS: tuple[Reproduction, ...] = (
         runtime="~1 s",
     ),
     Reproduction(
+        "reproducibility.section53_ot_cost",
+        "Section 5.3 -- OT cost saving against field size",
+        network_free=True,
+        runtime="~10 s",
+    ),
+    Reproduction(
         "reproducibility.table4_patch_seams",
         "Table 4 / Section 5.4 -- patch seams",
         network_free=True,

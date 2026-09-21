@@ -153,6 +153,9 @@ class TrainingPipeline(BasePipeline[None]):
 
         # The single switch between the cylindrical model and the Euclidean baseline.
         self.manifold: BaseManifold = manifold_from_config(self.cfg).to(self.device)
+        print_main(
+            f"Using manifold: {self.manifold.name} ({self.manifold.state_channels}-channel state)"
+        )
 
         self.coupling = build_coupling(self.config.training.coupling)
         # Whether the coupling permutes the batch, which the loop reports once.

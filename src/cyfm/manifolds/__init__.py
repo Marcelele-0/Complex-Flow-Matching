@@ -66,6 +66,8 @@ def build_manifold(
             f"Expected one of {MANIFOLDS.list()}."
         )
 
-    manifold_obj = MANIFOLDS.get_class(name).from_config(manifold, loss)
-    print(f"Using manifold: {manifold_obj.name} ({manifold_obj.state_channels}-channel state)")
-    return manifold_obj
+    # Deliberately silent. This used to print "Using manifold: ...", which made a
+    # script's output depend on how many manifolds it happened to construct and
+    # put stray lines in the reproduction reports. The entry points announce the
+    # geometry themselves, where the announcement belongs.
+    return MANIFOLDS.get_class(name).from_config(manifold, loss)

@@ -46,7 +46,7 @@ _EXPECTED = {
         "stft_store",
     },
     "couplings": {"independent", "none", "optimal_transport", "ot"},
-    "experiments": {"bridge_geometry"},
+    "experiments": {"bridge_geometry", "coupling_scaling"},
 }
 
 _PROBE = """
