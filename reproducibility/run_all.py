@@ -2,7 +2,6 @@
 
     uv run python -m reproducibility.run_all
     uv run python -m reproducibility.run_all --network-free   # only the fast ones
-    uv run cyfm-reproduce                                     # the installed name
 
 Three outcomes per script, and they mean different things. ``PASS`` is a number
 that matches the paper. ``FAIL`` is a number that was computed and does not.
