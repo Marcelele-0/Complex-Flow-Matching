@@ -48,10 +48,28 @@ SCRIPTS: tuple[Reproduction, ...] = (
         runtime="~20 s",
     ),
     Reproduction(
+        "reproducibility.table2_field_synthesis",
+        "Table 2 -- spatial field synthesis (64x64)",
+        network_free=True,
+        runtime="~1 s",
+    ),
+    Reproduction(
+        "reproducibility.table3_unet_scaling",
+        "Table 3 -- dimensionality scaling",
+        network_free=True,
+        runtime="~1 s",
+    ),
+    Reproduction(
         "reproducibility.table4_patch_seams",
         "Table 4 / Section 5.4 -- patch seams",
         network_free=True,
         runtime="~40 s",
+    ),
+    Reproduction(
+        "reproducibility.table5_knee_mri",
+        "Table 5 -- knee MRI (64x64)",
+        network_free=True,
+        runtime="~1 s",
     ),
 )
 

@@ -31,9 +31,20 @@ produce it rather than a quiet "OK".
 | script | result | needs | runtime |
 | --- | --- | --- | --- |
 | `table1_bridge_geometry.py` | Table 1, analytical path geometry | nothing for the synthetic block | ~20 s |
+| `table2_field_synthesis.py` | Table 2, 64x64 synthetic | the archived evaluations | ~1 s |
+| `table3_unet_scaling.py` | Table 3, 16x16 and 32x32 | the archived evaluations | ~1 s |
 | `table4_patch_seams.py` | Table 4 / Section 5.4, patch seams | nothing | ~40 s |
+| `table5_knee_mri.py` | Table 5, knee MRI 64x64 | the archived evaluations | ~1 s |
 
-Both generate their own targets, so they reproduce from a bare checkout on a CPU.
+All five run on a CPU from a bare checkout. Two generate their own targets; three
+re-derive their numbers from `docs/reproduce/paper_results/`, which ships with
+the repository. Averaging over seeds is done here rather than read from a stored
+aggregate, so what is compared is the per-run evaluations themselves.
+
+This asks a different question from `tests/test_paper_results.py`. That test
+checks every archived run's Hydra overrides against the experiment config it
+claims to come from — that the runs are the ones the paper says they are. These
+check that the numbers inside those runs are the numbers the paper prints.
 
 ## Known discrepancies
 
@@ -50,6 +61,19 @@ seed, and `table4_patch_seams.py` checks that separately from the digit. The
 issue is presentational: the sentence's other two numbers (0.000 and 0.979) are
 stable to three decimals, which invites a reader to treat all three alike.
 Run `--seeds 8` to see the spread.
+
+**Table 5's numbers depend on which other step counts were swept.** The knee
+archive carries every arm twice, as `dense_t5c64_*` and `p5_t5c64_*`. They score
+the same checkpoint on the same cohort with the same seed, and differ only in
+`evaluate.nfe` — eleven step counts against five. Their `k=1..8` columns agree to
+float noise; their `k=100` columns do not, 0.0631 against 0.0722 for
+cylindrical+OT. The evaluation sweep consumes one seeded generator across step
+counts, so a row depends on which counts preceded it: `k=100` is fifth in one
+list and eleventh in the other, and draws a different prior batch. The paper
+prints the five-count evaluation, which matches its five columns, and that is
+what `table5_knee_mri.py` checks. Nothing here is wrong, but a row is not
+reproducible from its own `k` alone — the whole `nfe` list is part of its
+provenance, and it is recorded in the archive.
 
 **Two `expected:` blocks in `conf/experiment/` are stale.** They were written on
 2026-09-11 and `13a1124` (09-17) changed what the probes print without updating

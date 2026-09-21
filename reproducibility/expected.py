@@ -34,6 +34,10 @@ __all__ = [
     "SEAM_LAG1",
     "SEC53_COST_DROP",
     "TABLE4_SPIRAL",
+    "TABLE5_ARMS",
+    "TABLE5_DIFFUSION",
+    "TABLE5_SLICED_W2",
+    "TABLE5_SPATIAL_LAG1",
 ]
 
 #: Compare to the precision the paper prints, with no slack.
@@ -142,6 +146,160 @@ TABLE4_SPIRAL: Final[dict[float, dict[str, Expectation]]] = {
         "cost_factorised": Expectation(0.2001, 0.002, "Table 4, rho = 1.0"),
         "cost_joint": Expectation(0.3845, 0.002, "Table 4, rho = 1.0"),
     },
+}
+
+
+# --- Tables 2 and 3: the U-Net grids ---------------------------------------
+#
+# Sliced W2 against the data distribution, mean over 5 seeds, at each solver step
+# count. Read off the tables themselves, which print three decimals; the
+# tolerance is half of the last digit, so a mean that rounds to the printed value
+# passes and one that does not, fails.
+#
+# The archives these are checked against are frozen input: tests/test_paper_results.py
+# verifies every run's Hydra overrides against the experiment config it claims to
+# come from, which is a different question from whether the numbers match the
+# paper. This is that second question.
+_UNET_TOLERANCE = 5e-4
+
+#: Arm name in the archive -> the row of Table 2, at 64x64.
+TABLE2_ARMS: Final[dict[str, str]] = {
+    "un_euclidean_independent_scnull": "Cartesian, independent",
+    "un_euclidean_ot_scnull": "Cartesian, minibatch OT",
+    "un_cylindrical_independent_scnull": "Cylindrical, independent",
+    "un_cylindrical_ot_scnull": "Cylindrical, minibatch OT",
+}
+
+#: Table 2, sliced W2 at 1, 2, 4, 8 and 100 steps.
+TABLE2_SLICED_W2: Final[dict[str, dict[int, Expectation]]] = {
+    arm: {
+        steps: Expectation(
+            value, _UNET_TOLERANCE, f"tables/table2_unet64.tex, {label}, {steps} step(s)"
+        )
+        for steps, value in zip((1, 2, 4, 8, 100), values, strict=True)
+    }
+    for arm, label, values in (
+        (
+            "un_euclidean_independent_scnull",
+            "Cartesian / Independent",
+            (0.416, 0.349, 0.285, 0.154, 0.046),
+        ),
+        ("un_euclidean_ot_scnull", "Cartesian / Minibatch OT", (0.376, 0.318, 0.260, 0.141, 0.047)),
+        (
+            "un_cylindrical_independent_scnull",
+            "Cylindrical / Independent",
+            (0.121, 0.148, 0.109, 0.066, 0.043),
+        ),
+        (
+            "un_cylindrical_ot_scnull",
+            "Cylindrical / Minibatch OT",
+            (0.117, 0.114, 0.078, 0.054, 0.040),
+        ),
+    )
+}
+
+#: Table 3, the same metric across resolutions. The 64x64 block is Table 2's
+#: rows, which is why that table's caption says it contains them.
+TABLE3_SLICED_W2: Final[dict[str, dict[int, Expectation]]] = {
+    arm: {
+        steps: Expectation(
+            value, _UNET_TOLERANCE, f"tables/table3_unet_scaling.tex, {label}, {steps} step(s)"
+        )
+        for steps, value in zip((1, 2, 4, 8, 100), values, strict=True)
+    }
+    for arm, label, values in (
+        ("unsz_euclidean_ot_16", "16x16 Cartesian OT", (0.227, 0.202, 0.153, 0.097, 0.068)),
+        (
+            "unsz_cylindrical_independent_16",
+            "16x16 CyFM independent",
+            (0.116, 0.155, 0.133, 0.097, 0.062),
+        ),
+        ("unsz_cylindrical_ot_16", "16x16 CyFM joint OT", (0.098, 0.086, 0.053, 0.064, 0.054)),
+        ("unsz_euclidean_ot_32", "32x32 Cartesian OT", (0.340, 0.275, 0.209, 0.104, 0.037)),
+        (
+            "unsz_cylindrical_independent_32",
+            "32x32 CyFM independent",
+            (0.123, 0.145, 0.113, 0.063, 0.047),
+        ),
+        ("unsz_cylindrical_ot_32", "32x32 CyFM joint OT", (0.113, 0.094, 0.072, 0.049, 0.041)),
+    )
+}
+
+#: Seeds each U-Net table's caption says it averages over.
+UNET_SEEDS: Final = 5
+
+
+# --- Table 5: knee MRI at 64x64 --------------------------------------------
+#
+# Mean over 5 seeds on held-out test slices. The archive carries each arm twice,
+# under a `dense_` and a `p5_` prefix; both give the same means, and `dense_` is
+# the one used here.
+#
+# The score-based row needs its own tolerances: at k <= 2 its output is still the
+# prior, whose scale is sigma_max = 53.4, so its "error" is tens rather than
+# hundredths and a fixed absolute tolerance would be meaningless on both ends of
+# the same column.
+TABLE5_ARMS: Final[dict[str, str]] = {
+    "p5_t5c64_cylindrical_ot": "Cylindrical + OT (ours)",
+    "p5_t5c64_cylindrical_independent": "Cylindrical, independent",
+    "p5_t5c64_euclidean_ot": "Cartesian + OT",
+    "p5_t5c64_euclidean_independent": "Cartesian, independent",
+}
+
+TABLE5_SLICED_W2: Final[dict[str, dict[int, Expectation]]] = {
+    arm: {
+        steps: Expectation(
+            value, 5e-5, f"tables/table5_fastmri64.tex, {TABLE5_ARMS[arm]}, k={steps}"
+        )
+        for steps, value in zip((1, 2, 4, 8, 100), values, strict=True)
+    }
+    for arm, values in (
+        ("p5_t5c64_cylindrical_ot", (0.0593, 0.1200, 0.0937, 0.0735, 0.0722)),
+        ("p5_t5c64_cylindrical_independent", (0.0604, 0.1338, 0.1064, 0.0756, 0.0677)),
+        ("p5_t5c64_euclidean_ot", (0.1062, 0.1120, 0.0872, 0.0614, 0.0617)),
+        ("p5_t5c64_euclidean_independent", (0.1518, 0.1432, 0.1054, 0.0582, 0.0563)),
+    )
+}
+
+#: The VE-SDE baseline, whose column spans four orders of magnitude. Printed to
+#: two decimals where it is large and four where it is small, so the tolerance
+#: follows the printed precision rather than a single constant.
+TABLE5_DIFFUSION: Final[dict[int, Expectation]] = {
+    steps: Expectation(
+        value,
+        tolerance,
+        f"tables/table5_fastmri64.tex, Complex diffusion (VE-SDE), k={steps}",
+    )
+    for steps, value, tolerance in (
+        (1, 53.18, 5e-3),
+        (2, 53.16, 5e-3),
+        (4, 429.50, 5e-3),
+        (8, 67.44, 5e-3),
+        (100, 0.0771, 5e-5),
+    )
+}
+
+#: Spatial lag-1 gap, the amplitude-texture row. This is the measure whose
+#: ordering the paper reports as measured, including where the plane wins.
+TABLE5_SPATIAL_LAG1: Final[dict[str, dict[int, Expectation]]] = {
+    arm: {
+        steps: Expectation(
+            value, 5e-5, f"tables/table5_fastmri64.tex, spatial lag-1, {label}, k={steps}"
+        )
+        for steps, value in zip((1, 2, 4, 8, 100), values, strict=True)
+    }
+    for arm, label, values in (
+        (
+            "p5_t5c64_cylindrical_ot",
+            "Cylindrical + OT (ours)",
+            (0.2971, 0.1598, 0.0339, 0.0235, 0.0153),
+        ),
+        (
+            "p5_t5c64_euclidean_independent",
+            "Cartesian, independent",
+            (0.0758, 0.0495, 0.0561, 0.0404, 0.0305),
+        ),
+    )
 }
 
 

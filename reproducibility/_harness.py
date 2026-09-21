@@ -13,13 +13,31 @@ non-zero and says what to run to produce it; it never prints a quiet "OK".
 
 from __future__ import annotations
 
+import json
+import pathlib
+import statistics
 import sys
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 from reproducibility.expected import SEED_SENSITIVE, Expectation
 
-__all__ = ["Check", "MissingInput", "Outcome", "compare", "report"]
+__all__ = [
+    "ARCHIVES",
+    "Check",
+    "MissingInput",
+    "Outcome",
+    "compare",
+    "load_archive",
+    "mean_over_seeds",
+    "report",
+]
+
+#: Where the archived evaluations live. Frozen: ``tests/test_paper_results.py``
+#: computes this same path and checks every run's Hydra overrides against the
+#: experiment config it claims to come from.
+ARCHIVES = pathlib.Path(__file__).resolve().parents[1] / "docs" / "reproduce" / "paper_results"
 
 
 class Outcome(Enum):
@@ -177,3 +195,61 @@ def report(title: str, checks: list[Check], notes: list[str] | None = None) -> i
 def exit_with(code: int) -> None:
     """Leave the process with ``code``; never exit 0 on an unreproduced result."""
     sys.exit(code)
+
+
+def load_archive(name: str) -> dict[str, Any]:
+    """Read one archived evaluation set.
+
+    Args:
+        name: File name under ``docs/reproduce/paper_results/``.
+
+    Returns:
+        Run name to that run's ``metrics.json`` payload.
+
+    Raises:
+        MissingInput: If the archive is not in this checkout.
+    """
+    path = ARCHIVES / name
+    if not path.is_file():
+        raise MissingInput(
+            f"{path} is not in this checkout",
+            "it ships with the repository; check out the full tree",
+        )
+    return dict(json.loads(path.read_text()))
+
+
+def mean_over_seeds(
+    archive: dict[str, Any], arm: str, metric: str, steps: int
+) -> tuple[float, int]:
+    """Average one metric over every seed of one arm.
+
+    The paper's U-Net tables are means over five seeds, which the captions state;
+    this is how they are formed. Averaging is done here rather than trusting a
+    stored aggregate, so what is compared is the per-run evaluations themselves.
+
+    Args:
+        archive: As returned by :func:`load_archive`.
+        arm: Run-name prefix, e.g. ``"un_cylindrical_ot_scnull"``. Runs are named
+            ``{arm}_s{seed}_eval``.
+        metric: Metric key inside each sweep row.
+        steps: ``num_steps`` of the row to read.
+
+    Returns:
+        ``(mean, seeds_averaged)``.
+
+    Raises:
+        MissingInput: If no run of that arm carries that step count.
+    """
+    values = [
+        row[metric]
+        for name, payload in archive.items()
+        if name.startswith(f"{arm}_s")
+        for row in payload["sweep"]
+        if row["num_steps"] == steps and metric in row
+    ]
+    if not values:
+        raise MissingInput(
+            f"no archived run of {arm!r} carries {metric!r} at {steps} step(s)",
+            "re-run the grid with scripts/paper/reproduce.py",
+        )
+    return statistics.fmean(values), len(values)
