@@ -4,22 +4,45 @@ This is the code behind the submission. It is written for a reviewer who wants t
 whether the numbers in the paper came from these experiments, and who may not want to
 take our word for any of it.
 
-There are three levels of checking here, and they cost very different amounts. The first
-needs a laptop and twenty seconds. The second needs one GPU and an afternoon, and
-downloads nothing. The third needs the public datasets and about thirty GPU-hours. You
-can stop at whichever level convinces you.
+There are four levels of checking here and they cost very different amounts. The first
+recomputes published numbers and compares them against the paper, on a laptop, in about
+five minutes. The last needs the public datasets and about thirty GPU-hours. You can stop
+at whichever level convinces you.
 
 ---
 
-## Level 1 — check the provenance. No GPU, no data, ~20 seconds
+## Level 0 — recompute results and diff them against the paper. ~5 minutes, no data
 
 ```bash
 uv sync
+uv run python -m reproducibility.run_all --network-free
+```
+
+Start here. `reproducibility/` holds one script per published result. Each recomputes the
+number and compares it **against the value printed in the paper** — `expected.py` quotes
+every one of them, naming the file and the sentence it came from — so a disagreement is
+reported rather than left for you to notice.
+
+It distinguishes three outcomes, and the third is the one that usually gets hidden:
+`PASS`, `FAIL` (computed and disagrees) and `MISSING INPUT` (there was nothing to compute
+it from). A script that cannot find its input says what to run to produce it instead of
+printing a quiet success.
+
+`--network-free` covers what needs no trained network and no dataset: the analytical path
+geometry of Table 1, the optimal-transport cost against field size, both halves of the
+factorised-coupling result, and the table rows that read from the archives. Seven results,
+all of which reproduce as of this writing. Drop the flag to run everything this checkout
+can.
+
+## Level 1 — check the provenance of the rest. No GPU, no data, ~20 seconds
+
+```bash
 uv run pytest tests/test_paper_results.py -q
 ```
 
-This is the strongest cheap check we can offer, and it is worth saying exactly what it
-proves and what it does not.
+Level 0 recomputes what can be recomputed cheaply. Everything else in the paper comes from
+training runs, and this is what can be said about those without a GPU. It is worth stating
+exactly what it proves and what it does not.
 
 Every number printed in the paper is read from one of seven JSON archives in
 `docs/reproduce/paper_results/`. An archive is keyed by evaluation run, and each entry
@@ -40,7 +63,7 @@ apart.
 
 The test file imports no torch and touches no dataset.
 
-## Level 2 — rerun the synthetic experiments. One GPU, no downloads
+## Level 2 — retrain the synthetic experiments. One GPU, no downloads
 
 The synthetic cohort is generated on the fly from a Gaussian copula, so there is nothing
 to obtain:
@@ -68,7 +91,7 @@ few-step claim is implicitly measured against:
 uv run python scripts/prior_control.py --side 16 --num-fields 16
 ```
 
-## Level 3 — rerun everything, including the real data
+## Level 3 — retrain everything, including the real data
 
 `scripts/wcss/` holds the Slurm scripts the published cohorts were launched with, kept
 verbatim apart from the anonymisation noted below. They are for one specific cluster and
