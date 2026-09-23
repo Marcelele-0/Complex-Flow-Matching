@@ -76,3 +76,9 @@ CLAUDE.md
 
 # Local Overleaf git clone (holds the paper sources and an access token in its .git/config)
 overleaf_cache/
+
+# The manuscript mirrors an Overleaf project. Keeping the LaTeX here duplicated a
+# source of truth that is edited elsewhere, so the working copy stays on disk and out
+# of the repository. Values quoted in reproducibility/expected.py name the manuscript
+# file and sentence they came from, which is a citation rather than a path to read.
+paper/

@@ -2,7 +2,8 @@
 
 One script per published result. Each recomputes what the paper prints and
 compares it against the paper, not against a stored output — `expected.py`
-quotes every value from `paper/ICLR Main/`, naming the file and the sentence.
+quotes every value from the manuscript, naming the file and the sentence it
+came from. The LaTeX itself is not in this repository; the quotes are the record.
 
 ```bash
 uv run python -m reproducibility.run_all --network-free   # minutes, no data needed
