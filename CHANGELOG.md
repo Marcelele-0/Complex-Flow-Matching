@@ -131,9 +131,6 @@ reconstruction problem. None of it backed a number in the paper.
 - `cyfm/flow/__init__.py` declared four names in `__all__` that it never imported, so
   `from cyfm.flow import build_coupling` raised `ImportError` and the `COUPLINGS`
   registry stayed empty unless something imported `cyfm.flow.coupling` directly.
-- `check_ascii.py` listed fifteen paths, three of them long deleted, and printed read
-  errors without setting its failure flag -- so it exited 0 while checking almost
-  nothing. It now walks the tree and treats an unreadable file as a failure.
 - `README.md` claimed "every result is on synthetic data generated on the fly" and
   filed fastMRI under "Not part of the paper", while the paper rests on three domains.
   `conf/experiment/README.md` omitted both real-data experiments, and
