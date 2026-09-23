@@ -7,7 +7,7 @@
 #
 # Needs data/knee_pd/val.h5 and val.json under the project root and nothing else: no
 # raw k-space, no NYU links, no ESPIRiT. Everything it measures lands in the log and in
-# outputs/gate/, ending with the lines to copy into docs/notes/V2_PLAN.md (P0-1).
+# outputs/gate/, ending with the lines to copy into the cohort's record.
 #
 # The probe runs both geometries, because every arm of Table 5 shares one batch size and
 # the hungrier arm is the binding one. It runs each twice: on the whole H100, and capped
@@ -77,7 +77,7 @@ EXPERIMENT="$EXPERIMENT" HOLDOUT_ROLE=holdout BATCH="$BATCH" \
 METRICS="$(find "$CYFM_ROOT/outputs/evaluate/${NAME}_eval" -name metrics.json 2>/dev/null | sort | tail -1)"
 
 echo
-echo "== numbers for docs/notes/V2_PLAN.md (P0-1) =="
+echo "== numbers for the cohort record =="
 grep -H "max_batch=" "$GATE_DIR"/probe_*.txt | sed "s#$GATE_DIR/##"
 grep -h "epoch_seconds=" "$GATE_DIR/epoch_and_eval.txt"
 grep -h "phase_step_median=\|VERDICT" "$GATE_DIR/panels.txt"

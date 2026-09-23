@@ -67,7 +67,7 @@ jobs:
       #
       # This asserts determinism and a band, NOT a literal. The exact digits are
       # platform-dependent: measured 0.1852 on macOS 15.6 arm64 (torch 2.11.0,
-      # numpy 2.4.4, scipy 1.17.1), while docs/notes/2026-09-20-repo-migration-plan.md
+      # numpy 2.4.4, scipy 1.17.1), while the migration plan
       # recorded 0.1841 from a different machine. A genuine regression moves this by
       # far more than the ~0.6% that float32 reduction order accounts for.
       - name: Numerical gate (prior control)

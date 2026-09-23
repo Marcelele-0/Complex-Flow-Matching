@@ -17,7 +17,7 @@
 #   EXTRA_ARGS   further Hydra overrides, e.g. the loss the cohort was trained with
 #   SEEDS      default "0", widen for the full grid
 #
-# What produced the numbers quoted in docs/notes on 2026-09-18:
+# What produced the re-scored numbers of 2026-09-18:
 #
 #   PREFIX=t5_    OUT_PREFIX=ps2_ sbatch scripts/wcss/rescore_metrics.sbatch
 #   PREFIX=t5c64_ OUT_PREFIX=ps2_ KSPACE_CROP=64 sbatch scripts/wcss/rescore_metrics.sbatch

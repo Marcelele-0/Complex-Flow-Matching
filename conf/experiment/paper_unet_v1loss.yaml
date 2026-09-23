@@ -2,7 +2,7 @@
 # paper_unet with the arXiv v1 objective: absolute velocity error, and on the
 # cylinder a phase term weighted by the clean amplitude A_1 / mean(A_1). Kept to
 # reproduce v1 and the loss ablation; the weighting depends on x_1, so the phase
-# channel does not regress the flow-matching target (docs/notes/COUPLING_NOTES.md,
+# channel does not regress the flow-matching target (docs/coupling-and-loss.md,
 # section 9). For the Cartesian arm it is identical to paper_unet_l1.
 defaults:
   - paper_unet

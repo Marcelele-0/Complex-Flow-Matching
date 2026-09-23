@@ -85,7 +85,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--out",
         type=str,
-        default="docs/notes/figures/knee_samples_64.png",
+        default="outputs/figures/knee_samples_64.png",
         help="Where to write the panel.",
     )
     return parser.parse_args()

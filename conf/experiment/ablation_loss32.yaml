@@ -4,7 +4,7 @@
 # The cylinder under {L1, L2} x {amplitude-weighted, unweighted} phase term and the
 # Cartesian geometry under {L1, L2}, all with joint OT, 3 seeds. 32x32 is where the
 # v1 asymptote gap was largest. The report prints every arm and the pairwise
-# comparisons with a per-seed separation verdict (docs/notes/COUPLING_NOTES.md,
+# comparisons with a per-seed separation verdict (docs/coupling-and-loss.md,
 # section 9, has the numbers).
 #
 #   uv run python scripts/paper/reproduce.py ablation_loss32

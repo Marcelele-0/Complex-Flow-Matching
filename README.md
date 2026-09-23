@@ -63,7 +63,7 @@ between tables are made once.
 | what would run | `uv run python scripts/paper/reproduce.py --all --dry-run` | seconds |
 
 The U-Net tables use the objective fixed by the loss ablation (`ablation_loss32`,
-`docs/notes/COUPLING_NOTES.md` section 9): the squared velocity error in both
+`docs/coupling-and-loss.md` section 9): the squared velocity error in both
 geometries, with an unweighted phase term on the cylinder, and 5 seeds.
 
 **Without retraining.** Every number in the U-Net tables is archived in
@@ -99,7 +99,7 @@ kernels are not bitwise deterministic, so a retrained model matches within the s
 spread rather than to the digit; re-evaluating a fixed checkpoint is exact.
 
 The research log behind the paper -- the gates, sweeps and negative results that did
-not make it in -- is `docs/notes/COUPLING_NOTES.md`.
+not make it in -- is `docs/coupling-and-loss.md`.
 
 ## Running your own experiment
 
@@ -174,7 +174,7 @@ scripts/paper/             # reproduce.py and the table / statistics printers
 scripts/*.py               # the network-free probes the experiments call
 scripts/data/              # builders for the knee MRI and LibriSpeech stores
 docs/reproduce/            # archived evaluations with provenance, generated LaTeX tables
-docs/notes/                # the research log (COUPLING_NOTES.md)
+docs/coupling-and-loss.md  # why the loss and coupling are what they are
 ```
 
 ## Not part of the paper

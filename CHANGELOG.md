@@ -149,7 +149,7 @@ reconstruction problem. None of it backed a number in the paper.
   `mirrors-mypy` installs into an isolated environment without the project's
   dependencies, so it resolved `DictConfig` and every torch type to `Any`.
 - Corrected the prior-control gate recorded in
-  `docs/notes/2026-09-20-repo-migration-plan.md`. It quoted `0.1841` as the expected
+  the migration plan. It quoted `0.1841` as the expected
   value; the measured value is `0.1852` on macOS 15.6 arm64, reproduced on a pristine
   checkout of `775710d`. The digits are platform-dependent, so CI asserts determinism
   and a band rather than a literal.
