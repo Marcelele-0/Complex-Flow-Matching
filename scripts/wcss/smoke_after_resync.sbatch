@@ -21,15 +21,15 @@
 #SBATCH --mem=32GB
 #SBATCH --time=00:45:00
 #SBATCH --gres=gpu:hopper:1
-#SBATCH --output=/lustre/pd03/hpc-danbor2008-1756464546/CyFM/logs/%x-%j.txt
-#SBATCH --error=/lustre/pd03/hpc-danbor2008-1756464546/CyFM/logs/%x-%j.err
+#SBATCH --output=/path/to/project/CyFM/logs/%x-%j.txt
+#SBATCH --error=/path/to/project/CyFM/logs/%x-%j.err
 set -u
-source /lustre/pd03/hpc-danbor2008-1756464546/CyFM/scripts/wcss/env.sh
+source /path/to/project/CyFM/scripts/wcss/env.sh
 
 echo "=== host and GPU"
 hostname
 nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader
-echo "tree revision: $(cat /lustre/pd03/hpc-danbor2008-1756464546/CyFM/GIT_REVISION 2>/dev/null)"
+echo "tree revision: $(cat /path/to/project/CyFM/GIT_REVISION 2>/dev/null)"
 
 # The venv records the project as a path dependency, so a rename or a move leaves it
 # importing something that is no longer there. Reinstall before trusting any import.
@@ -41,7 +41,7 @@ echo "uv_sync_exit=$? seconds=$(( $(date +%s) - t0 ))"
 # A stale package next to the new one is the failure this resync existed to prevent,
 # and it is silent: both import, and the wrong one may win.
 echo "=== package layout"
-ls /lustre/pd03/hpc-danbor2008-1756464546/CyFM/src/
+ls /path/to/project/CyFM/src/
 uv run --no-sync python -c "import cyfm, pathlib; print('cyfm at', pathlib.Path(cyfm.__file__).parent)"
 uv run --no-sync python -c "import importlib.util; print('stale cfm importable:', importlib.util.find_spec('cfm') is not None)"
 

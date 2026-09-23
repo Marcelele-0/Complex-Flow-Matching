@@ -11,7 +11,7 @@
 #
 # Paths are absolute on purpose: a bare `cd` on this site lands in the shared grant
 # storage, not in $HOME.
-CYFM_ROOT=/lustre/pd03/hpc-danbor2008-1756464546/CyFM
+CYFM_ROOT=/path/to/project/CyFM
 
 # New files stay group-writable, so a teammate can rerun or clean up after us.
 umask 0002

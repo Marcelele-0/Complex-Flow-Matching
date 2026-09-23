@@ -26,10 +26,10 @@
 #SBATCH --time=04:00:00
 #SBATCH --gres=gpu:hopper:1
 #SBATCH --array=0-4
-#SBATCH --output=/lustre/pd03/hpc-danbor2008-1756464546/CyFM/logs/%x-%A_%a.txt
-#SBATCH --error=/lustre/pd03/hpc-danbor2008-1756464546/CyFM/logs/%x-%A_%a.err
+#SBATCH --output=/path/to/project/CyFM/logs/%x-%A_%a.txt
+#SBATCH --error=/path/to/project/CyFM/logs/%x-%A_%a.err
 set -u
-source /lustre/pd03/hpc-danbor2008-1756464546/CyFM/scripts/wcss/env.sh
+source /path/to/project/CyFM/scripts/wcss/env.sh
 
 mapfile -t SRCS < <(ls -d /lustre/tmp/slurm/*/knee-*/extract/multicoil_train 2>/dev/null | sort)
 if [ "${#SRCS[@]}" -eq 0 ]; then

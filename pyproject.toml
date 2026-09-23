@@ -14,12 +14,10 @@ requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 
+# Withheld for double-blind review, as one entry rather than five: the author count
+# is itself a weak identifier. Restored in the camera-ready.
 authors = [
-    { name = "Marcel Musialek" },
-    { name = "Iga Wolanin" },
-    { name = "Damian Ryczko" },
-    { name = "Anna Grelewska" },
-    { name = "Oleksii Furman" },
+    { name = "Anonymous Authors" },
 ]
 
 # The acronym is what the paper uses and what a citation will carry, but nobody searching
@@ -182,8 +180,4 @@ check_untyped_defs = true
 # A reviewer clones the repo and runs `python -m reproducibility.run_all`, which
 # is how every other paper script here is invoked.
 
-[project.urls]
-Homepage = "https://github.com/Marcelele-0/Complex-Flow-Matching"
-Repository = "https://github.com/Marcelele-0/Complex-Flow-Matching"
-Issues = "https://github.com/Marcelele-0/Complex-Flow-Matching/issues"
-
+# [project.urls] withheld for double-blind review; restored in the camera-ready.

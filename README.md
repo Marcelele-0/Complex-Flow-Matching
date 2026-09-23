@@ -31,7 +31,7 @@ acquisitions, and LibriSpeech STFT segments:
 ## Install
 
 ```bash
-git clone https://github.com/Marcelele-0/Complex-Flow-Matching.git
+git clone <anonymised-repository-url>
 cd Complex-Flow-Matching
 uv sync
 ```

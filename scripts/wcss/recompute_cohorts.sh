@@ -22,7 +22,7 @@
 # Speech needs EPOCHS=40 for the same reason: its launcher defaults to 2, and the
 # published arm is t6e40.
 set -euo pipefail
-cd /lustre/pd03/hpc-danbor2008-1756464546/CyFM
+cd /path/to/project/CyFM
 
 echo "synthetic, 3 sizes x 2 geometries x 2 couplings x 5 seeds = 60 tasks"
 sbatch --array=0-59 --job-name=rr-l2u \

@@ -7,35 +7,17 @@ abstract: >-
   solvers and the structural metrics used to score them.
 type: software
 license: MIT
-repository-code: "https://github.com/Marcelele-0/Complex-Flow-Matching"
+# Author names, their affiliation and the repository link are withheld for
+# double-blind review; five authors are listed as one anonymous entry rather than
+# five, since the count is itself a weak identifier. The camera-ready restores them.
+# The file stays valid CFF instead of being deleted, so the metadata a tool reads is
+# the metadata the paper will carry.
+repository-code: "withheld for double-blind review"
 authors:
-  - family-names: "Musiałek"
-    given-names: "Marcel"
-    affiliation: "Wrocław University of Science and Technology"
-  - family-names: "Wolanin"
-    given-names: "Iga"
-    affiliation: "Wrocław University of Science and Technology"
-  - family-names: "Ryczko"
-    given-names: "Damian"
-    affiliation: "Wrocław University of Science and Technology"
-  - family-names: "Grelewska"
-    given-names: "Anna"
-    affiliation: "Wrocław University of Science and Technology"
-  - family-names: "Furman"
-    given-names: "Oleksii"
-    affiliation: "Wrocław University of Science and Technology"
+  - name: "Anonymous Authors"
 preferred-citation:
   type: article
   title: "CyFM: Cylindrical Optimal Transport for Few-Step Complex-Valued Flow Matching"
   year: 2026
   authors:
-    - family-names: "Musiałek"
-      given-names: "Marcel"
-    - family-names: "Wolanin"
-      given-names: "Iga"
-    - family-names: "Ryczko"
-      given-names: "Damian"
-    - family-names: "Grelewska"
-      given-names: "Anna"
-    - family-names: "Furman"
-      given-names: "Oleksii"
+    - name: "Anonymous Authors"

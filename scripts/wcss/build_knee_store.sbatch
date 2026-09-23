@@ -45,10 +45,10 @@
 #SBATCH --mem=64GB
 #SBATCH --time=2-00:00:00
 #SBATCH --array=0-0
-#SBATCH --output=/lustre/pd03/hpc-danbor2008-1756464546/CyFM/logs/%x-%A_%a.txt
-#SBATCH --error=/lustre/pd03/hpc-danbor2008-1756464546/CyFM/logs/%x-%A_%a.err
+#SBATCH --output=/path/to/project/CyFM/logs/%x-%A_%a.txt
+#SBATCH --error=/path/to/project/CyFM/logs/%x-%A_%a.err
 set -u
-source /lustre/pd03/hpc-danbor2008-1756464546/CyFM/scripts/wcss/env.sh
+source /path/to/project/CyFM/scripts/wcss/env.sh
 
 ENV_FILE="${ENV_FILE:-$CYFM_ROOT/.env}"
 URLS_VAR="${URLS_VAR:-FASTMRI_FULL_URLS}"

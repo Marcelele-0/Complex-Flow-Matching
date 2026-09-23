@@ -42,10 +42,10 @@
 #SBATCH --mem=64GB
 #SBATCH --time=01:00:00
 #SBATCH --gres=gpu:hopper:1
-#SBATCH --output=/lustre/pd03/hpc-danbor2008-1756464546/CyFM/logs/%x-%j.txt
-#SBATCH --error=/lustre/pd03/hpc-danbor2008-1756464546/CyFM/logs/%x-%j.err
+#SBATCH --output=/path/to/project/CyFM/logs/%x-%j.txt
+#SBATCH --error=/path/to/project/CyFM/logs/%x-%j.err
 set -u
-source /lustre/pd03/hpc-danbor2008-1756464546/CyFM/scripts/wcss/env.sh
+source /path/to/project/CyFM/scripts/wcss/env.sh
 
 PREFIX="${PREFIX:?set PREFIX to the cohort to re-score, e.g. t5_}"
 OUT_PREFIX="${OUT_PREFIX:?set OUT_PREFIX for the new evaluation names}"

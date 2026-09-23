@@ -14,10 +14,10 @@
 #SBATCH --mem=32GB
 #SBATCH --time=00:45:00
 #SBATCH --gres=gpu:hopper:1
-#SBATCH --output=/lustre/pd03/hpc-danbor2008-1756464546/CyFM/logs/%x-%j.txt
-#SBATCH --error=/lustre/pd03/hpc-danbor2008-1756464546/CyFM/logs/%x-%j.err
+#SBATCH --output=/path/to/project/CyFM/logs/%x-%j.txt
+#SBATCH --error=/path/to/project/CyFM/logs/%x-%j.err
 set -u
-source /lustre/pd03/hpc-danbor2008-1756464546/CyFM/scripts/wcss/env.sh
+source /path/to/project/CyFM/scripts/wcss/env.sh
 
 hostname
 nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv

@@ -95,7 +95,7 @@ main text therefore cannot be re-derived from a checkout. This is the largest
 reproducibility hole in the project.
 
 **The knee archives carry cluster paths.** `table5_fastmri64_metrics.json` records
-provenance including `/lustre/pd03/...` and `/mnt/lscratch/slurm/...`. Those
+provenance including `/lustre/pd03/...` and `/path/to/node-scratch/...`. Those
 travel with any public artefact. The archives are frozen input to
 `tests/test_paper_results.py`, so rewriting them is an editorial decision that
 requires re-deriving the provenance test.

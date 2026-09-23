@@ -20,12 +20,12 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32GB
 #SBATCH --time=04:00:00
-#SBATCH --output=/lustre/pd03/hpc-danbor2008-1756464546/CyFM/logs/%x-%j.txt
-#SBATCH --error=/lustre/pd03/hpc-danbor2008-1756464546/CyFM/logs/%x-%j.err
+#SBATCH --output=/path/to/project/CyFM/logs/%x-%j.txt
+#SBATCH --error=/path/to/project/CyFM/logs/%x-%j.err
 set -u
 # The default is the cluster copy; CYFM_ENV lets the test suite point this at a stub
 # so the script's logic can be exercised without a cluster and without downloading.
-source "${CYFM_ENV:-/lustre/pd03/hpc-danbor2008-1756464546/CyFM/scripts/wcss/env.sh}"
+source "${CYFM_ENV:-/path/to/project/CyFM/scripts/wcss/env.sh}"
 
 COHORTS="${COHORTS:-dev-clean test-clean}"
 OUT="${OUT:-$CYFM_ROOT/data/librispeech_stft/librispeech.h5}"
