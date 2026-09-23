@@ -31,6 +31,15 @@ repos:
   # them worse tests.
   - repo: local
     hooks:
+      # The tree is ASCII on purpose: a curly quote pasted from a paper or a chat
+      # window is invisible in review and arrives as mojibake on a cluster terminal.
+      # The check existed but nothing ran it, which made the policy advisory.
+      - id: check-ascii
+        name: ASCII-only source and configuration
+        entry: uv run python check_ascii.py
+        language: system
+        pass_filenames: false
+        always_run: true
       - id: mypy
         name: mypy (project environment)
         entry: uv run mypy src/ scripts/ reproducibility/

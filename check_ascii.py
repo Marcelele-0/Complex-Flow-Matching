@@ -12,8 +12,8 @@ failure flag, the script still exited 0 -- it reported "All clean!" while checki
 almost nothing. It now walks the tree, so it cannot drift from it, and a file it
 cannot read is an error rather than a shrug.
 
-``paper/`` is excluded: it mirrors an Overleaf project whose author names and
-affiliations are legitimately non-ASCII.
+The manuscript is no longer in this repository, so nothing here is exempt: every
+file the walk reaches is expected to be ASCII.
 """
 
 from __future__ import annotations
