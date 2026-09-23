@@ -701,3 +701,74 @@ def test_table6_training_config_equals_the_documented_experiment() -> None:
             assert OmegaConf.to_container(launched, resolve=False) == OmegaConf.to_container(
                 described, resolve=False
             ), name
+
+
+# --- The amplitude-weighted knee arms ---------------------------------------
+#
+# One sentence in Section 5.2 compares the unweighted product metric against an
+# amplitude-weighted phase term, and until this archive existed the weighted half of
+# that comparison was in no file here: the claim was the only one in the paper without
+# a source. The runs are the `t5wc64_` cohort, published from the same `p5_` re-scoring
+# pass as every other block, for the same reason -- the unprefixed pass predates the
+# phase-coherence metric and reproduces neither printed value.
+
+TABLE5W_ARCHIVE = "table5_fastmri64_weighted_metrics.json"
+TABLE5W_PREFIX = "p5_t5wc64_"
+TABLE5W_ARMS = (
+    "cylindrical_ot",
+    "cylindrical_independent",
+    "euclidean_ot",
+    "euclidean_independent",
+)
+
+table5w_needs_archive = pytest.mark.skipif(
+    not (RESULTS / TABLE5W_ARCHIVE).exists(),
+    reason=f"{TABLE5W_ARCHIVE} not present; run the cluster grid and export_table5w.py",
+)
+
+
+@table5w_needs_archive
+def test_table5w_archive_holds_the_full_grid() -> None:
+    """Twenty evaluations: four arms of five seeds."""
+    expected = {f"{TABLE5W_PREFIX}{arm}_s{seed}_eval" for arm in TABLE5W_ARMS for seed in SEEDS}
+    assert set(load(TABLE5W_ARCHIVE)) == expected
+
+
+@table5w_needs_archive
+def test_table5w_runs_carry_the_weighting_and_the_crop() -> None:
+    """The two overrides that make this cohort what it is, asserted rather than assumed."""
+    for name, run in load(TABLE5W_ARCHIVE).items():
+        given = overrides_to_dict(run["provenance"]["train_overrides"])
+        assert given["training.loss.phase_amplitude_weighting"] == "true", name
+        assert given["dataset.kspace_crop"] == "64", name
+        assert run["field_shape"] == [64, 64], name
+
+
+@table5w_needs_archive
+def test_table5w_reproduces_the_comparison_the_text_makes() -> None:
+    """Section 5.2's sentence, checked against both archives at once.
+
+    The unweighted values come from the main 64x64 archive and the weighted ones from
+    this archive, which is the point: the claim spans two cohorts and neither file alone
+    can support it.
+    """
+    unweighted = load(TABLE5C64_ARCHIVE)
+    weighted = load(TABLE5W_ARCHIVE)
+
+    def converged(archive: dict[str, Any], prefix: str, metric: str) -> float:
+        values = [
+            next(
+                row[metric]
+                for row in archive[f"{prefix}cylindrical_ot_s{seed}_eval"]["sweep"]
+                if row["num_steps"] == 100
+            )
+            for seed in SEEDS
+        ]
+        return sum(values) / len(values)
+
+    assert converged(unweighted, "p5_t5c64_", "spatial_lag1_gap") == pytest.approx(0.0153, abs=5e-5)
+    assert converged(weighted, TABLE5W_PREFIX, "spatial_lag1_gap") == pytest.approx(
+        0.0219, abs=5e-5
+    )
+    assert converged(unweighted, "p5_t5c64_", "phase_lag1_gap") == pytest.approx(0.1057, abs=5e-5)
+    assert converged(weighted, TABLE5W_PREFIX, "phase_lag1_gap") == pytest.approx(0.1656, abs=5e-5)

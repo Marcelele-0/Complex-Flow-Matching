@@ -400,6 +400,20 @@ TABLE6_ROWS = (
     ("euclidean", "independent", r"Cartesian ($\mathbb{R}^2$)", "Independent", STEPS),
 )
 
+# The amplitude-weighted loss at the 64x64 acquisition matrix. Section 5.2 claims the
+# unweighted product metric beats it on every spatial measure, and that claim needs the
+# arm it is compared against to be on record: 0.0153 against 0.0219 on amplitude texture
+# and 0.1057 against 0.1656 on phase coherence, all at k=100.
+#
+# Same `p5_` re-scoring pass as the other blocks, and the same reason: the unprefixed
+# runs predate the phase-coherence metric. `t5w` is the weighted cohort, `c64` the crop.
+TABLE5W_ARCHIVE = "table5_fastmri64_weighted_metrics.json"
+TABLE5W_NAME = "{prefix}t5wc64_{arm}_{coupling}_s{seed}_eval"
+TABLE5W_PREFIX = "p5_"
+TABLE5W_ROWS = tuple(
+    (arm, coupling) for arm in ("cylindrical", "euclidean") for coupling in ("ot", "independent")
+)
+
 
 def load_table5() -> Runs:
     """The Table 5 archive: run name to that run's ``metrics.json`` payload."""

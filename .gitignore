@@ -81,4 +81,4 @@ overleaf_cache/
 # source of truth that is edited elsewhere, so the working copy stays on disk and out
 # of the repository. Values quoted in reproducibility/expected.py name the manuscript
 # file and sentence they came from, which is a citation rather than a path to read.
-paper/
+/paper/
