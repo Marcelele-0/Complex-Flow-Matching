@@ -586,3 +586,118 @@ def test_table5c64_training_config_equals_the_documented_experiment() -> None:
             assert OmegaConf.to_container(launched, resolve=False) == OmegaConf.to_container(
                 described, resolve=False
             ), name
+
+
+# --- Table 2, speech block: LibriSpeech STFT at 64x64 -----------------------
+#
+# The last main-text block to get an archive. Three prefixes exist on the cluster and
+# they are different experiments rather than retries: `t6_` and `t6e10_` are shorter
+# budgets whose numbers differ in the second decimal, and only `t6e40_` reproduces the
+# printed table. The launcher defaults to two epochs, which is how the short cohorts
+# came to exist, so the published one carries its epoch count in its name and these
+# tests pin it.
+#
+# Unlike the knee blocks, this cohort moves the EVALUATION seed with the training seed,
+# so its five seeds vary both the weights and the prior draw. That makes its spread the
+# wider quantity of the two and its arm-to-arm comparisons unpaired -- worth knowing
+# before the two blocks' error bars are read as if they meant the same thing.
+
+TABLE6_ARCHIVE = "table6_audio_metrics.json"
+TABLE6_SIDE = 64
+TABLE6_PREFIX = "t6e40_"
+TABLE6_ARMS: dict[str, tuple[str, str]] = {
+    "cylindrical_ot": ("cylindrical", "ot"),
+    "cylindrical_independent": ("cylindrical", "independent"),
+    "euclidean_ot": ("euclidean", "ot"),
+    "euclidean_independent": ("euclidean", "independent"),
+}
+
+table6_needs_archive = pytest.mark.skipif(
+    not (RESULTS / TABLE6_ARCHIVE).exists(),
+    reason=f"{TABLE6_ARCHIVE} not present; run the cluster grid and export_table6.py",
+)
+
+
+def table6_expected() -> dict[str, tuple[str, int]]:
+    """Every speech evaluation name, mapped to its arm key and seed."""
+    return {
+        f"{TABLE6_PREFIX}{arm}_s{seed}_eval": (arm, seed) for arm in TABLE6_ARMS for seed in SEEDS
+    }
+
+
+@table6_needs_archive
+def test_table6_archive_holds_the_full_grid() -> None:
+    """Twenty evaluations: four flow arms of five seeds. No diffusion row here."""
+    assert set(load(TABLE6_ARCHIVE)) == set(table6_expected())
+
+
+@table6_needs_archive
+def test_table6_entries_match_their_names() -> None:
+    """Each entry is the arm its name claims, on the speech cohort."""
+    expected = table6_expected()
+    for name, run in load(TABLE6_ARCHIVE).items():
+        arm, seed = expected[name]
+        manifold, _ = TABLE6_ARMS[arm]
+        assert run["field_shape"] == [TABLE6_SIDE, TABLE6_SIDE], name
+        assert run["manifold"] == manifold, name
+        assert run["dataset"] == "librispeech_stft", name
+        assert run["seed"] == seed, name
+        assert run["num_fields"] == 64, name
+        assert run["reference_domain"] == "training transform", name
+        assert [row["num_steps"] for row in run["sweep"]] == STEPS, name
+
+
+@table6_needs_archive
+def test_table6_recorded_overrides_carry_the_protocol() -> None:
+    """Forty epochs, the held-out speakers, and an evaluation seed that tracks training."""
+    expected = table6_expected()
+    for name, run in load(TABLE6_ARCHIVE).items():
+        arm, seed = expected[name]
+        manifold, coupling = TABLE6_ARMS[arm]
+        record = run["provenance"]
+        for key in ("train_overrides", "evaluate_overrides"):
+            given = overrides_to_dict(record[key])
+            for field in ("+experiment", "manifold", "training.coupling"):
+                assert field in given, (name, key, field)
+            assert given["+experiment"] == "table6_audio", (name, key)
+            assert given["manifold"] == manifold, (name, key)
+            assert given["training.coupling"] == coupling, (name, key)
+        train = overrides_to_dict(record["train_overrides"])
+        assert train["training.seed"] == str(seed), name
+        # The launcher defaults to 2. A cohort run without EPOCHS=40 produces numbers
+        # that look like these and are not, so the epoch count is asserted, not assumed.
+        assert train["training.epochs"] == "40", name
+        evaluate = overrides_to_dict(record["evaluate_overrides"])
+        assert evaluate["evaluate.seed"] == str(seed), name
+        # Speech hashes one store by speaker, so the held-out role is what keeps the
+        # reference segments from speakers the arm trained on.
+        assert evaluate["dataset.role"] == "holdout", name
+        assert evaluate["evaluate.num_fields"] == "64", name
+        assert evaluate["evaluate.run_name"] == train["logging.experiment_name"], name
+        assert train["logging.experiment_name"] == f"{TABLE6_PREFIX}{arm}_s{seed}", name
+
+
+@table6_needs_archive
+def test_table6_training_config_equals_the_documented_experiment() -> None:
+    """The recorded launch and ``+experiment=table6_audio`` compose to one config."""
+    expected = table6_expected()
+    with initialize_config_dir(config_dir=str(CONF), version_base="1.3"):
+        for name, run in load(TABLE6_ARCHIVE).items():
+            arm, seed = expected[name]
+            manifold, coupling = TABLE6_ARMS[arm]
+            recorded = run["provenance"]["train_overrides"]
+            given = overrides_to_dict(recorded)
+            documented = [
+                "+experiment=table6_audio",
+                f"manifold={manifold}",
+                f"training.coupling={coupling}",
+                *(f"{key}={given[key]}" for key in ("dataset.data_dir",) if key in given),
+                f"training.epochs={given['training.epochs']}",
+                f"training.seed={seed}",
+                f"logging.experiment_name={given['logging.experiment_name']}",
+            ]
+            launched = compose(config_name="config", overrides=recorded)
+            described = compose(config_name="config", overrides=documented)
+            assert OmegaConf.to_container(launched, resolve=False) == OmegaConf.to_container(
+                described, resolve=False
+            ), name

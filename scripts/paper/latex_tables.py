@@ -382,6 +382,24 @@ TABLE5C64_DENSE_ARMS = tuple(
     (arm, coupling) for arm, coupling, prefix, _, _, _ in TABLE5C64_ROWS if prefix == "p5_"
 )
 
+# The speech block of Table 2 -- LibriSpeech STFT at 64x64, the paper's second real
+# domain. Three prefixes exist on the cluster and only one is the published one:
+# `t6_` and `t6e10_` are shorter-budget runs whose numbers differ in the second
+# decimal, while `t6e40_` reproduces all four printed arms exactly. The epoch count
+# is in the name because that launcher defaults to 2 epochs, so a cohort run without
+# EPOCHS=40 looks like the real thing and is not.
+TABLE6_ARCHIVE = "table6_audio_metrics.json"
+TABLE6_NAME = "{prefix}{arm}_{coupling}_s{seed}_eval"
+TABLE6_PREFIX = "t6e40_"
+
+# Four flow arms, no diffusion: the score-based baseline was run on knee MRI only.
+TABLE6_ROWS = (
+    ("cylindrical", "ot", "Cylindrical (Ours)", "Minibatch OT", STEPS),
+    ("cylindrical", "independent", "Cylindrical (Ours)", "Independent", STEPS),
+    ("euclidean", "ot", r"Cartesian ($\mathbb{R}^2$)", "Minibatch OT", STEPS),
+    ("euclidean", "independent", r"Cartesian ($\mathbb{R}^2$)", "Independent", STEPS),
+)
+
 
 def load_table5() -> Runs:
     """The Table 5 archive: run name to that run's ``metrics.json`` payload."""
