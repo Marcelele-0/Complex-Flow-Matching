@@ -14,7 +14,7 @@
 # cohort with few speakers cannot be split without leaking a voice across it. dev-clean
 # and test-clean give 40 each and their speaker ids are disjoint.
 #SBATCH --job-name=cyfm-stft-store
-#SBATCH --partition=bem2-cpu-normal
+#SBATCH --partition=cpu-normal
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8

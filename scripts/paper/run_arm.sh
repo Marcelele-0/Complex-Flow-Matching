@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One run of the U-Net experiments, train then evaluate, through conf/experiment/.
-# scripts/paper/reproduce.py runs whole specs; this runs a single cell (the WCSS array uses it).
+# scripts/paper/reproduce.py runs whole specs; this runs a single cell (the HPC cluster array uses it).
 #
 #   LOSS_MODE=l2u bash scripts/paper/run_arm.sh NAME SIDE MANIFOLD COUPLING SEED [EPOCHS]
 #

@@ -1,6 +1,6 @@
 """`run_arm.sh`'s environment overrides, checked without training anything.
 
-The runner is what the WCSS array calls for every cell of every table, so an override
+The runner is what the HPC cluster array calls for every cell of every table, so an override
 that silently fails to reach Hydra costs a whole grid rather than one run.
 """
 

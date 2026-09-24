@@ -6,7 +6,7 @@
 #
 # Downloads, extraction and ESPIRiT are CPU work and must not sit on an H100: the GPU
 # grant is the scarce resource (~7.5k GPU-h left against ~45k CPU-h), so this runs on
-# bem2-cpu-normal. Everything heavy stays on node-local scratch and only the part-store
+# cpu-normal. Everything heavy stays on node-local scratch and only the part-store
 # (a few hundred MB) is written to lustre.
 #
 # One task per archive because the archives are independent and each is ~90 GB; tasks
@@ -36,9 +36,9 @@
 #
 # RUN ONE ARCHIVE FIRST. The log prints espirit_seconds_per_volume, which is what sizes
 # --time for the rest, and node-local scratch on this partition is unverified -- the
-# 7 TB figure in the WCSS skill is documented for GPU nodes.
+# 7 TB figure in the HPC cluster skill is documented for GPU nodes.
 #SBATCH --job-name=cyfm-knee-store
-#SBATCH --partition=bem2-cpu-normal
+#SBATCH --partition=cpu-normal
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16

@@ -1,4 +1,4 @@
-# Environment for CyFM jobs on WCSS (ui.wcss.pl). Source it from a batch script.
+# Environment for CyFM jobs on HPC cluster (cluster.local). Source it from a batch script.
 #
 # Layout, chosen so the whole group can use and inspect a run:
 #   $PDDIR/CyFM            code, outputs, logs and caches, group-writable (setgid)

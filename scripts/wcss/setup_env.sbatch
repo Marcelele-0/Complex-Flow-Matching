@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time environment build for CyFM on WCSS, plus a timing probe.
+# One-time environment build for CyFM on HPC cluster, plus a timing probe.
 #
 #   sbatch scripts/wcss/setup_env.sbatch
 #

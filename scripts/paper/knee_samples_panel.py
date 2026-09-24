@@ -150,7 +150,7 @@ def resolve_checkpoint(run_name: str) -> pathlib.Path:
 
     Raises:
         FileNotFoundError: If no checkpoint is present, which usually means the run is
-            still only on WCSS.
+            still only on HPC cluster.
     """
     root = pathlib.Path("outputs/train") / run_name
     stamps = sorted(p for p in root.glob("*") if (p / "checkpoints").is_dir())
@@ -162,7 +162,7 @@ def resolve_checkpoint(run_name: str) -> pathlib.Path:
         if found:
             return found[-1]
     raise FileNotFoundError(
-        f"no checkpoint under {root}. The knee arms train on WCSS; copy one back with "
+        f"no checkpoint under {root}. The knee arms train on HPC cluster; copy one back with "
         "rsync --no-perms --no-owner --no-group before drawing the panel."
     )
 
