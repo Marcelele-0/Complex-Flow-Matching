@@ -2,10 +2,10 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
-[![arXiv](https://img.shields.io/badge/arXiv-Preprint-b31b1b.svg)](https://arxiv.org/)
+[![arXiv](https://img.shields.io/badge/arXiv-2609.14171-b31b1b.svg)](https://arxiv.org/abs/2609.14171)
 
-Code for the paper *CyFM: Cylindrical Optimal Transport for Few-Step Complex-Valued
-Flow Matching*.
+Code for the paper [*CyFM: Cylindrical Optimal Transport for Few-Step Complex-Valued
+Flow Matching*](https://arxiv.org/abs/2609.14171) (arXiv:2609.14171).
 
 Complex-valued signals (MRI, audio spectrograms) are usually generated as two real
 channels `(Re z, Im z)`. Straight Cartesian paths then pass near the origin, where the
@@ -208,8 +208,12 @@ If you use this work or codebase, please cite:
 @article{musialek2026cyfm,
   title={CyFM: Cylindrical Optimal Transport for Few-Step Complex-Valued Flow Matching},
   author={Musia{\l}ek, Marcel and Wolanin, Iga and Ryczko, Damian and Grelewska, Anna and Furman, Oleksii},
-  journal={arXiv preprint},
-  year={2026}
+  journal={arXiv preprint arXiv:2609.14171},
+  year={2026},
+  eprint={2609.14171},
+  archivePrefix={arXiv},
+  primaryClass={cs.LG},
+  url={https://arxiv.org/abs/2609.14171}
 }
 ```
 
