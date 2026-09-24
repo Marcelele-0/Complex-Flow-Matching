@@ -18,20 +18,20 @@
 # magnitude -- but it is a race, so a volume that vanishes mid-run is skipped by the
 # builder rather than being fatal.
 #SBATCH --job-name=cyfm-knee-gpu
-#SBATCH --partition=lem-gpu-short
+#SBATCH --partition=gpu-short
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64GB
 #SBATCH --time=04:00:00
-#SBATCH --gres=gpu:hopper:1
+#SBATCH --gres=gpu:1
 #SBATCH --array=0-4
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%A_%a.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%A_%a.err
 set -u
 source /path/to/project/CyFM/scripts/cluster/env.sh
 
-mapfile -t SRCS < <(ls -d /lustre/tmp/slurm/*/knee-*/extract/multicoil_train 2>/dev/null | sort)
+mapfile -t SRCS < <(ls -d /path/to/shared-tmp/slurm/*/knee-*/extract/multicoil_train 2>/dev/null | sort)
 if [ "${#SRCS[@]}" -eq 0 ]; then
   echo "no first-stage scratch left; are those jobs still running?"
   exit 2

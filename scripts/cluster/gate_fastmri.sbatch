@@ -13,13 +13,13 @@
 # the hungrier arm is the binding one. It runs each twice: on the whole H100, and capped
 # at 15 GiB to stand in for the 16 GB RTX 4070 Ti SUPER the issue also asks about.
 #SBATCH --job-name=cyfm-gate
-#SBATCH --partition=lem-gpu-short
+#SBATCH --partition=gpu-short
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64GB
 #SBATCH --time=02:00:00
-#SBATCH --gres=gpu:hopper:1
+#SBATCH --gres=gpu:1
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%j.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%j.err
 set -u

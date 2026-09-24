@@ -120,7 +120,7 @@ def error_table(records: list[dict[str, Any]], family: str, side: str) -> None:
             for k, value in curve.items():
                 cells[arm][k].append(value)
     if not cells:
-        print(f"  (nic dla family={family} side={side})")
+        print(f"  (nothing for family={family} side={side})")
         return
     steps = sorted({k for arm in cells.values() for k in arm})
     shown = [k for k in steps if k in (1, 2, 4, 8, 16, 32, 64, 100)] or steps
@@ -150,11 +150,11 @@ def steps_to_target(records: list[dict[str, Any]], family: str, side: str) -> No
         if any(100 in c for c in seeds.values())
     }
     if not ceilings:
-        print("  (brak k=100, nie ma jak wyznaczyc E*)")
+        print("  (no k=100, so E* cannot be determined)")
         return
     target = max(ceilings.values())
     worst = max(ceilings.items(), key=lambda item: item[1])[0]
-    print(f"\n  E* = {target:.4f}  (sufit gorszego ramienia: {worst})")
+    print(f"\n  E* = {target:.4f}  (ceiling of the worse arm: {worst})")
     for arm in [a for a in ARM_ORDER if a in per_arm]:
         reached = []
         for curve in per_arm[arm].values():
@@ -163,7 +163,7 @@ def steps_to_target(records: list[dict[str, Any]], family: str, side: str) -> No
         shown = ", ".join("-" if r is None else str(r) for r in reached)
         got = [r for r in reached if r is not None]
         median = f"{statistics.median(got):.0f}" if got else "-"
-        print(f"  {arm:<26} k po seedach: [{shown}]   mediana {median}")
+        print(f"  {arm:<26} k per seed: [{shown}]   median {median}")
 
 
 def main() -> None:
@@ -174,20 +174,20 @@ def main() -> None:
     args = parser.parse_args()
 
     records = load(args.outputs)
-    print(f"ewaluacji rozpoznanych: {len(records)}")
+    print(f"evaluations recognised: {len(records)}")
     families = collections.Counter((r["family"], r["side"], r["dense"]) for r in records)
     for key in sorted(families):
         family, side, dense = key
         print(f"  {family:<5} side={side:<7} dense={str(dense):<5} -> {families[key]}")
 
     for family, side, title in (
-        ("l2u", "native", "TABELA 2 -- syntetyk, rozdzielczosc natywna"),
-        ("l2u", "16", "TABELA 3 -- syntetyk 16x16"),
-        ("l2u", "32", "TABELA 3 -- syntetyk 32x32"),
-        ("t5", "native", "BLOK MRI -- fastMRI knee CORPD 320x320"),
-        ("t6e40", "native", "BLOK MOWY -- LibriSpeech STFT, 40 epok"),
-        ("t6e10", "native", "BLOK MOWY -- LibriSpeech STFT, 10 epok"),
-        ("t6", "native", "BLOK MOWY -- LibriSpeech STFT, sonda 2-epokowa"),
+        ("l2u", "native", "TABLE 2 -- synthetic, native resolution"),
+        ("l2u", "16", "TABLE 3 -- synthetic 16x16"),
+        ("l2u", "32", "TABLE 3 -- synthetic 32x32"),
+        ("t5", "native", "MRI BLOCK -- fastMRI knee CORPD 320x320"),
+        ("t6e40", "native", "SPEECH BLOCK -- LibriSpeech STFT, 40 epochs"),
+        ("t6e10", "native", "SPEECH BLOCK -- LibriSpeech STFT, 10 epochs"),
+        ("t6", "native", "SPEECH BLOCK -- LibriSpeech STFT, 2-epoch probe"),
     ):
         print(f"\n{'=' * 78}\n{title}\n{'=' * 78}")
         error_table(records, family, side)
@@ -195,7 +195,7 @@ def main() -> None:
 
     if args.json is not None:
         args.json.write_text(json.dumps(records, indent=2))
-        print(f"\nzapisano {args.json}")
+        print(f"\nwrote {args.json}")
 
 
 if __name__ == "__main__":

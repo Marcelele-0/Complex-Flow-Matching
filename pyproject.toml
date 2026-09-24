@@ -25,7 +25,6 @@ authors = [
 # PyPI's search reads it. No alias package: an empty pointer is a dead entry forever.
 keywords = [
     "cylindrical flow matching",
-    "complex flow matching",
     "flow matching",
     "generative model",
     "optimal transport",

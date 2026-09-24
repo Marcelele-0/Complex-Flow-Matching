@@ -1,4 +1,4 @@
-"""Model architectures for Complex Flow Matching."""
+"""Model architectures for CyFM."""
 
 from __future__ import annotations
 

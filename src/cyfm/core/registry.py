@@ -1,4 +1,4 @@
-"""Generic typed component registry for modular extension in Complex Flow Matching."""
+"""Generic typed component registry for modular extension in CyFM."""
 
 from __future__ import annotations
 

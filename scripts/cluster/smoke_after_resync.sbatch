@@ -14,13 +14,13 @@
 # It is not a correctness check on the science. It answers "is this tree runnable",
 # which is the question that has to be answered before a cohort is worth launching.
 #SBATCH --job-name=cyfm-smoke
-#SBATCH --partition=lem-gpu-short
+#SBATCH --partition=gpu-short
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=6
 #SBATCH --mem=32GB
 #SBATCH --time=00:45:00
-#SBATCH --gres=gpu:hopper:1
+#SBATCH --gres=gpu:1
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%j.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%j.err
 set -u

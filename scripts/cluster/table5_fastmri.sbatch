@@ -42,13 +42,13 @@
 # than the 1.5 h the flow arms need. MEASURE the first diffusion cell before releasing
 # the other four -- that estimate is arithmetic, not a measurement.
 #SBATCH --job-name=cyfm-table5
-#SBATCH --partition=lem-gpu-short
+#SBATCH --partition=gpu-short
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64GB
 #SBATCH --time=02:00:00
-#SBATCH --gres=gpu:hopper:1
+#SBATCH --gres=gpu:1
 #SBATCH --array=0-24
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%A_%a.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%A_%a.err

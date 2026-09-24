@@ -23,13 +23,13 @@
 # The wall clock below is many times the measured run because an epoch here is thirty
 # times a knee epoch and the store is read from lustre if staging is skipped.
 #SBATCH --job-name=cyfm-table6
-#SBATCH --partition=lem-gpu-short
+#SBATCH --partition=gpu-short
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64GB
 #SBATCH --time=01:00:00
-#SBATCH --gres=gpu:hopper:1
+#SBATCH --gres=gpu:1
 #SBATCH --array=0-19
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%A_%a.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%A_%a.err

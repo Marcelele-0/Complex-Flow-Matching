@@ -33,7 +33,7 @@
 # LOSS_MODE:
 #   l2u  (default) the fair loss: L2 in both geometries, unweighted phase term
 #        (see conf/experiment/ablation_loss32.yaml)
-#   l1w  the arXiv v1 loss: L1 in both geometries, amplitude-weighted phase term
+#   l1w  the v1 loss: L1 in both geometries, amplitude-weighted phase term
 #   l1u  L1 in both geometries, unweighted phase term -- the cylinder's
 #        counterpart of Cartesian L1, which has no phase weighting to remove
 #

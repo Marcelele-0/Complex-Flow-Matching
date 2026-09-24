@@ -4,5 +4,5 @@
 # Identical to conf/logging/default.yaml except for use_wandb, so opting into
 # logging does not move the run's output directory. See the note there.
 use_wandb: true
-project_name: "complex_flow_matching"
+project_name: "cyfm"
 experiment_name: "cyfm_run"

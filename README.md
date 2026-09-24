@@ -32,7 +32,7 @@ acquisitions, and LibriSpeech STFT segments:
 
 ```bash
 git clone <anonymised-repository-url>
-cd Complex-Flow-Matching
+cd <repository-directory>
 uv sync
 ```
 
@@ -78,7 +78,7 @@ uv run python scripts/paper/loss_protocols.py --archive   # both loss protocols,
 uv run python scripts/paper/latex_tables.py               # the LaTeX the paper includes
 ```
 
-The arXiv v1 tables (L1 with an amplitude-weighted phase term, 2 seeds) remain
+The v1 tables (L1 with an amplitude-weighted phase term, 2 seeds) remain
 readable with `uv run python scripts/paper/paper_tables.py --archive`.
 
 **Checking the paper's numbers.** `reproducibility/` holds one script per

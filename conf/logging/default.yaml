@@ -6,5 +6,5 @@
 # conf/hydra/default.yaml, so switching presets must not silently move where
 # checkpoints and outputs land.
 use_wandb: false
-project_name: "complex_flow_matching"
+project_name: "cyfm"
 experiment_name: "cyfm_run"

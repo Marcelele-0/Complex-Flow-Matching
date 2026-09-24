@@ -7,7 +7,7 @@
 # what the network was allowed to see. The parameter count is then identical
 # across geometries too, which it is not under the per-geometry state.
 #
-# Use with dataset=cylinder_toy_iid to reproduce Gate B (scripts/coupling_gate_b.py, removed 2026-09-11; git show 1d12a6f:scripts/coupling_gate_b.py)
+# Use with dataset=cylinder_toy_iid to reproduce Gate B (scripts/coupling_gate_b.py, removed 2026-09-11)
 # through cyfm.train rather than through the script's own loop.
 name: "mlp"
 

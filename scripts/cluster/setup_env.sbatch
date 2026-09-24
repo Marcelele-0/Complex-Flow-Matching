@@ -7,13 +7,13 @@
 # checks that torch sees the H100, then trains one 64x64 arm for 2 epochs and
 # evaluates it, printing wall-clock seconds so the 40-epoch array can be budgeted.
 #SBATCH --job-name=cyfm-setup
-#SBATCH --partition=lem-gpu-short
+#SBATCH --partition=gpu-short
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=6
 #SBATCH --mem=32GB
 #SBATCH --time=00:45:00
-#SBATCH --gres=gpu:hopper:1
+#SBATCH --gres=gpu:1
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%j.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%j.err
 set -u

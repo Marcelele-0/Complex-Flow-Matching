@@ -4,10 +4,10 @@
 #   sbatch scripts/cluster/build_knee_store.sbatch                 # archive 0 only
 #   sbatch --array=0-4 scripts/cluster/build_knee_store.sbatch     # archives 0..4
 #
-# Downloads, extraction and ESPIRiT are CPU work and must not sit on an H100: the GPU
-# grant is the scarce resource (~7.5k GPU-h left against ~45k CPU-h), so this runs on
-# cpu-normal. Everything heavy stays on node-local scratch and only the part-store
-# (a few hundred MB) is written to lustre.
+# Downloads, extraction and ESPIRiT are CPU work and must not sit on an H100: GPU hours
+# are the scarce part of the allocation, so this runs on cpu-normal. Everything heavy
+# stays on node-local scratch and only the part-store (a few hundred MB) is written to
+# lustre.
 #
 # One task per archive because the archives are independent and each is ~90 GB; tasks
 # cannot share an HDF5 file, so each writes its own part and a single merge joins them

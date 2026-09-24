@@ -10,7 +10,7 @@ spread, not to the digit.
 
 | file | contents | protocol | seeds | hardware |
 | --- | --- | --- | --- | --- |
-| `unet_eval_metrics.json` | arXiv v1 Tables 2-3 | L1, cylinder phase weighted by `A_1 / mean(A_1)` | 0, 1 | RTX 4070 Ti SUPER |
+| `unet_eval_metrics.json` | v1 Tables 2-3 | L1, cylinder phase weighted by `A_1 / mean(A_1)` | 0, 1 | RTX 4070 Ti SUPER |
 | `unet_eval_metrics_l2u.json` | v2 Tables 2-3 (matched loss) | L2 in both geometries, phase unweighted | 0-4 | H100 |
 | `unet_eval_metrics_l1u_cylindrical.json` | appendix table, cylinder | L1, phase unweighted | 0-4 | H100 |
 | `unet_eval_metrics_l1w_cartesian.json` | appendix table, Cartesian | L1 (the Cartesian loss has no phase weighting) | 0-4 | H100 |

@@ -35,13 +35,13 @@
 # one H100. Reading val.h5 from lustre rather than staging it is deliberate: 64 fields is a
 # few hundred reads, not 40 epochs of them.
 #SBATCH --job-name=cyfm-rescore
-#SBATCH --partition=lem-gpu-short
+#SBATCH --partition=gpu-short
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64GB
 #SBATCH --time=01:00:00
-#SBATCH --gres=gpu:hopper:1
+#SBATCH --gres=gpu:1
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%j.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%j.err
 set -u

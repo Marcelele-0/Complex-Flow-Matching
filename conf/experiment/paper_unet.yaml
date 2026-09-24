@@ -1,5 +1,5 @@
 # @package _global_
-# The U-Net experiment behind Tables 2 and 3 (arXiv v2 protocol).
+# The U-Net experiment behind Tables 2 and 3 (v2 protocol).
 #
 # Synthetic complex fields (copula target, rho 0.5, correlation length 4), the
 # c_unet, 40 epochs, white uniform prior, and the matched loss: squared velocity
@@ -16,7 +16,7 @@
 #   evaluate.nfe=[1,2,4,8,100]
 #
 # Loss variants: paper_unet_l1 (L1, unweighted phase) and paper_unet_v1loss
-# (L1, amplitude-weighted phase: the arXiv v1 objective). docs/reproduce/paper_results/
+# (L1, amplitude-weighted phase: the v1 objective). docs/reproduce/paper_results/
 # README.md maps each archived evaluation to the experiment that produced it.
 defaults:
   - override /dataset: cylinder_toy_field

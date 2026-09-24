@@ -21,13 +21,13 @@
 #     sbatch --array=0-29 --export=ALL,GEOMS=cylindrical,LOSS_MODE=l1u,PREFIX=l1u_,SEEDS="0 1 2 3 4" \
 #       scripts/cluster/paper_tables_l2u.sbatch
 #SBATCH --job-name=cyfm-l2u
-#SBATCH --partition=lem-gpu-short
+#SBATCH --partition=gpu-short
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=6
 #SBATCH --mem=32GB
 #SBATCH --time=00:30:00
-#SBATCH --gres=gpu:hopper:1
+#SBATCH --gres=gpu:1
 #SBATCH --array=0-35
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%A_%a.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%A_%a.err

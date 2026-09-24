@@ -9,7 +9,7 @@ geometry, coupling, field size and seed:
 | --- | --- |
 | `paper_unet` | squared velocity error; on the cylinder, an unweighted phase term (the paper's) |
 | `paper_unet_l1` | absolute velocity error, unweighted phase term |
-| `paper_unet_v1loss` | absolute error, phase weighted by the clean amplitude (the arXiv v1 objective) |
+| `paper_unet_v1loss` | absolute error, phase weighted by the clean amplitude (the v1 objective) |
 | `paper_unet_l2w` | squared error, amplitude-weighted phase (only in the loss ablation) |
 
 **Paper experiments.** One config per result of the paper, with a `paper:` block that

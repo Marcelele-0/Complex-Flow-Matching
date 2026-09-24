@@ -12,8 +12,7 @@ Recorded 2026-09-09/10.
 **Removed from the tree on 2026-09-11.** The exploratory scripts quoted below
 (`scripts/sweeps/`, `scripts/coupling_gate_b.py`, `scripts/paper/ablation_loss32.sh`)
 and their raw console output (`gate_artefacts/`, formerly `docs/reproduce/gate_artefacts/`)
-are no longer checked out; the numbers here are the record. Recover any of them with
-`git show 1d12a6f:<path>`, e.g. `git show 1d12a6f:docs/reproduce/gate_artefacts/dim_sweep.txt`.
+are no longer checked out; the numbers here are the record.
 The paper's own results are reproduced from the configs in `conf/experiment/` (see the README).
 
 ---
@@ -535,7 +534,7 @@ spread quoted beside each result, not to the digit. The gate scripts and the
 network-free scripts do not go through `cyfm.evaluate` and were never affected by
 its two defects.
 
-**The arXiv v1 paper** has one wrapper per table in `scripts/paper/` (index in the
+**The v1 protocol** has one wrapper per table in `scripts/paper/` (index in the
 README, "Reproducing the paper"), and the evaluations its Tables 2 and 3 were
 written from are archived in `docs/reproduce/paper_results/unet_eval_metrics.json`, so
 `uv run python scripts/paper/paper_tables.py --archive` prints them without

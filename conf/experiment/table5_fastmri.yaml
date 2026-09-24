@@ -25,7 +25,7 @@
 # reference fields come from volumes no arm was trained on. The split is by volume,
 # because slices of one knee are highly correlated.
 #
-# batch_size is MEASURED, not provisional: the #76 gate (job 5883147) found 84 to be the
+# batch_size is MEASURED, not provisional: the #76 gate found 84 to be the
 # largest that fits an H100 at 320x320, and 64 the largest power of two, at a peak of
 # 70.8 of 93.1 GiB. Both geometries probe identically, so neither binds. Changing this
 # changes the protocol, so every arm of the table must use the same one.

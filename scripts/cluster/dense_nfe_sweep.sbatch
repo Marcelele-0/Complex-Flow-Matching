@@ -12,13 +12,13 @@
 # cross, so the sparse grid cannot answer the question. The dense grid adds 16, 24, 32,
 # 48 and 64.
 #SBATCH --job-name=cyfm-dense-nfe
-#SBATCH --partition=lem-gpu-short
+#SBATCH --partition=gpu-short
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=6
 #SBATCH --mem=32GB
 #SBATCH --time=01:00:00
-#SBATCH --gres=gpu:hopper:1
+#SBATCH --gres=gpu:1
 #SBATCH --array=0-59
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%A_%a.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%A_%a.err

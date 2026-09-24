@@ -3,8 +3,7 @@
 This is the test that makes :mod:`cyfm.config.schema` honest. Nothing stops a
 Python dataclass default from drifting away from the YAML it mirrors, and five of
 them already had: the previous code read ``matmul_precision`` as ``"highest"``
-where the config says ``"high"``, named the W&B project
-``"Cylindrical-Flow-Matching"`` where the config says ``"complex_flow_matching"``,
+where the config says ``"high"``, named the W&B project differently from the config,
 and -- the one that could cost a run -- defaulted ``paths.state_dir`` to a single
 unkeyed ``outputs/state`` where the config keys it by experiment name, so two
 concurrent runs would overwrite each other's resume state.

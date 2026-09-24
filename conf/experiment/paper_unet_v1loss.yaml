@@ -1,5 +1,5 @@
 # @package _global_
-# paper_unet with the arXiv v1 objective: absolute velocity error, and on the
+# paper_unet with the v1 objective: absolute velocity error, and on the
 # cylinder a phase term weighted by the clean amplitude A_1 / mean(A_1). Kept to
 # reproduce v1 and the loss ablation; the weighting depends on x_1, so the phase
 # channel does not regress the flow-matching target (docs/coupling-and-loss.md,

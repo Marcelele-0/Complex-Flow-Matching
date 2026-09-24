@@ -101,10 +101,6 @@ def main() -> int:
         "gives 0.0631 rather than 0.0722 at k = 100: the sweep shares one generator across\n"
         "step counts, so a row depends on which counts preceded it."
     )
-    notes.append(
-        "This archive records cluster paths in its provenance (/lustre/..., /mnt/lscratch/...).\n"
-        "They travel with any public artefact; see reproducibility/README.md."
-    )
     return report("TABLE 5 -- Knee MRI (64x64)", checks, notes=notes)
 
 

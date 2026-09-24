@@ -79,26 +79,20 @@ reproducible from its own `k` alone — the whole `nfe` list is part of its
 provenance, and it is recorded in the archive.
 
 **Two `expected:` blocks in `conf/experiment/` are stale.** They were written on
-2026-09-11 and `13a1124` (09-17) changed what the probes print without updating
+2026-09-11, and a change on 2026-09-17 altered what the probes print without updating
 them. `sec53_ot_cost.yaml` lists `64x64 3.1%` where the code and *the paper* both
 say 2.8%; `table4_factorized.yaml` lists the seam number discussed above. The
 paper is correct in both cases; the config comments are not.
 
 ## Not reproducible from this repository
 
-Documented, not fixed — closing either needs cluster time, not a refactor.
+Documented, not fixed — closing it needs cluster time, not a refactor.
 
 **The speech results have no archive.** `conf/experiment/table6_audio.yaml`
 carries no `paper:` block, is absent from `reproduce.py`'s `PAPER_ORDER`, and has
 no JSON under `docs/reproduce/paper_results/`. The speech block of Table 2 in the
 main text therefore cannot be re-derived from a checkout. This is the largest
 reproducibility hole in the project.
-
-**The knee archives carry cluster paths.** `table5_fastmri64_metrics.json` records
-provenance including `/lustre/pd03/...` and `/path/to/node-scratch/...`. Those
-travel with any public artefact. The archives are frozen input to
-`tests/test_paper_results.py`, so rewriting them is an editorial decision that
-requires re-deriving the provenance test.
 
 ## How the network-free measurements are reached
 

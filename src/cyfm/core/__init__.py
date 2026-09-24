@@ -1,4 +1,4 @@
-"""Core modular architecture and registries for Complex Flow Matching (CFM)."""
+"""Core modular architecture and registries for CyFM."""
 
 from __future__ import annotations
 

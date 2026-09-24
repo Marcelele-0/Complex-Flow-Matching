@@ -139,7 +139,7 @@ claim to test.
 | `table6_audio_metrics.json` | Table 2, speech block |
 | `table5_fastmri64_metrics.json` | main-text knee MRI table, 64x64 |
 | `table5_fastmri_metrics.json` | appendix knee MRI table, 320x320 |
-| `unet_eval_metrics.json` | superseded: the arXiv v1 protocol, kept for the record and read by no current table |
+| `unet_eval_metrics.json` | superseded: the v1 protocol, kept for the record and read by no current table |
 
 234 entries in total. Each holds the full metric sweep for its run — pooled sliced $W_2$,
 amplitude and circular-phase $W_2$, the two spatial autocorrelation gaps, the radial
@@ -166,12 +166,16 @@ unnoticed.
 ## Anonymisation
 
 For double-blind review, this tree has author names, affiliation and repository links
-withheld, and cluster paths replaced with placeholders — the allocation identifier and
-job numbers would otherwise name the group. `/path/to/project` and
-`/path/to/node-scratch/JOBID/` are the placeholders; they appear in the Slurm scripts and
-in the `dataset.data_dir` entries the archives record. Nothing else was altered, and the
-provenance tests above pass against the substituted values, which is how we know the
-substitution was consistent.
+withheld, and what would name the compute cluster replaced: paths, job and array numbers,
+partition names, the GPU resource type, the login host and the cluster's own name, any of
+which would otherwise name the group. `/path/to/project`, `/path/to/node-scratch/JOBID/`,
+`/path/to/shared-tmp` and `ARRAYID` are the placeholders; they appear in the Slurm scripts
+and in the `dataset.data_dir` entries the archives record, and the scripts use generic
+partition and host names (`cpu-normal`, `gpu-short`, `cluster.local`). A few comments, log
+messages and the default W&B project name were reworded for the same reason. No
+computation changed, and the provenance tests above pass against the substituted values,
+which is how we know the substitution was consistent.
 
-Internal working notes, agent configuration and the manuscript source are not included in
-this bundle. The code, configs, archives, tests and cluster scripts are complete.
+Internal working notes, agent configuration, repository automation and the manuscript
+source are not included in this bundle. The code, configs, archives, tests and cluster
+scripts are complete.

@@ -19,7 +19,7 @@ paper:
       64x64 2.8%  128x128 1.4%  320x320 0.5%
     and in every row the assignment still reorders ~95-100% of the batch.
 
-    These were 85.9% ... 3.1% until 2026-09-21. That list predated 13a1124, which
-    extended the sweep to 128 and 320; the block was never updated, so it
+    These were 85.9% ... 3.1% until 2026-09-21. That list predated the 2026-09-17
+    change that extended the sweep to 128 and 320; the block was never updated, so it
     disagreed with both the code and the paper. Section 5.3 of the paper quotes
     2.8% at 64x64 and 0.5% at 320x320, which is what the command prints.

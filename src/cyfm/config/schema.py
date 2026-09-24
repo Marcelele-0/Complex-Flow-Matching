@@ -125,7 +125,7 @@ class LoggingConfig:
     """
 
     use_wandb: bool = False
-    project_name: str = "complex_flow_matching"
+    project_name: str = "cyfm"
     experiment_name: str = "cyfm_run"
 
     @classmethod
@@ -134,7 +134,7 @@ class LoggingConfig:
         values = as_plain_dict(section)
         return cls(
             use_wandb=bool(values.get("use_wandb", False)),
-            project_name=str(values.get("project_name", "complex_flow_matching")),
+            project_name=str(values.get("project_name", "cyfm")),
             experiment_name=str(values.get("experiment_name", "cyfm_run")),
         )
 
