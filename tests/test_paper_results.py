@@ -167,7 +167,7 @@ def test_training_config_equals_the_documented_experiment(filename: str) -> None
 
 # --- Table 5: fastMRI knee CORPD at 320x320 ---------------------------------
 #
-# The grid runs on the cluster (scripts/wcss/table5_fastmri.sbatch) and the archive
+# The grid runs on the cluster (scripts/cluster/table5_fastmri.sbatch) and the archive
 # is written by scripts/paper/export_table5.py, so these tests skip until it is
 # present rather than failing a checkout that has never seen the cluster. They are
 # what turns "the array came back" into "the array came back whole and on protocol".

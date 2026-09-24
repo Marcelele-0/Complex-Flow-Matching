@@ -2,8 +2,8 @@
 # Issue #76, the fastMRI gate, as one GPU job: the batch size at 320x320, one timed
 # epoch, an evaluation from held-out volumes, and the amplitude/phase sanity check.
 #
-#   sbatch scripts/wcss/gate_fastmri.sbatch
-#   BATCH=16 sbatch scripts/wcss/gate_fastmri.sbatch    # time a chosen batch instead
+#   sbatch scripts/cluster/gate_fastmri.sbatch
+#   BATCH=16 sbatch scripts/cluster/gate_fastmri.sbatch    # time a chosen batch instead
 #
 # Needs data/knee_pd/val.h5 and val.json under the project root and nothing else: no
 # raw k-space, no NYU links, no ESPIRiT. Everything it measures lands in the log and in
@@ -23,7 +23,7 @@
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%j.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%j.err
 set -u
-source /path/to/project/CyFM/scripts/wcss/env.sh
+source /path/to/project/CyFM/scripts/cluster/env.sh
 
 EXPERIMENT=table5_fastmri
 MANIFOLD="${MANIFOLD:-cylindrical}"

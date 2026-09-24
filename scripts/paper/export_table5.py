@@ -2,7 +2,7 @@
 
 Table 5 is the one table this repository does not run locally: its grid is 25
 training runs on 320x320 fastMRI knee volumes, launched by
-``scripts/wcss/table5_fastmri.sbatch`` on the cluster. This script is the step
+``scripts/cluster/table5_fastmri.sbatch`` on the cluster. This script is the step
 between that grid coming back and ``scripts/paper/latex_tables.py`` being able to
 render anything -- it collects ``outputs/evaluate/t5_*_eval/*/metrics.json`` into
 ``docs/reproduce/paper_results/table5_fastmri_metrics.json``, keyed and shaped
@@ -100,7 +100,7 @@ def export(path: pathlib.Path, partial: bool = False) -> None:
     if not runs:
         raise SystemExit(
             f"No Table 5 evaluations under {display(EVALUATIONS)}. This grid runs on the "
-            "cluster: see scripts/wcss/table5_fastmri.sbatch, then copy the evaluation "
+            "cluster: see scripts/cluster/table5_fastmri.sbatch, then copy the evaluation "
             "directories back before exporting."
         )
     if missing and not partial:
@@ -142,7 +142,7 @@ def main() -> None:
     if args.if_present and not any(EVALUATIONS.glob("t5_*_eval/*/metrics.json")):
         print(
             "No Table 5 evaluations on this machine; skipping the export. "
-            "The grid runs on the cluster: scripts/wcss/table5_fastmri.sbatch."
+            "The grid runs on the cluster: scripts/cluster/table5_fastmri.sbatch."
         )
         return
     export(args.out, partial=args.partial)

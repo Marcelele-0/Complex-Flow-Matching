@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Turn one raw fastMRI archive into one knee CORPD part-store, as a CPU array job.
 #
-#   sbatch scripts/wcss/build_knee_store.sbatch                 # archive 0 only
-#   sbatch --array=0-4 scripts/wcss/build_knee_store.sbatch     # archives 0..4
+#   sbatch scripts/cluster/build_knee_store.sbatch                 # archive 0 only
+#   sbatch --array=0-4 scripts/cluster/build_knee_store.sbatch     # archives 0..4
 #
 # Downloads, extraction and ESPIRiT are CPU work and must not sit on an H100: the GPU
 # grant is the scarce resource (~7.5k GPU-h left against ~45k CPU-h), so this runs on
@@ -27,7 +27,7 @@
 # python-dotenv call and the same comma-or-newline splitting cyfm.data.download uses, so
 # there is one format to get right rather than two. Task N takes the Nth URL.
 #
-#   URLS_VAR=FASTMRI_MINI_URLS sbatch scripts/wcss/build_knee_store.sbatch
+#   URLS_VAR=FASTMRI_MINI_URLS sbatch scripts/cluster/build_knee_store.sbatch
 #
 # NYU signs these for about two weeks, so an expired link is the normal failure. The job
 # checks its URL's signature (a 1-byte ranged GET -- a real HEAD fails 403 on these
@@ -48,7 +48,7 @@
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%A_%a.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%A_%a.err
 set -u
-source /path/to/project/CyFM/scripts/wcss/env.sh
+source /path/to/project/CyFM/scripts/cluster/env.sh
 
 ENV_FILE="${ENV_FILE:-$CYFM_ROOT/.env}"
 URLS_VAR="${URLS_VAR:-FASTMRI_FULL_URLS}"

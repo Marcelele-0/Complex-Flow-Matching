@@ -31,11 +31,11 @@ with `+experiment=table2_unet64`.
 
 Two of those are not like the others and the difference matters.
 `table5_fastmri` is `kind: commands` although it *is* a U-Net grid: 25 runs at
-320x320 need a cluster, so `scripts/wcss/table5_fastmri.sbatch` launches them and the
+320x320 need a cluster, so `scripts/cluster/table5_fastmri.sbatch` launches them and the
 `paper:` block owns only what follows -- collecting the evaluations into the archive
 and rendering the table. `table6_audio` carries no `paper:` block at all, so it is
 absent from `reproduce.py`'s `PAPER_ORDER` and reachable only through
-`scripts/wcss/table6_audio.sbatch`; there is also no archive for it under
+`scripts/cluster/table6_audio.sbatch`; there is also no archive for it under
 `docs/reproduce/paper_results/`, which means the speech numbers in the main text
 cannot currently be re-derived from a checkout.
 

@@ -2,9 +2,9 @@
 # Table 6: LibriSpeech complex STFT, one array task per run.
 #   {cylindrical, euclidean} x {independent, ot} x seeds {0..4} = 20 tasks
 #
-#   sbatch scripts/wcss/table6_audio.sbatch
+#   sbatch scripts/cluster/table6_audio.sbatch
 #
-# Prerequisite, built once by scripts/wcss/build_stft_store.sbatch:
+# Prerequisite, built once by scripts/cluster/build_stft_store.sbatch:
 #   data/librispeech_stft/librispeech.h5 and its .json manifest
 #
 # The split differs from Table 5 and that is why this is a separate script. fastMRI
@@ -34,7 +34,7 @@
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%A_%a.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%A_%a.err
 set -u
-source /path/to/project/CyFM/scripts/wcss/env.sh
+source /path/to/project/CyFM/scripts/cluster/env.sh
 
 PREFIX="${PREFIX:-t6_}"
 GEOMS="${GEOMS:-cylindrical euclidean}"

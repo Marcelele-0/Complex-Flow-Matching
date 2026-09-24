@@ -45,7 +45,7 @@ from cyfm.pipelines.evaluation import training_pipeline  # noqa: E402
 from cyfm.utils.inference import build_model, load_weights  # noqa: E402
 
 # The two arms of the knee 64x64 block whose checkpoints are in the repository, with the
-# geometry each was trained on. Both come from scripts/wcss/table5_fastmri.sbatch with
+# geometry each was trained on. Both come from scripts/cluster/table5_fastmri.sbatch with
 # dataset.kspace_crop=64; the geometry is not stored in the weights, so naming it here is
 # what keeps a 3-channel cylindrical checkpoint from being loaded as a 2-channel plane.
 ARMS: tuple[tuple[str, str, str], ...] = (

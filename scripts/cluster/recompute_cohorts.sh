@@ -2,7 +2,7 @@
 # Relaunch every cohort the paper reports, under a distinct prefix, to check that the
 # refactor left the results where they were.
 #
-#   bash scripts/wcss/recompute_cohorts.sh
+#   bash scripts/cluster/recompute_cohorts.sh
 #
 # Each cohort keeps its own launcher; this only fixes the four things a rerun has to
 # get right and that are easy to get wrong from memory:
@@ -27,19 +27,19 @@ cd /path/to/project/CyFM
 echo "synthetic, 3 sizes x 2 geometries x 2 couplings x 5 seeds = 60 tasks"
 sbatch --array=0-59 --job-name=rr-l2u \
   --export=ALL,SEEDS=0\ 1\ 2\ 3\ 4,PREFIX=rr_l2u_ \
-  scripts/wcss/paper_tables_l2u.sbatch
+  scripts/cluster/paper_tables_l2u.sbatch
 
 echo "knee 320, flow arms only = 20 tasks"
 sbatch --array=0-19 --job-name=rr-t5 \
   --export=ALL,PREFIX=rr_t5_ \
-  scripts/wcss/table5_fastmri.sbatch
+  scripts/cluster/table5_fastmri.sbatch
 
 echo "knee 64, flow arms and the score-based baseline = 25 tasks"
 sbatch --array=0-24 --job-name=rr-t5c64 \
   --export=ALL,PREFIX=rr_t5c64_,KSPACE_CROP=64,SIGMA_MAX=53.44 \
-  scripts/wcss/table5_fastmri.sbatch
+  scripts/cluster/table5_fastmri.sbatch
 
 echo "speech STFT, 40 epochs = 20 tasks"
 sbatch --array=0-19 --job-name=rr-t6 \
   --export=ALL,PREFIX=rr_t6e40_,EPOCHS=40 \
-  scripts/wcss/table6_audio.sbatch
+  scripts/cluster/table6_audio.sbatch

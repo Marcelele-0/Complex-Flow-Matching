@@ -4,7 +4,7 @@
 #   complex_diffusion x independent x seeds {0..4}                 5 tasks, scored twice
 #                                                                 -- = 25 tasks, 30 evaluations
 #
-#   sbatch scripts/wcss/table5_fastmri.sbatch
+#   sbatch scripts/cluster/table5_fastmri.sbatch
 #
 # Prerequisite, and it does not happen on its own when the intake array drains:
 #
@@ -53,7 +53,7 @@
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%A_%a.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%A_%a.err
 set -u
-source /path/to/project/CyFM/scripts/wcss/env.sh
+source /path/to/project/CyFM/scripts/cluster/env.sh
 
 PREFIX="${PREFIX:-t5_}"
 GEOMS="${GEOMS:-cylindrical euclidean}"

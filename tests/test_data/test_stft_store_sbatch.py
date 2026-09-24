@@ -20,7 +20,7 @@ import torch
 from cyfm.data.stores.stft import DEFAULT_STFT
 
 SBATCH = (
-    pathlib.Path(__file__).resolve().parents[2] / "scripts" / "wcss" / "build_stft_store.sbatch"
+    pathlib.Path(__file__).resolve().parents[2] / "scripts" / "cluster" / "build_stft_store.sbatch"
 )
 pytestmark = pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
 

@@ -93,7 +93,7 @@ uv run python scripts/prior_control.py --side 16 --num-fields 16
 
 ## Level 3 — retrain everything, including the real data
 
-`scripts/wcss/` holds the Slurm scripts the published cohorts were launched with, kept
+`scripts/cluster/` holds the Slurm scripts the published cohorts were launched with, kept
 verbatim apart from the anonymisation noted below. They are for one specific cluster and
 will need editing for another, but they state the grids exactly:
 `paper_tables_l2u.sbatch` (synthetic), `table5_fastmri.sbatch` (knee MRI, with

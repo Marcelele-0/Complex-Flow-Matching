@@ -285,7 +285,7 @@ def table_appendix(sources: dict[str, Runs]) -> str:
 # --- Table 5: fastMRI knee CORPD, real complex data ---
 
 # The archive scripts/paper/export_table5.py writes for this table, and the
-# run-name convention of scripts/wcss/table5_fastmri.sbatch. Kept beside each
+# run-name convention of scripts/cluster/table5_fastmri.sbatch. Kept beside each
 # other because a mismatch between them is silent: a missing seed raises, but a
 # wrong prefix produces an empty table. The `_eval` suffix is part of the key:
 # every archive in this repository is keyed by the *evaluation* directory name,

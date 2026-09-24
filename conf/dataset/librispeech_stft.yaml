@@ -14,7 +14,7 @@
 name: librispeech_stft
 
 # Directory holding <store> and its .json manifest. The default name is what
-# scripts/wcss/build_stft_store.sbatch writes: one store pooling both cohorts, since
+# scripts/cluster/build_stft_store.sbatch writes: one store pooling both cohorts, since
 # their speaker ids are disjoint and the split is made here rather than by the corpus.
 data_dir: "data/librispeech_stft"
 store: "librispeech.h5"

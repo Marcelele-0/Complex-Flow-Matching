@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-time environment build for CyFM on HPC cluster, plus a timing probe.
 #
-#   sbatch scripts/wcss/setup_env.sbatch
+#   sbatch scripts/cluster/setup_env.sbatch
 #
 # Builds the uv venv on a compute node (the login node caps users at 1 GB RAM),
 # checks that torch sees the H100, then trains one 64x64 arm for 2 epochs and
@@ -17,7 +17,7 @@
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%j.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%j.err
 set -u
-source /path/to/project/CyFM/scripts/wcss/env.sh
+source /path/to/project/CyFM/scripts/cluster/env.sh
 
 hostname
 nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv

@@ -2,7 +2,7 @@
 # Stage two of the knee intake: build the part stores on a GPU, reading the volumes the
 # first-stage jobs already downloaded and extracted.
 #
-#   sbatch --array=0-4 scripts/wcss/build_knee_from_scratch.sbatch
+#   sbatch --array=0-4 scripts/cluster/build_knee_from_scratch.sbatch
 #
 # Why this exists. The first stage calibrated ESPIRiT on CPU, over the whole volume, at
 # ~376 s each, which projected to 30-80 h per archive against a 48 h wall. On an H100,
@@ -29,7 +29,7 @@
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%A_%a.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%A_%a.err
 set -u
-source /path/to/project/CyFM/scripts/wcss/env.sh
+source /path/to/project/CyFM/scripts/cluster/env.sh
 
 mapfile -t SRCS < <(ls -d /lustre/tmp/slurm/*/knee-*/extract/multicoil_train 2>/dev/null | sort)
 if [ "${#SRCS[@]}" -eq 0 ]; then

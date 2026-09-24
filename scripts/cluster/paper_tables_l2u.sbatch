@@ -4,7 +4,7 @@
 #   {64, 32, 16} x {cylindrical, euclidean} x {independent, ot} x seeds {0, 1, 2}
 # = 36 tasks, 64x64 first because those are the longest.
 #
-#   sbatch scripts/wcss/paper_tables_l2u.sbatch
+#   sbatch scripts/cluster/paper_tables_l2u.sbatch
 #
 # Run names carry the prefix l2u_ and otherwise match the table scripts, so the
 # tables print with:
@@ -13,13 +13,13 @@
 # The grid can be narrowed with environment variables; --array must then match
 # the task count (|SIDES| x |GEOMS| x |COUPLINGS| x |SEEDS|). Examples:
 #   seeds 3 and 4 of the same grid (24 tasks):
-#     sbatch --array=0-23 --export=ALL,SEEDS="3 4" scripts/wcss/paper_tables_l2u.sbatch
+#     sbatch --array=0-23 --export=ALL,SEEDS="3 4" scripts/cluster/paper_tables_l2u.sbatch
 #   Cartesian with the v1 loss at 64x64, 5 seeds (10 tasks):
 #     sbatch --array=0-9 --export=ALL,SIDES=64,GEOMS=euclidean,LOSS_MODE=l1w,PREFIX=l1w_,SEEDS="0 1 2 3 4" \
-#       scripts/wcss/paper_tables_l2u.sbatch
+#       scripts/cluster/paper_tables_l2u.sbatch
 #   the cylinder with L1 and an unweighted phase term, all sizes, 5 seeds (30 tasks):
 #     sbatch --array=0-29 --export=ALL,GEOMS=cylindrical,LOSS_MODE=l1u,PREFIX=l1u_,SEEDS="0 1 2 3 4" \
-#       scripts/wcss/paper_tables_l2u.sbatch
+#       scripts/cluster/paper_tables_l2u.sbatch
 #SBATCH --job-name=cyfm-l2u
 #SBATCH --partition=lem-gpu-short
 #SBATCH --nodes=1
@@ -32,7 +32,7 @@
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%A_%a.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%A_%a.err
 set -u
-source /path/to/project/CyFM/scripts/wcss/env.sh
+source /path/to/project/CyFM/scripts/cluster/env.sh
 PREFIX="${PREFIX:-l2u_}"
 SIDES="${SIDES:-64 32 16}"
 GEOMS="${GEOMS:-cylindrical euclidean}"

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Turn LibriSpeech into the compact complex-STFT store Table 6 trains on, as one CPU job.
 #
-#   sbatch scripts/wcss/build_stft_store.sbatch
-#   COHORTS="dev-clean" sbatch scripts/wcss/build_stft_store.sbatch   # 40 speakers, not 80
+#   sbatch scripts/cluster/build_stft_store.sbatch
+#   COHORTS="dev-clean" sbatch scripts/cluster/build_stft_store.sbatch   # 40 speakers, not 80
 #
 # The audio counterpart of build_knee_store.sbatch, and much smaller: the archives are
 # public on openslr, so there are no signed links to expire, and there is no ESPIRiT.
@@ -25,7 +25,7 @@
 set -u
 # The default is the cluster copy; CYFM_ENV lets the test suite point this at a stub
 # so the script's logic can be exercised without a cluster and without downloading.
-source "${CYFM_ENV:-/path/to/project/CyFM/scripts/wcss/env.sh}"
+source "${CYFM_ENV:-/path/to/project/CyFM/scripts/cluster/env.sh}"
 
 COHORTS="${COHORTS:-dev-clean test-clean}"
 OUT="${OUT:-$CYFM_ROOT/data/librispeech_stft/librispeech.h5}"

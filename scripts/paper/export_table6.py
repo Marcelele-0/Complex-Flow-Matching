@@ -85,7 +85,7 @@ def export(path: pathlib.Path, partial: bool = False) -> None:
     if not runs:
         raise SystemExit(
             f"No speech evaluations under {display(EVALUATIONS)}. This grid runs on the "
-            "cluster: see scripts/wcss/table6_audio.sbatch, which needs EPOCHS=40, then "
+            "cluster: see scripts/cluster/table6_audio.sbatch, which needs EPOCHS=40, then "
             "copy the evaluation directories back before exporting."
         )
     if missing and not partial:

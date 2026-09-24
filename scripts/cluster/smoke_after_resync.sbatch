@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Verify a freshly resynced CyFM tree before spending GPU hours on a cohort.
 #
-#   sbatch scripts/wcss/smoke_after_resync.sbatch
+#   sbatch scripts/cluster/smoke_after_resync.sbatch
 #
 # The cluster tree is an rsync copy rather than a checkout, so nothing there
 # guarantees that what landed is what the repository holds: a stale package can sit
@@ -24,7 +24,7 @@
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%j.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%j.err
 set -u
-source /path/to/project/CyFM/scripts/wcss/env.sh
+source /path/to/project/CyFM/scripts/cluster/env.sh
 
 echo "=== host and GPU"
 hostname

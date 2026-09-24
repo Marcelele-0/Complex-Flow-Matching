@@ -19,13 +19,13 @@
 #
 # What produced the re-scored numbers of 2026-09-18:
 #
-#   PREFIX=t5_    OUT_PREFIX=ps2_ sbatch scripts/wcss/rescore_metrics.sbatch
-#   PREFIX=t5c64_ OUT_PREFIX=ps2_ KSPACE_CROP=64 sbatch scripts/wcss/rescore_metrics.sbatch
+#   PREFIX=t5_    OUT_PREFIX=ps2_ sbatch scripts/cluster/rescore_metrics.sbatch
+#   PREFIX=t5c64_ OUT_PREFIX=ps2_ KSPACE_CROP=64 sbatch scripts/cluster/rescore_metrics.sbatch
 #   PREFIX=t5w_   OUT_PREFIX=ps3_ EXTRA_ARGS=training.loss.phase_amplitude_weighting=true \
-#     sbatch scripts/wcss/rescore_metrics.sbatch
+#     sbatch scripts/cluster/rescore_metrics.sbatch
 #   PREFIX=t5wc64_ OUT_PREFIX=ps3_ KSPACE_CROP=64 \
 #     EXTRA_ARGS=training.loss.phase_amplitude_weighting=true \
-#     sbatch scripts/wcss/rescore_metrics.sbatch
+#     sbatch scripts/cluster/rescore_metrics.sbatch
 #
 # The loss override matters even for scoring: run_arm.sh records the protocol on every row,
 # and a row whose recorded loss differs from the checkpoint's is a row that cannot be
@@ -45,7 +45,7 @@
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%j.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%j.err
 set -u
-source /path/to/project/CyFM/scripts/wcss/env.sh
+source /path/to/project/CyFM/scripts/cluster/env.sh
 
 PREFIX="${PREFIX:?set PREFIX to the cohort to re-score, e.g. t5_}"
 OUT_PREFIX="${OUT_PREFIX:?set OUT_PREFIX for the new evaluation names}"

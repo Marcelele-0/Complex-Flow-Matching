@@ -114,7 +114,7 @@ def export(path: pathlib.Path, partial: bool = False) -> None:
     if not runs:
         raise SystemExit(
             f"No 64x64 knee evaluations under {display(EVALUATIONS)}. This grid runs on "
-            "the cluster: see scripts/wcss/table5_fastmri.sbatch with KSPACE_CROP=64, then "
+            "the cluster: see scripts/cluster/table5_fastmri.sbatch with KSPACE_CROP=64, then "
             "copy the evaluation directories back before exporting."
         )
     if missing and not partial:

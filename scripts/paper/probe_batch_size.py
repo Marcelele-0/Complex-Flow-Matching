@@ -213,7 +213,7 @@ def main() -> int:
         if not torch.cuda.is_available():
             print(
                 "no CUDA device: a batch-size probe on CPU measures nothing. Run it on a "
-                "GPU node, e.g. through scripts/wcss/gate_fastmri.sbatch.",
+                "GPU node, e.g. through scripts/cluster/gate_fastmri.sbatch.",
                 file=sys.stderr,
             )
             return 2

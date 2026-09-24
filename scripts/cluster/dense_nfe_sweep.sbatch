@@ -3,7 +3,7 @@
 # question can be turned around -- not "what error at k steps" but "how many steps to
 # reach a given error".
 #
-#   sbatch scripts/wcss/dense_nfe_sweep.sbatch
+#   sbatch scripts/cluster/dense_nfe_sweep.sbatch
 #
 # Evaluation only. No training: it reads the 60 runs already in outputs/train/ and
 # writes new metrics under a _dense suffix, so the existing archives are untouched.
@@ -23,7 +23,7 @@
 #SBATCH --output=/path/to/project/CyFM/logs/%x-%A_%a.txt
 #SBATCH --error=/path/to/project/CyFM/logs/%x-%A_%a.err
 set -u
-source /path/to/project/CyFM/scripts/wcss/env.sh
+source /path/to/project/CyFM/scripts/cluster/env.sh
 cd "$CYFM_ROOT"
 
 NFE="${NFE:-[1,2,4,8,16,24,32,48,64,100]}"

@@ -4,7 +4,7 @@
 # `paper:` block at the end of this file puts it in reproduce.py's PAPER_ORDER.
 #
 # Unlike every other paper experiment, reproduce.py does not LAUNCH this grid -- 25
-# training runs on 320x320 fields need a cluster, and scripts/wcss/table5_fastmri.sbatch
+# training runs on 320x320 fields need a cluster, and scripts/cluster/table5_fastmri.sbatch
 # is what runs them. The `paper:` block covers the steps that follow: collecting the
 # evaluations into the archive, and rendering the table from it.
 #
