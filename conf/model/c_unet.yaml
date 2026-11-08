@@ -1,2 +1,18 @@
-base_channels: 64
+# The paper's U-Net: a symmetric encoder/decoder with skip connections, now with
+# three downsampling levels and self-attention at the bottleneck (~15.4M params).
+# Both geometries share this trunk; only the first conv follows state_channels.
 name: "c_unet"
+
+# Width of the first level; every level is base_channels * 2**i, so this must be a
+# multiple of 8 (each GroupNorm has 8 groups and the attention uses 8 heads).
+base_channels: 64
+
+# Downsampling stages. The field's H and W must be divisible by 2**num_levels;
+# the training pipeline's CROP_BASE=16 already guarantees divisibility by 16, so
+# up to four levels are safe. At 320x320 three levels put the bottleneck at 40x40.
+num_levels: 3
+
+# Self-attention over the bottleneck grid, giving the otherwise purely local
+# convolutional trunk a path for distant regions to interact. Set false for the
+# older attention-free trunk.
+use_attention: true
