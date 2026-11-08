@@ -90,10 +90,14 @@ class TestUnknownKeysAreRejected:
         build_manifold({"name": "cylindrical"})  # would raise if `name` leaked through
 
     def test_an_unknown_model_key_is_rejected(self, torch_cpu_device) -> None:
-        """The deleted attention model's keys were being silently swallowed."""
-        with pytest.raises(ValueError, match="does not accept use_attention"):
+        """A typo in a model override must fail loudly, not be silently swallowed.
+
+        ``use_attention`` is a real ``c_unet`` key now, so a misspelling of it is
+        the honest example of a key the builder must still reject.
+        """
+        with pytest.raises(ValueError, match="does not accept use_attebtion"):
             build_model(
-                {"model": {"name": "c_unet", "base_channels": 8, "use_attention": True}},
+                {"model": {"name": "c_unet", "base_channels": 8, "use_attebtion": True}},
                 torch_cpu_device,
             )
 
